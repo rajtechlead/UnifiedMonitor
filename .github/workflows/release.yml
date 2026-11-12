@@ -229,7 +229,7 @@ jobs:
         run: ls -lh release-assets/ 2>/dev/null || echo "No Windows assets"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "UniMonitor v${{ env.VERSION }}"
           generate_release_notes: true
