@@ -3,9 +3,9 @@ Secret provider health checks and aggregated health reporting.
 """
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Sequence
 
 from unimonitor.core.logging import get_logger
 from unimonitor.secrets.provider import HealthStatus, ProviderType

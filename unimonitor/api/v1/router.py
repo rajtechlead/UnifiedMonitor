@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from unimonitor.api.v1.auth import router as auth_router
 from unimonitor.api.v1.assessments import router as assessments_router
+from unimonitor.api.v1.auth import router as auth_router
 from unimonitor.api.v1.controls import router as controls_router
 from unimonitor.api.v1.dashboard import router as dashboard_router
 from unimonitor.api.v1.findings import router as findings_router

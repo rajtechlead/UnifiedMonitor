@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from fastapi import Depends, Request
-from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.jwt import validate_access_token
 from unimonitor.db import get_async_session
 from unimonitor.db.models.user import AppUser, UserRole
-from unimonitor.exceptions import AuthenticationError, AuthorisationError, NotFoundError
+from unimonitor.exceptions import AuthenticationError, AuthorisationError
 
 http_bearer = HTTPBearer(auto_error=False)
 

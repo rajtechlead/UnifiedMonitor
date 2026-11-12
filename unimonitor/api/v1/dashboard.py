@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
@@ -280,7 +280,7 @@ async def dashboard_overview(
 
     activity = [
         ActivityItem(
-            timestamp=a.get("timestamp", datetime.now(timezone.utc)),
+            timestamp=a.get("timestamp", datetime.now(UTC)),
             event_type=a.get("event_type", ""),
             description=a.get("description", ""),
             actor=a.get("actor"),
@@ -309,7 +309,7 @@ async def dashboard_overview(
         recent_activity=activity,
         monitoring_health=health,
         tenant_id=tenant_id,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -349,7 +349,7 @@ async def dashboard_executive(
         framework_coverage=framework_coverage,
         asset_coverage_pct=0.0,
         remediation_progress_pct=0.0,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -392,7 +392,7 @@ async def dashboard_security(
         identity_findings=identity_findings,
         device_findings=device_findings,
         threat_findings=threat_findings,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -410,7 +410,7 @@ async def dashboard_compliance(
         overall_compliance_score=comp,
         frameworks=framework_coverage,
         controls_by_category={},
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -441,7 +441,7 @@ async def dashboard_risk(
             for cell in heatmap_data
         ],
         critical_risks=[f for f in top_findings if f.severity == "critical"],
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -462,7 +462,7 @@ async def dashboard_soc(
         mean_time_to_resolve_hours=None,
         alerts_by_severity=finding_counts,
         incident_trend=[],
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -492,5 +492,5 @@ async def dashboard_trends(
             for p in trend_points
         ],
         finding_trend=finding_trend,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )

@@ -56,7 +56,7 @@ class CollectorRegistry:
             tasks = {name: self._run_collector(name, gc) for name in names}
             results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
-            for name, result in zip(tasks.keys(), results):
+            for name, result in zip(tasks.keys(), results, strict=False):
                 if isinstance(result, Exception):
                     logger.error("Collector failed", collector=name, error=str(result))
                     all_data[f"_error_{name}"] = str(result)

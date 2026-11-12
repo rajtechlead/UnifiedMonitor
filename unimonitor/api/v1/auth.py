@@ -6,7 +6,7 @@ import secrets
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import RedirectResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
@@ -61,12 +61,12 @@ async def login_local(
     Authenticates against the local `app_users` table using bcrypt.
     For Entra ID SSO, use GET /login to start the OAuth2 redirect flow.
     """
-    from passlib.context import CryptContext
-    from unimonitor.db.models.user import AppUser
+    import bcrypt as _bcrypt
     from sqlalchemy import select
 
+    from unimonitor.db.models.user import AppUser
+
     settings = get_settings()
-    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
     result = await db.execute(
         select(AppUser).where(AppUser.email == form_data.username)
@@ -79,7 +79,8 @@ async def login_local(
             detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    if not pwd.verify(form_data.password, db_user.hashed_password):
+    pw_bytes = form_data.password.encode("utf-8")[:72]
+    if not _bcrypt.checkpw(pw_bytes, db_user.hashed_password.encode("utf-8")):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -112,7 +113,7 @@ async def login(
     redirect_after: str = Query(default="/", alias="redirect"),
 ) -> RedirectResponse:
     """Redirect to Entra ID OAuth2 authorization endpoint."""
-    settings = get_settings()
+    get_settings()
     state = secrets.token_urlsafe(32)
 
     # Store state + redirect destination in cache (5 min TTL)
@@ -226,8 +227,9 @@ async def refresh_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
     # Load user from DB to get current role
-    from unimonitor.db.models.user import AppUser
     from sqlalchemy import select
+
+    from unimonitor.db.models.user import AppUser
 
     result = await db.execute(select(AppUser).where(AppUser.id == user_id))
     db_user = result.scalar_one_or_none()

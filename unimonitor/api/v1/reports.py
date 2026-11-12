@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Annotated, Literal, Any
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -72,7 +72,7 @@ async def generate_report(
     """Queue a report generation task."""
     report_id = str(uuid.uuid4())
     title = body.title or f"{body.report_type.title()} Report"
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     report_record = {
         "report_id": report_id,
@@ -213,6 +213,7 @@ async def list_report_runs(
     """
     try:
         from sqlalchemy import func, select
+
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.assessment import AssessmentRun
 

@@ -57,7 +57,7 @@ async def acquire_token_for_client(
     client_secret: str | None = None,
 ) -> str:
     """Acquire an application token (client credentials flow) for Graph API."""
-    settings = get_settings()
+    get_settings()
     if client_id and client_secret and tenant_id:
         app = get_msal_app_for_tenant(client_id, client_secret, tenant_id)
     else:

@@ -13,7 +13,6 @@ Authentication order (DefaultAzureCredential):
 from __future__ import annotations
 
 import time
-from datetime import datetime
 
 from unimonitor.core.logging import get_logger
 from unimonitor.secrets.provider import HealthStatus, ProviderType, SecretMetadata
@@ -47,6 +46,7 @@ class AzureKeyVaultProvider:
     async def get_secret(self, name: str, version: str | None = None) -> str:
         """Retrieve a secret value. Raises KeyError if not found."""
         import asyncio
+
         from azure.core.exceptions import ResourceNotFoundError
 
         try:
@@ -86,6 +86,7 @@ class AzureKeyVaultProvider:
     async def delete_secret(self, name: str) -> None:
         """Begin deletion. Azure KV uses a soft-delete with recovery period."""
         import asyncio
+
         from azure.core.exceptions import ResourceNotFoundError
 
         try:
@@ -129,6 +130,7 @@ class AzureKeyVaultProvider:
     async def health_check(self) -> HealthStatus:
         """Ping the vault by listing secrets (page size = 1)."""
         import asyncio
+
         from azure.core.exceptions import ClientAuthenticationError
 
         start = time.monotonic()

@@ -42,4 +42,4 @@ class AuditLog(Base):
         DateTime(timezone=True), server_default=func.now(), index=True
     )
 
-    user: Mapped["AppUser | None"] = relationship("AppUser", back_populates="audit_logs")
+    user: Mapped[AppUser | None] = relationship("AppUser", back_populates="audit_logs")

@@ -17,8 +17,8 @@ Usage::
 """
 from __future__ import annotations
 
+from unimonitor.secrets.provider import SecretMetadata, SecretProvider
 from unimonitor.secrets.resolver import SecretResolver, get_secret_resolver
-from unimonitor.secrets.provider import SecretProvider, SecretMetadata
 
 __all__ = [
     "SecretResolver",

@@ -2,15 +2,15 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
 
-from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+from unimonitor.auth.dependencies import get_current_user, require_role
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -167,8 +167,8 @@ async def framework_controls(
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
 
     from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.control_loader import ControlLibrary
     from unimonitor.db.repositories.finding_repo import FindingRepository
+    from unimonitor.grc.control_loader import ControlLibrary
 
     async with async_session_factory() as session:
         library = ControlLibrary(session)
@@ -285,7 +285,7 @@ async def gap_analysis(
         critical_gaps=critical_gaps,
         high_gaps=high_gaps,
         gaps_by_category=gaps_by_category,
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 
@@ -318,7 +318,7 @@ async def risk_scoring(
             "Risk score = (Critical×10 + High×8 + Medium×5 + Low×3 + Informational×1) "
             "normalised to 0–100. Lower is better."
         ),
-        generated_at=datetime.now(timezone.utc),
+        generated_at=datetime.now(UTC),
     )
 
 

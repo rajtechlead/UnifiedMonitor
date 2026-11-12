@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -55,7 +55,6 @@ class NotificationDispatcher:
     # ── Channel dispatch ─────────────────────────────────────────────────────
 
     async def _send_to_channels(self, subject: str, body: str, settings_obj: Any) -> None:
-        tasks = []
 
         if getattr(settings_obj, "smtp_enabled", False):
             emails = getattr(settings_obj, "smtp_to_emails", None) or []
@@ -145,7 +144,7 @@ class NotificationDispatcher:
                     "type": "context",
                     "elements": [{
                         "type": "mrkdwn",
-                        "text": f"UniMonitor | Tenant: `{self.tenant_id}` | {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
+                        "text": f"UniMonitor | Tenant: `{self.tenant_id}` | {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
                     }],
                 },
             ],
@@ -158,10 +157,12 @@ class NotificationDispatcher:
     # ── Digest builders ──────────────────────────────────────────────────────
 
     async def _build_daily_digest_body(self, tenant_id: str) -> tuple[str, str]:
-        from sqlalchemy import select, func as sqlfunc
+        from sqlalchemy import func as sqlfunc
+        from sqlalchemy import select
+
         from unimonitor.db.models.finding import Finding
 
-        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        since = datetime.now(UTC) - timedelta(hours=24)
         result = await self.db.execute(
             select(Finding.severity, sqlfunc.count(Finding.id))
             .where(Finding.tenant_id == tenant_id, Finding.first_detected_at >= since)
@@ -174,7 +175,7 @@ class NotificationDispatcher:
 
         subject = f"[UniMonitor Daily Digest] {total} new findings in last 24h"
         lines = [
-            f"Daily Security Digest — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            f"Daily Security Digest — {datetime.now(UTC).strftime('%Y-%m-%d')}",
             f"Tenant: {tenant_id}",
             "",
             f"New findings in last 24 hours: {total}",
@@ -188,11 +189,13 @@ class NotificationDispatcher:
         return subject, "\n".join(lines)
 
     async def _build_weekly_digest_body(self, tenant_id: str) -> tuple[str, str]:
-        from sqlalchemy import select, func as sqlfunc
-        from unimonitor.db.models.finding import Finding
-        from unimonitor.db.models.assessment import AssessmentRun
+        from sqlalchemy import func as sqlfunc
+        from sqlalchemy import select
 
-        since = datetime.now(timezone.utc) - timedelta(days=7)
+        from unimonitor.db.models.assessment import AssessmentRun
+        from unimonitor.db.models.finding import Finding
+
+        since = datetime.now(UTC) - timedelta(days=7)
         result = await self.db.execute(
             select(Finding.severity, sqlfunc.count(Finding.id))
             .where(Finding.tenant_id == tenant_id, Finding.first_detected_at >= since)

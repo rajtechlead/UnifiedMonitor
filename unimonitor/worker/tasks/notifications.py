@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone, timedelta
 
 from celery.utils.log import get_task_logger
 
@@ -29,11 +28,12 @@ def send_daily_digests() -> dict:
     logger.info("Sending daily digests")
 
     async def _run():
-        from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.tenant import Tenant
-        from unimonitor.db.models.notification_setting import NotificationSetting
-        from unimonitor.notifications.dispatcher import NotificationDispatcher
         from sqlalchemy import select
+
+        from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.notification_setting import NotificationSetting
+        from unimonitor.db.models.tenant import Tenant
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
 
         sent = 0
         failed = 0
@@ -41,7 +41,7 @@ def send_daily_digests() -> dict:
             result = await db.execute(
                 select(NotificationSetting)
                 .join(Tenant)
-                .where(Tenant.is_active == True, NotificationSetting.daily_digest == True)
+                .where(Tenant.is_active, NotificationSetting.daily_digest)
             )
             settings_list = result.scalars().all()
 
@@ -72,11 +72,12 @@ def send_weekly_digests() -> dict:
     logger.info("Sending weekly digests")
 
     async def _run():
-        from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.tenant import Tenant
-        from unimonitor.db.models.notification_setting import NotificationSetting
-        from unimonitor.notifications.dispatcher import NotificationDispatcher
         from sqlalchemy import select
+
+        from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.notification_setting import NotificationSetting
+        from unimonitor.db.models.tenant import Tenant
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
 
         sent = 0
         failed = 0
@@ -84,7 +85,7 @@ def send_weekly_digests() -> dict:
             result = await db.execute(
                 select(NotificationSetting)
                 .join(Tenant)
-                .where(Tenant.is_active == True, NotificationSetting.weekly_digest == True)
+                .where(Tenant.is_active, NotificationSetting.weekly_digest)
             )
             settings_list = result.scalars().all()
 
@@ -118,11 +119,12 @@ def dispatch_finding_alert(
     """Dispatch an immediate alert for a critical/high finding."""
 
     async def _run():
+        from sqlalchemy import select
+
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.finding import Finding
         from unimonitor.db.models.notification_setting import NotificationSetting
         from unimonitor.notifications.dispatcher import NotificationDispatcher
-        from sqlalchemy import select
 
         async with async_session_factory() as db:
             result = await db.execute(select(Finding).where(Finding.id == finding_id))

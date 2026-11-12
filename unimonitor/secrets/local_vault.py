@@ -69,7 +69,7 @@ class LocalVaultProvider:
         self._key_path = Path(
             key_path or os.environ.get("VAULT_KEY_PATH", self._vault_dir / _VAULT_KEY_FILE)
         )
-        self._fernet: "Fernet | None" = None
+        self._fernet: Fernet | None = None
         logger.info("Local Vault provider initialized", vault_dir=str(self._vault_dir))
 
     # ------------------------------------------------------------------

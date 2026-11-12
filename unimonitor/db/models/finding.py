@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
@@ -17,14 +17,14 @@ if TYPE_CHECKING:
     from unimonitor.db.models.tenant import Tenant
 
 
-class FindingState(str, Enum):
+class FindingState(StrEnum):
     IMPLEMENTED = "implemented"
     PARTIALLY_IMPLEMENTED = "partially_implemented"
     NOT_IMPLEMENTED = "not_implemented"
     NOT_APPLICABLE = "not_applicable"
 
 
-class FindingSeverity(str, Enum):
+class FindingSeverity(StrEnum):
     INFORMATIONAL = "informational"
     LOW = "low"
     MEDIUM = "medium"
@@ -95,12 +95,12 @@ class Finding(Base):
     )
 
     # Relationships
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="findings")
-    control: Mapped["Control | None"] = relationship("Control", back_populates="findings")
-    evidence: Mapped[list["FindingEvidence"]] = relationship(
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="findings")
+    control: Mapped[Control | None] = relationship("Control", back_populates="findings")
+    evidence: Mapped[list[FindingEvidence]] = relationship(
         "FindingEvidence", back_populates="finding", cascade="all, delete-orphan"
     )
-    history: Mapped[list["FindingHistory"]] = relationship(
+    history: Mapped[list[FindingHistory]] = relationship(
         "FindingHistory", back_populates="finding", cascade="all, delete-orphan"
     )
 

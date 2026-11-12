@@ -1,7 +1,6 @@
 """
 Unit tests for scoring utilities.
 """
-import pytest
 
 
 class TestFindingScoring:

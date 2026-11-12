@@ -12,9 +12,7 @@ Authentication (boto3 standard chain):
 """
 from __future__ import annotations
 
-import json
 import time
-from datetime import datetime
 
 from unimonitor.core.logging import get_logger
 from unimonitor.secrets.provider import HealthStatus, ProviderType, SecretMetadata
@@ -53,6 +51,7 @@ class AWSSecretsManagerProvider:
     async def get_secret(self, name: str, version: str | None = None) -> str:
         """Retrieve a secret. Raises KeyError if not found."""
         import asyncio
+
         from botocore.exceptions import ClientError
 
         kwargs: dict = {"SecretId": name}
@@ -79,6 +78,7 @@ class AWSSecretsManagerProvider:
     async def set_secret(self, name: str, value: str, tags: dict[str, str] | None = None) -> SecretMetadata:
         """Create or update a secret value."""
         import asyncio
+
         from botocore.exceptions import ClientError
 
         loop = asyncio.get_event_loop()
@@ -112,6 +112,7 @@ class AWSSecretsManagerProvider:
     async def delete_secret(self, name: str, recovery_window_days: int = 7) -> None:
         """Schedule secret deletion. Default recovery window = 7 days."""
         import asyncio
+
         from botocore.exceptions import ClientError
 
         try:
@@ -163,10 +164,10 @@ class AWSSecretsManagerProvider:
     async def health_check(self) -> HealthStatus:
         """Ping AWS SM by listing (1 item) to verify credentials and connectivity."""
         import asyncio
+
         from botocore.exceptions import (
-            ClientError,
-            NoCredentialsError,
             EndpointConnectionError,
+            NoCredentialsError,
         )
 
         start = time.monotonic()

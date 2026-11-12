@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 
-from celery import shared_task
 from celery.utils.log import get_task_logger
 
 from unimonitor.worker.celery_app import celery_app
@@ -45,11 +44,12 @@ def run_assessment_task(
     )
 
     async def _run():
+        from sqlalchemy import select
+
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.assessment import AssessmentRun
         from unimonitor.db.models.tenant import Tenant
         from unimonitor.grc.engine import AssessmentEngine
-        from sqlalchemy import select
 
         async with async_session_factory() as db:
             # Load run and tenant
@@ -106,18 +106,20 @@ def run_scheduled_assessments() -> dict:
     logger.info("Running scheduled assessments")
 
     async def _run():
-        from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.tenant import Tenant
-        from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
-        from sqlalchemy import select
         import uuid
+
+        from sqlalchemy import select
+
+        from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
+        from unimonitor.db.models.tenant import Tenant
 
         triggered = 0
         async with async_session_factory() as db:
             result = await db.execute(
                 select(Assessment)
                 .join(Tenant)
-                .where(Tenant.is_active == True, Assessment.is_active == True)
+                .where(Tenant.is_active, Assessment.is_active)
             )
             assessments = result.scalars().all()
 
@@ -163,10 +165,11 @@ def run_single_collector_task(
     logger.info("Single collector task", extra={"tenant_id": tenant_id, "collector": collector_name})
 
     async def _run():
+        from sqlalchemy import select
+
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.tenant import Tenant
         from unimonitor.graph.collector_registry import CollectorRegistry
-        from sqlalchemy import select
 
         async with async_session_factory() as db:
             result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
@@ -194,11 +197,12 @@ def cleanup_old_runs(retention_days: int = 90) -> dict:
     logger.info("Cleaning up old assessment runs", extra={"retention_days": retention_days})
 
     async def _run():
+        from sqlalchemy import delete
+
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.assessment import AssessmentRun
-        from sqlalchemy import select, delete
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=retention_days)
+        cutoff = datetime.now(UTC) - timedelta(days=retention_days)
         async with async_session_factory() as db:
             stmt = delete(AssessmentRun).where(AssessmentRun.started_at < cutoff)
             result = await db.execute(stmt)

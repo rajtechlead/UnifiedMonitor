@@ -5,7 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import AnyHttpUrl, field_validator, model_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_SECRET_KEY = "change-me-in-production"
@@ -120,7 +120,7 @@ class Settings(BaseSettings):
         return v
 
     @model_validator(mode="after")
-    def reject_default_secret_key_in_production(self) -> "Settings":
+    def reject_default_secret_key_in_production(self) -> Settings:
         """Refuse to start in production with the default SECRET_KEY."""
         if (
             self.UNIMONITOR_ENV == "production"

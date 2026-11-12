@@ -3,11 +3,12 @@ Shared pytest fixtures for UniMonitor tests.
 """
 import asyncio
 import os
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
+
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 # Use in-memory SQLite for tests
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
@@ -16,10 +17,10 @@ os.environ.setdefault("UNIMONITOR_ENV", "test")           # avoids production se
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
-from unimonitor.db.base import Base
-import unimonitor.db.models  # noqa: F401 — registers all ORM models with Base.metadata
-from unimonitor.db.session import get_db
 import unimonitor.db.base as _db_base  # patched below to redirect async_session_factory
+import unimonitor.db.models  # noqa: F401 — registers all ORM models with Base.metadata
+from unimonitor.db.base import Base
+from unimonitor.db.session import get_db
 from unimonitor.main import app
 
 
@@ -112,14 +113,15 @@ async def tenant(db_session: AsyncSession):
 @pytest_asyncio.fixture
 async def admin_user(db_session: AsyncSession, tenant):
     """Create a test admin user."""
+    import bcrypt as _bcrypt
+
     from unimonitor.db.models.user import AppUser
-    from passlib.context import CryptContext
-    pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    _hashed = _bcrypt.hashpw(b"TestPassword123!", _bcrypt.gensalt()).decode("utf-8")
     u = AppUser(
         id="test-user-id-000000000000001",
         email="admin@test.example.com",
         full_name="Test Admin",
-        hashed_password=pwd.hash("TestPassword123!"),
+        hashed_password=_hashed,
         role="admin",
         is_active=True,
         tenant_id=tenant.id,

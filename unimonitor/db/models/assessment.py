@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text, func
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from unimonitor.db.models.tenant import Tenant
 
 
-class AssessmentStatus(str, Enum):
+class AssessmentStatus(StrEnum):
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -46,8 +46,8 @@ class Assessment(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="assessments")
-    runs: Mapped[list["AssessmentRun"]] = relationship(
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="assessments")
+    runs: Mapped[list[AssessmentRun]] = relationship(
         "AssessmentRun", back_populates="assessment", cascade="all, delete-orphan"
     )
 

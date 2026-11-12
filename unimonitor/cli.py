@@ -59,6 +59,7 @@ def setup(run_wizard: bool) -> None:
         return
 
     import asyncio
+
     from scripts.setup import run_setup
     asyncio.run(run_setup())
 
@@ -66,9 +67,11 @@ def setup(run_wizard: bool) -> None:
 @main.command()
 def migrate() -> None:
     """Apply Alembic database migrations."""
-    from alembic.config import Config
-    from alembic import command
     import os
+
+    from alembic.config import Config
+
+    from alembic import command
 
     ini_path = os.path.join(os.path.dirname(__file__), "..", "alembic.ini")
     alembic_cfg = Config(ini_path)
@@ -100,6 +103,7 @@ def secrets() -> None:
 def secrets_health() -> None:
     """Check health of configured secret provider."""
     import asyncio
+
     from unimonitor.secrets.resolver import get_secret_resolver
 
     async def _check():
@@ -120,6 +124,7 @@ def secrets_health() -> None:
 def secrets_set(name: str, value: str) -> None:
     """Set a secret value (use with caution — value visible in shell history)."""
     import asyncio
+
     from unimonitor.secrets.resolver import get_secret_resolver
 
     async def _set():
@@ -135,6 +140,7 @@ def secrets_set(name: str, value: str) -> None:
 def secrets_get(name: str) -> None:
     """Retrieve a secret value (outputs to stdout — use in scripts only)."""
     import asyncio
+
     from unimonitor.secrets.resolver import get_secret_resolver
 
     async def _get():
@@ -151,6 +157,7 @@ def secrets_get(name: str) -> None:
 def secrets_rotate(name: str, new_value: str) -> None:
     """Rotate a secret to a new value."""
     import asyncio
+
     from unimonitor.secrets.resolver import get_secret_resolver
 
     async def _rotate():

@@ -45,15 +45,16 @@ def generate_report_task(
     )
 
     async def _run():
+        from sqlalchemy import select
+
         from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.report import Report, ReportStatus
         from unimonitor.db.models.assessment import AssessmentRun
         from unimonitor.db.models.finding import Finding
-        from unimonitor.reporting.pdf_generator import PdfReportGenerator
-        from unimonitor.reporting.excel_generator import ExcelReportGenerator
+        from unimonitor.db.models.report import Report, ReportStatus
         from unimonitor.reporting.csv_generator import CsvReportGenerator
+        from unimonitor.reporting.excel_generator import ExcelReportGenerator
         from unimonitor.reporting.json_generator import JsonReportGenerator
-        from sqlalchemy import select
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
 
         async with async_session_factory() as db:
             # Load report record

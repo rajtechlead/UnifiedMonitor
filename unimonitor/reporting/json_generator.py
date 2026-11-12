@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from unimonitor.reporting.base import BaseReportGenerator
@@ -45,7 +45,7 @@ class JsonReportGenerator(BaseReportGenerator):
 
         report = {
             "report_type": report_type,
-            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "tenant_id": self.tenant_id,
             "run_id": self._get_run_id(),
             "assessment": self.run if isinstance(self.run, dict) else None,

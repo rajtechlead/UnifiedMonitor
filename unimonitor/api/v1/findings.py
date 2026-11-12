@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
@@ -196,7 +196,6 @@ async def update_finding_state(
             detail=f"Invalid state '{body.state}'. Valid states: {', '.join(VALID_STATES)}",
         )
 
-    from datetime import timezone
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
     repo = FindingRepository(db)
@@ -207,7 +206,7 @@ async def update_finding_state(
     old_state = finding.state
     updates: dict = {"state": body.state}
     if body.state == "implemented":
-        updates["resolved_at"] = datetime.now(timezone.utc)
+        updates["resolved_at"] = datetime.now(UTC)
     elif old_state == "implemented":
         updates["resolved_at"] = None
 

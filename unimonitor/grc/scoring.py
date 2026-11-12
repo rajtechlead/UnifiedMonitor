@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from unimonitor.db.models.finding import Finding, FindingSeverity, FindingState
 
-
 SEVERITY_WEIGHT = {
     FindingSeverity.CRITICAL.value: 10,
     FindingSeverity.HIGH.value: 8,

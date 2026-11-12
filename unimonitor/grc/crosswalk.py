@@ -27,9 +27,9 @@ class FrameworkCrosswalk:
         matched = crosswalk.find_by_reference("iso_27001_2022", "A.9.4.2")
     """
 
-    def __init__(self, controls: list["ControlDefinition"]) -> None:
+    def __init__(self, controls: list[ControlDefinition]) -> None:
         # index: { framework_id -> { reference_id -> [ControlDefinition, ...] } }
-        self._index: dict[str, dict[str, list["ControlDefinition"]]] = {}
+        self._index: dict[str, dict[str, list[ControlDefinition]]] = {}
         self._controls = controls
         self._build_index()
 
@@ -55,7 +55,7 @@ class FrameworkCrosswalk:
 
     def find_by_reference(
         self, framework_id: str, reference: str
-    ) -> list["ControlDefinition"]:
+    ) -> list[ControlDefinition]:
         """Return controls that map *reference* in *framework_id*."""
         fw_id = framework_id.lower()
         return self._index.get(fw_id, {}).get(reference, [])
@@ -64,7 +64,7 @@ class FrameworkCrosswalk:
         """Return all framework IDs present in the loaded controls."""
         return list(self._index.keys())
 
-    def coverage_for_framework(self, framework_id: str) -> dict[str, list["ControlDefinition"]]:
+    def coverage_for_framework(self, framework_id: str) -> dict[str, list[ControlDefinition]]:
         """Return the full reference→controls mapping for a framework."""
         return self._index.get(framework_id.lower(), {})
 

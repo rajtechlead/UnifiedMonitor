@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from datetime import datetime, timedelta, timezone
-
-from sqlalchemy import and_, cast, desc, func, select, text
-from sqlalchemy.dialects import postgresql, sqlite
+from sqlalchemy import and_, desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
@@ -144,8 +142,8 @@ class AssessmentRepository(BaseRepository[Assessment]):
         self, tenant_id: str | None = None, days: int = 30
     ) -> list[dict]:
         """Return daily score trend data for the last N days."""
-        from datetime import datetime, timedelta, timezone
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        from datetime import datetime, timedelta
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         stmt = (
             select(AssessmentRun)
             .join(Assessment, AssessmentRun.assessment_id == Assessment.id)
@@ -183,7 +181,7 @@ class AssessmentRepository(BaseRepository[Assessment]):
         try:
             from unimonitor.db.models.finding import Finding  # local import avoids circulars
 
-            cutoff = datetime.now(tz=timezone.utc) - timedelta(days=days)
+            cutoff = datetime.now(tz=UTC) - timedelta(days=days)
 
             # Portable date truncation: SQLite uses strftime, PostgreSQL uses date_trunc
             # We detect dialect via the connection URL prefix set at startup
@@ -279,10 +277,10 @@ class AssessmentRunRepository(BaseRepository[AssessmentRun]):
         risk_score: float,
         counts: dict,
     ) -> AssessmentRun:
-        from datetime import datetime, timezone
+        from datetime import datetime
         run = await self.get_or_raise(run_id)
         run.status = AssessmentStatus.COMPLETED.value
-        run.completed_at = datetime.now(timezone.utc)
+        run.completed_at = datetime.now(UTC)
         run.security_score = security_score
         run.compliance_score = compliance_score
         run.risk_score = risk_score
@@ -297,10 +295,10 @@ class AssessmentRunRepository(BaseRepository[AssessmentRun]):
         return run
 
     async def mark_failed(self, run_id: str, error_message: str) -> AssessmentRun:
-        from datetime import datetime, timezone
+        from datetime import datetime
         run = await self.get_or_raise(run_id)
         run.status = AssessmentStatus.FAILED.value
-        run.completed_at = datetime.now(timezone.utc)
+        run.completed_at = datetime.now(UTC)
         run.error_message = error_message
         await self.session.flush()
         return run

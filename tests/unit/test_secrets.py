@@ -6,13 +6,7 @@ mocking only.
 """
 from __future__ import annotations
 
-import os
-import tempfile
-from pathlib import Path
-from unittest.mock import AsyncMock, patch
-
 import pytest
-
 
 # ---------------------------------------------------------------------------
 # Local Vault tests
@@ -129,8 +123,9 @@ class TestSecretCache:
         assert cache.get("b") is None
 
     def test_expired_entry_returns_none(self):
-        from unimonitor.secrets.cache import SecretCache
         import time
+
+        from unimonitor.secrets.cache import SecretCache
         cache = SecretCache(ttl_seconds=1)
         cache.set("key", "value")
         # Manually expire by patching the entry's timestamp
@@ -222,11 +217,10 @@ class TestSecretResolver:
     @pytest.mark.asyncio
     async def test_resolve_ref_with_scheme(self, local_provider):
         from unimonitor.secrets.resolver import SecretResolver
-        from unimonitor.secrets.provider import ProviderType
 
         resolver = SecretResolver(primary_provider=local_provider)
         await local_provider.set_secret("my/secret", "ref-value")
-        ref = f"local_vault://my/secret"
+        ref = "local_vault://my/secret"
         value = await resolver.resolve_ref(ref)
         assert value == "ref-value"
 

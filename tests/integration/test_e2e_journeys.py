@@ -7,7 +7,6 @@ These run against the in-memory SQLite test database (no external services neede
 from __future__ import annotations
 
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
 
 pytestmark = pytest.mark.asyncio
@@ -294,8 +293,9 @@ class TestGRCJourney:
 
     async def test_controls_cover_all_services(self):
         """Controls exist for all 7 expected services."""
-        from unimonitor.grc.control_loader import ControlLoader
         from collections import Counter
+
+        from unimonitor.grc.control_loader import ControlLoader
         controls = ControlLoader().load_all()
         services = Counter(c.service for c in controls)
         for svc in ("exchange", "sharepoint", "teams", "intune", "defender", "purview"):
@@ -315,7 +315,7 @@ class TestGRCJourney:
                 ), f"{c.id}: unexpected result '{result}'"
             except Exception as exc:
                 broken.append(f"{c.id}: {exc}")
-        assert not broken, f"Controls with broken evaluate:\n" + "\n".join(broken)
+        assert not broken, "Controls with broken evaluate:\n" + "\n".join(broken)
 
     async def test_framework_crosswalk_finds_nist_controls(self):
         """FrameworkCrosswalk can find controls mapped to NIST CSF DE.CM-01."""

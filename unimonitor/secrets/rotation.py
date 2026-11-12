@@ -14,9 +14,8 @@ Rotation policy is stored in secret tags:
 """
 from __future__ import annotations
 
-import importlib
-from datetime import datetime, timedelta, timezone
-from typing import Callable, Awaitable
+from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime, timedelta
 
 from unimonitor.core.logging import get_logger
 from unimonitor.secrets.provider import SecretMetadata
@@ -78,7 +77,7 @@ class RotationManager:
                     return False
                 days = int(days_str)
                 last_rotated = datetime.fromisoformat(last_rotated_str)
-                return datetime.now(timezone.utc) > last_rotated + timedelta(days=days)
+                return datetime.now(UTC) > last_rotated + timedelta(days=days)
         except Exception as exc:
             logger.warning("Could not check rotation policy", name=name, error=str(exc))
         return False
@@ -96,7 +95,7 @@ class RotationManager:
                 try:
                     days = int(days_str)
                     last_rotated = datetime.fromisoformat(last_rotated_str)
-                    if datetime.now(timezone.utc) > last_rotated + timedelta(days=days):
+                    if datetime.now(UTC) > last_rotated + timedelta(days=days):
                         due.append(secret.name)
                 except (ValueError, TypeError):
                     continue

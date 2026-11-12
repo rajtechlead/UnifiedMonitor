@@ -5,10 +5,8 @@ and resolves framework mappings.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -18,6 +16,19 @@ logger = get_logger(__name__)
 
 # Controls directory, relative to the project root
 CONTROLS_DIR = Path(__file__).resolve().parents[2] / "controls"
+
+
+# Map legacy pass/fail to canonical finding states (module-level constants)
+_RESULT_MAP: dict[str, str] = {
+    "pass": "implemented",
+    "fail": "not_implemented",
+    "partial": "partially_implemented",
+    "n/a": "not_applicable",
+    "na": "not_applicable",
+}
+_VALID_STATES: frozenset[str] = frozenset(
+    {"implemented", "partially_implemented", "not_implemented", "not_applicable"}
+)
 
 
 # ── ControlDefinition dataclass ───────────────────────────────
@@ -37,14 +48,28 @@ class ControlDefinition:
     _evaluate_code: str = field(default="", repr=False)
 
     def run_evaluate(self, data: dict) -> str:
-        """Execute the ``evaluate(data)`` function defined in the YAML and return the result."""
+        """Execute the ``evaluate(data)`` function defined in the YAML and return the result.
+
+        Normalises legacy ``pass`` / ``fail`` return values to canonical
+        finding states (``implemented`` / ``not_implemented``).
+        """
         namespace: dict = {}
         try:
             exec(self._evaluate_code, namespace)  # noqa: S102
-            return namespace["evaluate"](data)
+            raw: str = namespace["evaluate"](data)
         except Exception as exc:
             logger.warning("evaluate_error", control_id=self.id, error=str(exc))
             return "error"
+        # Normalise to canonical finding states
+        normalised = _RESULT_MAP.get(str(raw).lower(), raw)
+        if normalised not in _VALID_STATES:
+            logger.warning(
+                "evaluate_unexpected_result",
+                control_id=self.id,
+                raw=raw,
+                normalised=normalised,
+            )
+        return normalised
 
 
 # ── ControlLoader class ───────────────────────────────────────

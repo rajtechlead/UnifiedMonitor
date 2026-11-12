@@ -39,9 +39,15 @@ async def create_default_admin() -> None:
     from unimonitor.db.models.user import User
     from unimonitor.db.models.tenant import Tenant
     from sqlalchemy import select
-    from passlib.context import CryptContext
+    import bcrypt as _bcrypt
 
-    pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+    class _PwdContext:
+        """Thin bcrypt wrapper matching passlib's hash/verify interface."""
+        @staticmethod
+        def hash(password: str) -> str:
+            return _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8")
+
+    pwd_context = _PwdContext()
 
     async with AsyncSessionLocal() as db:
         # Check for existing tenants

@@ -8,11 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
+from enum import StrEnum
 from typing import Protocol, runtime_checkable
 
 
-class ProviderType(str, Enum):
+class ProviderType(StrEnum):
     AZURE_KEY_VAULT = "azure_key_vault"
     AWS_SECRETS_MANAGER = "aws_secrets_manager"
     LOCAL_VAULT = "local_vault"

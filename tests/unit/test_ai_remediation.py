@@ -1,8 +1,9 @@
 """
 Unit tests for the AI remediation engine (rule-based fallback path).
 """
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
 
 
 class TestRuleBasedRemediation:

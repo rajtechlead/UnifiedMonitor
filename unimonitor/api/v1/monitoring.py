@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
-from sqlalchemy import select, desc
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
@@ -140,10 +140,11 @@ async def get_platform_health(
     db: AsyncSession = Depends(get_session),
 ) -> PlatformHealthResponse:
     """Return health status of all platform components."""
-    from unimonitor.core.cache import get_redis
     import time
 
-    now = datetime.now(timezone.utc)
+    from unimonitor.core.cache import get_redis
+
+    now = datetime.now(UTC)
 
     # Database check
     db_status: dict[str, Any] = {"status": "unknown", "latency_ms": None}
@@ -181,7 +182,7 @@ async def get_platform_health(
     # Graph connectivity check (using default tenant if any)
     graph_status: dict[str, Any] = {"status": "not_configured"}
     try:
-        result = await db.execute(select(Tenant).where(Tenant.is_active == True).limit(1))
+        result = await db.execute(select(Tenant).where(Tenant.is_active).limit(1))
         tenant = result.scalar_one_or_none()
         if tenant:
             from unimonitor.graph.client import GraphClient

@@ -1,13 +1,11 @@
 """
 Unit tests for the reporting generators.
 """
-import json
 import csv
-import io
-import pytest
+import json
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
 
+import pytest
 
 SAMPLE_RUN = {
     "id": "run-00000001",
@@ -174,6 +172,7 @@ class TestExcelGenerator:
         """Excel workbook contains multiple sheets."""
         pytest.importorskip("openpyxl")
         import openpyxl
+
         from unimonitor.reporting.excel_generator import ExcelReportGenerator
 
         gen = ExcelReportGenerator(

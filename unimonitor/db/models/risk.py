@@ -44,7 +44,7 @@ class RiskItem(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    scores: Mapped[list["RiskScore"]] = relationship(
+    scores: Mapped[list[RiskScore]] = relationship(
         "RiskScore", back_populates="risk_item", cascade="all, delete-orphan"
     )
 

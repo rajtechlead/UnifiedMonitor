@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -359,7 +359,8 @@ async def test_notification(
             import httpx
             headers = {**wh_cfg.get("headers", {}), "Content-Type": "application/json"}
             if wh_cfg.get("secret"):
-                import hmac, hashlib
+                import hashlib
+                import hmac
                 body = json.dumps(test_payload).encode()
                 sig = hmac.new(wh_cfg["secret"].encode(), body, hashlib.sha256).hexdigest()
                 headers["X-UniMonitor-Signature"] = f"sha256={sig}"

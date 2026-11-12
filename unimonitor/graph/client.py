@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
-from collections import deque
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 import httpx
@@ -20,7 +19,12 @@ from unimonitor.auth.oauth import acquire_token_for_client
 from unimonitor.config import get_settings
 from unimonitor.core.cache import cache_get, cache_set, make_graph_cache_key
 from unimonitor.core.logging import get_logger
-from unimonitor.exceptions import GraphAPIError, GraphPermissionError, GraphRateLimitError, GraphTimeoutError
+from unimonitor.exceptions import (
+    GraphAPIError,
+    GraphPermissionError,
+    GraphRateLimitError,
+    GraphTimeoutError,
+)
 
 logger = get_logger(__name__)
 
@@ -87,7 +91,7 @@ class GraphClient:
         self._token_expiry: float = 0.0
         self._http_client: httpx.AsyncClient | None = None
 
-    async def __aenter__(self) -> "GraphClient":
+    async def __aenter__(self) -> GraphClient:
         self._http_client = httpx.AsyncClient(
             timeout=get_settings().GRAPH_REQUEST_TIMEOUT,
             http2=True,

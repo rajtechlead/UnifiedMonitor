@@ -2,9 +2,7 @@
 Integration tests for core API endpoints.
 """
 import pytest
-import pytest_asyncio
 from httpx import AsyncClient
-
 
 pytestmark = pytest.mark.asyncio
 

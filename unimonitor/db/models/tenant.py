@@ -61,14 +61,14 @@ class Tenant(Base):
     )
 
     # Relationships
-    users: Mapped[list["AppUser"]] = relationship("AppUser", back_populates="tenant", lazy="select")
-    assessments: Mapped[list["Assessment"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    users: Mapped[list[AppUser]] = relationship("AppUser", back_populates="tenant", lazy="select")
+    assessments: Mapped[list[Assessment]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Assessment", back_populates="tenant", cascade="all, delete-orphan"
     )
-    findings: Mapped[list["Finding"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    findings: Mapped[list[Finding]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "Finding", back_populates="tenant", cascade="all, delete-orphan"
     )
-    notification_setting: Mapped["NotificationSetting | None"] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    notification_setting: Mapped[NotificationSetting | None] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "NotificationSetting", back_populates="tenant", uselist=False
     )
 

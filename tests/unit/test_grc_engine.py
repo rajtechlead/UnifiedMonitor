@@ -1,10 +1,7 @@
 """
 Unit tests for the GRC engine — control loading, scoring, evaluate().
 """
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock, patch
-
 
 # ── Control loader ────────────────────────────────────────────────────────────
 

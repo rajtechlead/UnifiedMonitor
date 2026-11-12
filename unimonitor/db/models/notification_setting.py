@@ -47,4 +47,4 @@ class NotificationSetting(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="notification_setting")
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="notification_setting")

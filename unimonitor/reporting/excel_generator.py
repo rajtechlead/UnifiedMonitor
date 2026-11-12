@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 from unimonitor.reporting.base import BaseReportGenerator
 
 try:
     import openpyxl
     from openpyxl.styles import (
-        Alignment, Border, Font, PatternFill, Side, numbers,
+        Alignment,
+        Border,
+        Font,
+        PatternFill,
+        Side,
+        numbers,
     )
     from openpyxl.utils import get_column_letter
     HAS_OPENPYXL = True
@@ -84,7 +88,7 @@ class ExcelReportGenerator(BaseReportGenerator):
         ws["A2"].font = Font(size=10, color="666666")
         ws.merge_cells("A2:D2")
 
-        ws["A3"] = f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+        ws["A3"] = f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}"
         ws["A3"].font = Font(size=10, color="666666")
         ws.merge_cells("A3:D3")
 

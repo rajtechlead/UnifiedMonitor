@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from unimonitor.db.models.tenant import Tenant, TenantConfig
+from unimonitor.db.models.tenant import Tenant
 from unimonitor.db.repositories.base import BaseRepository
 
 
@@ -99,7 +99,7 @@ class TenantRepository(BaseRepository[Tenant]):
         try:
             from unimonitor.db.models.collection import CollectionRun  # type: ignore[import]
 
-            since = datetime.now(timezone.utc) - timedelta(hours=hours)
+            since = datetime.now(UTC) - timedelta(hours=hours)
             total_q = select(func.count(CollectionRun.id)).where(
                 and_(
                     CollectionRun.tenant_id == tenant_id,
@@ -167,8 +167,9 @@ class UserRepository(BaseRepository):  # type: ignore[type-arg]
 
     async def upsert_from_entra(self, user_info: dict):
         """Create or update an AppUser from Entra ID user info dict."""
-        from unimonitor.db.models.user import AppUser
         from sqlalchemy import select
+
+        from unimonitor.db.models.user import AppUser
 
         entra_oid = user_info.get("entra_oid") or user_info.get("id", "")
         email = user_info.get("email", "")

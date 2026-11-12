@@ -7,10 +7,14 @@ from __future__ import annotations
 
 from unimonitor.db.base import (
     async_session_factory as AsyncSessionLocal,
-    get_async_session as get_db,
-    engine,
+)
+from unimonitor.db.base import (
     create_all_tables,
     drop_all_tables,
+    engine,
+)
+from unimonitor.db.base import (
+    get_async_session as get_db,
 )
 
 __all__ = [

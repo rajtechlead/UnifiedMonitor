@@ -314,15 +314,7 @@ class FindingRepository(BaseRepository[Finding]):
         limit: int = 10,
     ) -> Sequence[Finding]:
         """Return top-priority non-suppressed, non-implemented findings."""
-        from unimonitor.db.models.finding import FindingSeverity
 
-        severity_order = {
-            FindingSeverity.CRITICAL.value: 0,
-            FindingSeverity.HIGH.value: 1,
-            FindingSeverity.MEDIUM.value: 2,
-            FindingSeverity.LOW.value: 3,
-            FindingSeverity.INFORMATIONAL.value: 4,
-        }
         stmt = (
             select(Finding)
             .where(
@@ -381,7 +373,6 @@ class FindingRepository(BaseRepository[Finding]):
         limit: int = 10,
     ) -> list[dict]:
         """Return recent finding state changes as activity items."""
-        from datetime import timezone
         stmt = (
             select(FindingHistory)
             .join(Finding, FindingHistory.finding_id == Finding.id)

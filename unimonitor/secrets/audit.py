@@ -17,8 +17,8 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
-from enum import Enum
+from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 
 import structlog
@@ -26,7 +26,7 @@ import structlog
 logger = structlog.get_logger("unimonitor.secrets.audit")
 
 
-class AuditOperation(str, Enum):
+class AuditOperation(StrEnum):
     GET = "get"
     SET = "set"
     ROTATE = "rotate"
@@ -63,7 +63,7 @@ class SecretAuditLog:
         error: str | None = None,
     ) -> None:
         record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event": "secret_access",
             "operation": operation.value,
             "secret_name": secret_name,

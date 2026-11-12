@@ -11,8 +11,7 @@ GRC Engine — orchestrates assessment runs:
 from __future__ import annotations
 
 import asyncio
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,10 +19,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unimonitor.core.logging import get_logger
 from unimonitor.db.models.assessment import AssessmentRun, AssessmentStatus
 from unimonitor.db.models.finding import Finding, FindingEvidence, FindingSeverity, FindingState
-from unimonitor.grc.frameworks import get_framework
-from unimonitor.grc.scoring import calculate_scores
-from unimonitor.grc.control_loader import ControlLoader, ControlDefinition
 from unimonitor.graph.collector_registry import CollectorRegistry
+from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
+from unimonitor.grc.scoring import calculate_scores
 
 logger = get_logger(__name__)
 
@@ -74,7 +72,7 @@ class AssessmentEngine:
             all_ctrl_defs = loader.load_all()
             # Filter by framework if specified
             if frameworks:
-                fw_set = set(f.lower() for f in frameworks)
+                fw_set = {f.lower() for f in frameworks}
                 controls: list[ControlDefinition] = [
                     c for c in all_ctrl_defs
                     if any(fw.lower() in fw_set for fw in c.compliance_mapping.keys())
@@ -146,7 +144,7 @@ class AssessmentEngine:
             run.low_count = scores["low_count"]
             run.informational_count = scores["informational_count"]
             run.status = AssessmentStatus.COMPLETED.value
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
 
             await self.db.commit()
             logger.info(
@@ -162,13 +160,13 @@ class AssessmentEngine:
             logger.error("Assessment run failed", run_id=run.id, error=str(exc))
             run.status = AssessmentStatus.FAILED.value
             run.error_message = str(exc)[:2000]
-            run.completed_at = datetime.now(timezone.utc)
+            run.completed_at = datetime.now(UTC)
             await self.db.commit()
             raise
 
     async def _evaluate_control(
         self,
-        control_def: "ControlDefinition",
+        control_def: ControlDefinition,
         collected_data: dict[str, Any],
         run_id: str,
     ) -> Finding:

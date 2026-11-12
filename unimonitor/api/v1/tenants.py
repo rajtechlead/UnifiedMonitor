@@ -10,7 +10,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field, SecretStr
 
 from unimonitor.auth.dependencies import get_current_user, require_role
-from unimonitor.exceptions import NotFoundError
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -223,15 +222,6 @@ async def test_connection(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
 
     # Required Graph API permissions for UniMonitor
-    required_scopes = [
-        "Organization.Read.All",
-        "Directory.Read.All",
-        "Policy.Read.All",
-        "SecurityEvents.Read.All",
-        "IdentityRiskyUser.Read.All",
-        "DeviceManagementManagedDevices.Read.All",
-        "Reports.Read.All",
-    ]
 
     try:
         async with GraphClient(
@@ -298,7 +288,6 @@ async def tenant_health(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> TenantHealthResponse:
     """Return last collection health status for a tenant."""
-    from datetime import datetime, timedelta, timezone
 
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.repositories.tenant_repo import TenantRepository

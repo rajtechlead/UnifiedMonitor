@@ -2,23 +2,28 @@
 
 from __future__ import annotations
 
-import json
-from datetime import datetime, timezone
-from pathlib import Path
-from typing import Any
+from datetime import UTC, datetime
 
 from unimonitor.reporting.base import BaseReportGenerator
 
 try:
     from reportlab.lib import colors
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     from reportlab.lib.pagesizes import A4, letter
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
     from reportlab.lib.units import cm, inch
     from reportlab.platypus import (
-        Flowable, Frame, HRFlowable, Image, PageTemplate, Paragraph,
-        SimpleDocTemplate, Spacer, Table, TableStyle,
+        Flowable,
+        Frame,
+        HRFlowable,
+        Image,
+        PageTemplate,
+        Paragraph,
+        SimpleDocTemplate,
+        Spacer,
+        Table,
+        TableStyle,
     )
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
     HAS_REPORTLAB = True
 except ImportError:
     HAS_REPORTLAB = False
@@ -71,7 +76,7 @@ class PdfReportGenerator(BaseReportGenerator):
         story.append(Spacer(1, 0.4 * cm))
 
         sub_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey)
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         story.append(Paragraph(f"Tenant: {self.tenant_id}  |  Run: {self.run.id}  |  Generated: {now}", sub_style))
         story.append(Spacer(1, 0.6 * cm))
 

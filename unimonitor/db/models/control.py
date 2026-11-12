@@ -31,7 +31,7 @@ class Framework(Base):
         DateTime(timezone=True), server_default=func.now()
     )
 
-    controls: Mapped[list["Control"]] = relationship(
+    controls: Mapped[list[Control]] = relationship(
         "Control", back_populates="framework", cascade="all, delete-orphan"
     )
 
@@ -64,13 +64,13 @@ class Control(Base):
     )
 
     framework: Mapped[Framework] = relationship("Framework", back_populates="controls")
-    mappings: Mapped[list["ControlMapping"]] = relationship(
+    mappings: Mapped[list[ControlMapping]] = relationship(
         "ControlMapping",
         foreign_keys="ControlMapping.source_control_id",
         back_populates="source_control",
         cascade="all, delete-orphan",
     )
-    findings: Mapped[list["Finding"]] = relationship("Finding", back_populates="control")  # type: ignore[name-defined]  # noqa: F821
+    findings: Mapped[list[Finding]] = relationship("Finding", back_populates="control")  # type: ignore[name-defined]  # noqa: F821
 
 
 class ControlMapping(Base):

@@ -48,8 +48,8 @@ class AppUser(Base):
     )
 
     # Relationships
-    tenant: Mapped["Tenant"] = relationship("Tenant", back_populates="users")
-    audit_logs: Mapped[list["AuditLog"]] = relationship(  # type: ignore[name-defined]  # noqa: F821
+    tenant: Mapped[Tenant] = relationship("Tenant", back_populates="users")
+    audit_logs: Mapped[list[AuditLog]] = relationship(  # type: ignore[name-defined]  # noqa: F821
         "AuditLog", back_populates="user", cascade="all, delete-orphan"
     )
 
