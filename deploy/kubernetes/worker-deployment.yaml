@@ -1,0 +1,178 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unimonitor-worker
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: unimonitor-worker
+  template:
+    metadata:
+      labels:
+        app: unimonitor-worker
+        app.kubernetes.io/name: unimonitor
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: unimonitor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: worker
+          image: ghcr.io/rajtechlead/unimonitor-worker:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - unimonitor.worker.celery_app
+            - worker
+            - --loglevel=info
+            - --concurrency=4
+            - -Q
+            - assessments,reports,notifications
+          envFrom:
+            - configMapRef:
+                name: unimonitor-config
+            - secretRef:
+                name: unimonitor-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2000m"
+              memory: "2Gi"
+          livenessProbe:
+            exec:
+              command:
+                - celery
+                - -A
+                - unimonitor.worker.celery_app
+                - inspect
+                - ping
+                - -d
+                - celery@$HOSTNAME
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 10
+            failureThreshold: 3
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: unimonitor-reports
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unimonitor-beat
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: beat
+spec:
+  replicas: 1  # Beat must be singleton
+  selector:
+    matchLabels:
+      app: unimonitor-beat
+  template:
+    metadata:
+      labels:
+        app: unimonitor-beat
+        app.kubernetes.io/name: unimonitor
+        app.kubernetes.io/component: beat
+    spec:
+      serviceAccountName: unimonitor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: beat
+          image: ghcr.io/rajtechlead/unimonitor-worker:latest
+          imagePullPolicy: Always
+          command:
+            - celery
+            - -A
+            - unimonitor.worker.celery_app
+            - beat
+            - --loglevel=info
+            - --scheduler=celery.beat.PersistentScheduler
+            - --schedule=/tmp/celerybeat-schedule
+          envFrom:
+            - configMapRef:
+                name: unimonitor-config
+            - secretRef:
+                name: unimonitor-secrets
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+---
+# Redis
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unimonitor-redis
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unimonitor-redis
+  template:
+    metadata:
+      labels:
+        app: unimonitor-redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - containerPort: 6379
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "250m"
+              memory: "512Mi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: unimonitor-redis-data
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unimonitor-redis-data
+  namespace: unimonitor
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 2Gi

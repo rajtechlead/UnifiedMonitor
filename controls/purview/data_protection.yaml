@@ -1,0 +1,259 @@
+# UniMonitor GRC Controls — Purview: Data Protection & Compliance
+
+controls:
+  - id: CTRL-PUR-001
+    title: "Sensitivity Labels Published to Users"
+    description: >
+      Microsoft Purview sensitivity labels must be created and published to users
+      to enable classification and protection of sensitive documents and emails.
+    severity: HIGH
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.12"
+        - "A.5.13"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "MP-3"
+      cis_controls_v8:
+        - "3.7"
+      cis_m365_benchmark:
+        - "3.1.1"
+      gdpr:
+        - "Article 25"
+        - "Article 32"
+      hipaa:
+        - "164.312(c)(2)"
+      pci_dss_v4:
+        - "9.4.1"
+      soc2:
+        - "CC6.1"
+    rationale: "Without labels, users cannot identify and protect sensitive content, leading to data exposure."
+    remediation: |
+      1. Navigate to Microsoft Purview compliance portal > Information protection > Labels
+      2. Create a label taxonomy (e.g. Public, Internal, Confidential, Highly Confidential)
+      3. Configure protection actions for Confidential and above (encryption, watermark)
+      4. Publish labels via a label policy to All users
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/compliance/sensitivity-labels
+    evaluate: |
+      labels = data.get("sensitivityLabels", {}).get("value", [])
+      info_labels = data.get("infoProtectionLabels", {}).get("value", [])
+      all_labels = labels or info_labels
+      if not all_labels:
+          return "not_implemented"
+      active = [l for l in all_labels if not l.get("isDeleted", False)]
+      if len(active) >= 3:
+          return "implemented"
+      return "partially_implemented" if active else "not_implemented"
+
+  - id: CTRL-PUR-002
+    title: "Data Loss Prevention Policies Active"
+    description: >
+      DLP policies must be active in Microsoft Purview to detect and prevent
+      sharing of sensitive information (PII, credit cards, PHI) via email,
+      Teams, SharePoint, and OneDrive.
+    severity: HIGH
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.12"
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+        - "PR.DS-02"
+      nist_800_53_r5:
+        - "SC-7"
+      cis_controls_v8:
+        - "3.9"
+      cis_m365_benchmark:
+        - "3.2.1"
+      gdpr:
+        - "Article 32"
+      hipaa:
+        - "164.312(c)(1)"
+      pci_dss_v4:
+        - "12.3.3"
+    rationale: "DLP prevents accidental and malicious data exfiltration across M365 workloads."
+    remediation: |
+      1. Navigate to Purview compliance portal > Data loss prevention > Policies
+      2. Create policies using built-in templates (Financial, Medical, PII)
+      3. Apply to: Exchange, SharePoint, OneDrive, Teams
+      4. Start in Test mode, review matches, then enforce
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/compliance/dlp-learn-about-dlp
+    evaluate: |
+      policies = data.get("dlpPolicies", {}).get("value", [])
+      if not policies:
+          return "not_implemented"
+      enabled = [p for p in policies if p.get("mode") == "Enforce"]
+      test = [p for p in policies if p.get("mode") in ("TestWithNotifications", "TestWithoutNotifications")]
+      if enabled:
+          return "implemented"
+      return "partially_implemented" if test else "not_implemented"
+
+  - id: CTRL-PUR-003
+    title: "Insider Risk Management Policy Enabled"
+    description: >
+      At least one Insider Risk Management policy must be configured to detect
+      risky user activities such as data theft, leaks, or policy violations.
+    severity: MEDIUM
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.6.3"
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-03"
+      nist_800_53_r5:
+        - "AT-2"
+      cis_m365_benchmark:
+        - "3.4.1"
+      soc2:
+        - "CC7.3"
+      hipaa:
+        - "164.308(a)(3)"
+    rationale: "Insider threats account for a significant percentage of data breaches. Early detection is critical."
+    remediation: |
+      1. Navigate to Purview compliance portal > Insider risk management
+      2. Create a policy using the Data theft by departing user template
+      3. Configure indicators and thresholds
+      4. Assign investigators to review alerts
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/compliance/insider-risk-management
+    evaluate: |
+      policies = data.get("insiderRiskPolicies", {}).get("value", [])
+      if not policies:
+          return "not_implemented"
+      enabled = [p for p in policies if p.get("status") == "Active"]
+      return "implemented" if enabled else "partially_implemented"
+
+  - id: CTRL-PUR-004
+    title: "Audit Log Retention Configured for Minimum 1 Year"
+    description: >
+      Microsoft Purview Audit must be enabled with retention configured for at least
+      1 year (or 10 years for E5) to support incident investigation and compliance.
+    severity: HIGH
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.15"
+        - "A.8.17"
+      nist_800_53_r5:
+        - "AU-11"
+      cis_m365_benchmark:
+        - "2.1.1"
+      soc2:
+        - "CC7.2"
+        - "A1.3"
+      hipaa:
+        - "164.308(a)(1)(ii)(D)"
+      pci_dss_v4:
+        - "10.5.1"
+    rationale: "Audit logs are essential for incident response and forensic investigation. Short retention limits investigation scope."
+    remediation: |
+      1. In Purview compliance portal > Audit > Audit retention policies
+      2. Create a retention policy for All activities or key workloads
+      3. Set duration to 1 year minimum (10 years for E5 premium audit)
+      4. Enable audit for all workloads in Microsoft 365 admin center
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/compliance/audit-log-retention-policies
+    evaluate: |
+      org = data.get("organization", {}).get("value", [{}])[0]
+      assigned_plans = org.get("assignedPlans", [])
+      has_e5_audit = any(
+          "M365Audit" in plan.get("service", "") or "PremiumAudit" in plan.get("servicePlanId", "")
+          for plan in assigned_plans
+          if plan.get("capabilityStatus") == "Enabled"
+      )
+      if has_e5_audit:
+          return "implemented"
+      # Standard audit with no premium — still check if audit is on
+      return "partially_implemented"
+
+  - id: CTRL-PUR-005
+    title: "Data Loss Prevention (DLP) Policies Configured"
+    description: >
+      Microsoft Purview DLP policies must be configured and active across Exchange,
+      SharePoint, Teams, and Endpoint locations to detect and prevent exfiltration
+      of sensitive data types (PII, PCI, PHI).
+    severity: HIGH
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "MP-6"
+      cis_controls_v8:
+        - "3.13"
+      cis_m365_benchmark:
+        - "3.2.1"
+      gdpr:
+        - "Article 25"
+        - "Article 32"
+      hipaa:
+        - "164.312(c)(2)"
+      pci_dss_v4:
+        - "12.3.2"
+      soc2:
+        - "CC6.7"
+    evaluate: |
+      dlp_policies = data.get("dlp_policies", [])
+      if not dlp_policies:
+          return "not_implemented"
+      active = [p for p in dlp_policies if p.get("mode") in ("Enable", "TestWithNotifications")]
+      if not active:
+          return "not_implemented"
+      locations = set()
+      for p in active:
+          for loc in p.get("locations", []):
+              locations.add(loc.get("name", "").lower())
+      covered = sum(1 for l in ("exchange", "sharepoint", "teams", "endpoint") if l in str(locations).lower())
+      if covered >= 3:
+          return "implemented"
+      if covered >= 1:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-PUR-006
+    title: "Insider Risk Management Policy Enabled"
+    description: >
+      Microsoft Purview Insider Risk Management must have at least one active policy
+      covering data theft, data leaks, or security policy violations to detect
+      malicious or inadvertent insider threats.
+    severity: HIGH
+    category: purview
+    service: purview
+    compliance_mapping:
+      iso27001_2022:
+        - "A.6.6"
+      nist_csf_2:
+        - "DE.CM-03"
+      nist_800_53_r5:
+        - "PS-7"
+      cis_controls_v8:
+        - "13.1"
+      cis_m365_benchmark:
+        - "3.4.1"
+      zero_trust:
+        - "apps.insider_risk"
+      soc2:
+        - "CC6.6"
+    evaluate: |
+      irm_policies = data.get("insider_risk_policies", [])
+      if not irm_policies:
+          return "not_implemented"
+      active = [p for p in irm_policies if p.get("status") == "Active"]
+      if active:
+          return "implemented"
+      if irm_policies:
+          return "partially_implemented"
+      return "not_implemented"

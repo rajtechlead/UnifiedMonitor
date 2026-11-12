@@ -1,0 +1,167 @@
+# UniMonitor GRC Controls — Identity: Privileged Access
+
+controls:
+  - id: CTRL-ENT-010
+    title: "Privileged Identity Management (PIM) Enabled"
+    description: >
+      Azure AD Privileged Identity Management must be enabled to provide just-in-time
+      privileged access with approval workflows and audit logs for administrative roles.
+    severity: CRITICAL
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+        - "A.5.18"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6(5)"
+        - "AC-2(7)"
+      cis_controls_v8:
+        - "5.4"
+      cis_m365_benchmark:
+        - "1.1.9"
+      zero_trust:
+        - "identity.least_privilege_access"
+      soc2:
+        - "CC6.3"
+      cmmc_2:
+        - "AC.2.006"
+      hipaa:
+        - "164.312(a)(1)"
+      pci_dss_v4:
+        - "7.2.1"
+    rationale: "PIM reduces the attack surface by ensuring privileged roles are not permanently assigned."
+    remediation: |
+      1. Navigate to Azure AD > Identity Governance > Privileged Identity Management
+      2. Enable PIM for Azure AD roles
+      3. Convert permanent assignments to eligible assignments
+      4. Configure activation requirements (MFA, justification, approval)
+    references:
+      - https://learn.microsoft.com/en-us/entra/id-governance/privileged-identity-management/pim-configure
+    evaluate: |
+      pim = data.get("pimResources", {})
+      if not pim:
+          return "not_applicable"
+      resources = pim.get("value", [])
+      if resources:
+          return "implemented"
+      # Check if PIM active roles exist
+      roles = data.get("directoryRoles", {}).get("value", [])
+      return "partially_implemented" if roles else "not_implemented"
+
+  - id: CTRL-ENT-011
+    title: "Global Administrator Count Minimized (<=5)"
+    description: >
+      The number of permanent Global Administrator accounts must not exceed 5.
+      Microsoft recommends 2-4 for most organizations.
+    severity: HIGH
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+      nist_800_53_r5:
+        - "AC-6(5)"
+      cis_m365_benchmark:
+        - "1.1.6"
+      zero_trust:
+        - "identity.least_privilege_access"
+      soc2:
+        - "CC6.3"
+      pci_dss_v4:
+        - "7.2.1"
+    rationale: "Excess Global Admin accounts increase the blast radius of a compromise."
+    remediation: |
+      1. Review all Global Administrators in Azure AD > Roles and administrators > Global Administrator
+      2. Remove unnecessary assignments
+      3. Convert remaining to eligible (PIM) rather than permanent where possible
+      4. Target: 2-4 total Global Admins
+    references:
+      - https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/best-practices
+    evaluate: |
+      roles = data.get("directoryRoles", {}).get("value", [])
+      ga_role = next((r for r in roles if r.get("displayName") == "Global Administrator"), None)
+      if not ga_role:
+          return "not_applicable"
+      members = ga_role.get("members", [])
+      count = len(members)
+      if count == 0:
+          return "not_applicable"
+      if count <= 5:
+          return "implemented"
+      if count <= 10:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-ENT-012
+    title: "Emergency Access (Break-Glass) Accounts Configured"
+    description: >
+      At least two emergency access accounts must exist that are excluded from
+      Conditional Access policies and monitored with alerts for any usage.
+    severity: HIGH
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+      nist_800_53_r5:
+        - "AC-2"
+      cis_m365_benchmark:
+        - "1.1.5"
+      zero_trust:
+        - "identity.verify_explicitly"
+      soc2:
+        - "CC6.1"
+    rationale: "Break-glass accounts provide access during identity system failures or lockouts."
+    remediation: |
+      1. Create 2 cloud-only accounts with long, random passwords
+      2. Assign Global Administrator role permanently
+      3. Exclude from all CA policies
+      4. Store credentials in a secure location (safe, sealed envelope)
+      5. Monitor with Azure Monitor alerts on sign-in
+    references:
+      - https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/security-emergency-access
+    evaluate: |
+      # Heuristic: look for CA policies with excluded users (break-glass pattern)
+      policies = data.get("conditionalAccessPolicies", {}).get("value", [])
+      has_exclusions = any(
+          len(p.get("conditions", {}).get("users", {}).get("excludeUsers", [])) > 0
+          for p in policies
+      )
+      return "implemented" if has_exclusions else "partially_implemented"
+
+  - id: CTRL-ENT-013
+    title: "Privileged Accounts Use Cloud-Only Identities"
+    description: >
+      Accounts holding privileged roles must be cloud-only (not synced from on-premises AD)
+      to prevent on-prem compromise from elevating to cloud privileges.
+    severity: HIGH
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+      nist_csf_2:
+        - "PR.AA-05"
+      cis_m365_benchmark:
+        - "1.1.7"
+      zero_trust:
+        - "identity.verify_explicitly"
+    rationale: "Synced accounts can be compromised via on-premises AD attacks, gaining cloud admin access."
+    remediation: |
+      1. Identify privileged role holders that are synced accounts (onPremisesSyncEnabled = true)
+      2. Create cloud-only counterpart accounts for each
+      3. Remove privileged roles from synced accounts
+      4. Update documentation
+    references:
+      - https://learn.microsoft.com/en-us/entra/identity/role-based-access-control/best-practices
+    evaluate: |
+      org = data.get("organization", {}).get("value", [{}])[0]
+      # If on-prem sync is not enabled at all, cloud-only is implicit
+      on_prem_sync = org.get("onPremisesSyncEnabled", False)
+      if not on_prem_sync:
+          return "implemented"
+      # Sync is enabled — partial (we can't fully verify without user details)
+      return "partially_implemented"

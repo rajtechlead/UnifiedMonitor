@@ -1,0 +1,118 @@
+# UniMonitor GRC Controls — Identity: Risk & Sign-in Protection
+
+controls:
+  - id: CTRL-ENT-020
+    title: "User Risk Policy — Block or Require Password Change"
+    description: >
+      A Conditional Access policy must be configured to respond to high-risk users
+      by requiring a secure password change or blocking access.
+    severity: HIGH
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "DE.CM-01"
+      cis_m365_benchmark:
+        - "1.1.10"
+      zero_trust:
+        - "identity.assume_breach"
+      soc2:
+        - "CC7.3"
+      hipaa:
+        - "164.308(a)(1)(ii)(D)"
+    rationale: "Risky users may have compromised credentials. Automatic remediation limits attacker dwell time."
+    remediation: |
+      1. Navigate to Azure AD > Security > Conditional Access > New Policy
+      2. Set Users: All users
+      3. Set Conditions > User risk: High
+      4. Set Grant: Require password change
+      5. Enable the policy
+    references:
+      - https://learn.microsoft.com/en-us/entra/identity/conditional-access/howto-conditional-access-policy-risk-user
+    evaluate: |
+      policies = data.get("conditionalAccessPolicies", {}).get("value", [])
+      enabled = [p for p in policies if p.get("state") == "enabled"]
+      for p in enabled:
+          conditions = p.get("conditions", {})
+          user_risk = conditions.get("userRiskLevels", [])
+          grant = p.get("grantControls") or {}
+          built_in = grant.get("builtInControls", [])
+          if "high" in user_risk and ("passwordChange" in built_in or "block" in built_in):
+              return "implemented"
+      risky_users = data.get("riskyUsers", {}).get("value", [])
+      if risky_users:
+          return "not_implemented"
+      return "partially_implemented"
+
+  - id: CTRL-ENT-021
+    title: "Sign-In Risk Policy Enabled"
+    description: >
+      A Conditional Access policy must require MFA or block medium/high risk sign-ins
+      detected by Microsoft Entra ID Protection.
+    severity: HIGH
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "DE.CM-01"
+      cis_m365_benchmark:
+        - "1.1.11"
+      zero_trust:
+        - "identity.assume_breach"
+      soc2:
+        - "CC7.1"
+    rationale: "Sign-in risk policies stop suspicious authentication before damage occurs."
+    remediation: |
+      1. In Conditional Access, create a new policy
+      2. Set Conditions > Sign-in risk: Medium and above
+      3. Set Grant: Require multifactor authentication
+      4. Apply to All users
+    references:
+      - https://learn.microsoft.com/en-us/entra/identity/conditional-access/howto-conditional-access-policy-risk
+    evaluate: |
+      policies = data.get("conditionalAccessPolicies", {}).get("value", [])
+      enabled = [p for p in policies if p.get("state") == "enabled"]
+      for p in enabled:
+          conditions = p.get("conditions", {})
+          sign_in_risk = conditions.get("signInRiskLevels", [])
+          if "medium" in sign_in_risk or "high" in sign_in_risk:
+              grant = p.get("grantControls") or {}
+              if "mfa" in grant.get("builtInControls", []):
+                  return "implemented"
+      risky_sign_ins = data.get("riskySignIns", {}).get("value", [])
+      return "not_implemented"
+
+  - id: CTRL-ENT-022
+    title: "Identity Protection Notifications Configured"
+    description: >
+      Notifications for risky users and weekly digest should be configured in
+      Entra ID Protection to alert administrators to identity risks.
+    severity: MEDIUM
+    category: identity
+    service: entra_id
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.AE-07"
+      cis_m365_benchmark:
+        - "1.1.12"
+      soc2:
+        - "CC7.2"
+    rationale: "Without notifications, identity risks can go undetected for extended periods."
+    remediation: |
+      1. Navigate to Azure AD > Security > Identity Protection > Notifications
+      2. Enable 'Users at risk detected alerts'
+      3. Set notification email recipients
+      4. Enable 'Weekly digest'
+    references:
+      - https://learn.microsoft.com/en-us/entra/id-protection/howto-identity-protection-configure-notifications
+    evaluate: |
+      # Heuristic via org configuration — full check requires Identity Protection API
+      org = data.get("organization", {}).get("value", [{}])[0]
+      tech_contacts = org.get("technicalNotificationMails", [])
+      return "implemented" if tech_contacts else "not_implemented"

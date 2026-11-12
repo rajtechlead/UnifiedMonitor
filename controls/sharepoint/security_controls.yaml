@@ -1,0 +1,127 @@
+controls:
+  - id: CTRL-SPO-001
+    title: "Block Legacy Authentication for SharePoint"
+    severity: HIGH
+    category: identity
+    service: sharepoint
+    compliance_mapping:
+      cis_m365_benchmark: ["7.1"]
+      iso27001_2022: ["A.8.5"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      legacy_auth_blocked = settings.get("isLegacyAuthProtocolsEnabled", True) is False
+      return "implemented" if legacy_auth_blocked else "not_implemented"
+
+  - id: CTRL-SPO-002
+    title: "Restrict SharePoint Sharing to Existing Users or Specified Domains"
+    severity: HIGH
+    category: data_protection
+    service: sharepoint
+    compliance_mapping:
+      cis_m365_benchmark: ["7.2"]
+      iso27001_2022: ["A.8.3"]
+      nist_csf: ["PR.AC-3"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      # sharingCapability: 0=disabled, 1=existingGuests, 2=newAndExistingGuests, 3=anyone
+      sharing_cap = settings.get("sharingCapability", 3)
+      if sharing_cap == 0:
+        return "implemented"
+      if sharing_cap == 1:
+        return "implemented"
+      if sharing_cap == 2:
+        # Acceptable if domain allowlist is configured
+        allowed_domains = settings.get("sharingAllowedDomainList", [])
+        if allowed_domains:
+          return "partially_implemented"
+        return "not_implemented"
+      return "not_implemented"
+
+  - id: CTRL-SPO-003
+    title: "Require Managed Devices for SharePoint Access"
+    severity: MEDIUM
+    category: device_compliance
+    service: sharepoint
+    compliance_mapping:
+      cis_m365_benchmark: ["7.3"]
+      iso27001_2022: ["A.8.1"]
+      nist_csf: ["PR.AC-3"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      # conditionalAccessPolicy: 1=AllowFullAccess, 2=AllowLimitedAccess, 3=BlockAccess
+      ca_policy = settings.get("conditionalAccessPolicy", 1)
+      if ca_policy in [2, 3]:
+        return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-SPO-004
+    title: "Disable Anyone Links or Restrict Link Expiration"
+    severity: HIGH
+    category: data_protection
+    service: sharepoint
+    compliance_mapping:
+      cis_m365_benchmark: ["7.4"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      sharing_cap = settings.get("sharingCapability", 3)
+      # Anyone links disabled
+      if sharing_cap != 3:
+        return "implemented"
+      # Anyone links allowed but with expiration
+      expiry_days = settings.get("anonymousLinkExpirationInDays", 0)
+      if expiry_days and expiry_days <= 30:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-SPO-005
+    title: "Enable SharePoint Versioning for Document Libraries"
+    severity: LOW
+    category: data_protection
+    service: sharepoint
+    compliance_mapping:
+      iso27001_2022: ["A.8.11"]
+      nist_csf: ["PR.DS-1"]
+    evaluate: |
+      sites = data.get("sharePointSites", {}).get("value", [])
+      if not sites:
+        return "not_applicable"
+      return "partially_implemented"
+
+  - id: CTRL-SPO-006
+    title: "Restrict External Sharing for SharePoint Admin Center"
+    severity: HIGH
+    category: governance
+    service: sharepoint
+    compliance_mapping:
+      cis_m365_benchmark: ["7.5"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      # Prevent users from changing sharing permissions
+      prevent_change = settings.get("preventExternalUsersFromResharing", False)
+      require_account_match = settings.get("requireAnonymousLinksExpireInDays", 0) > 0 or settings.get("sharingBlockedDomainList") is not None
+      if prevent_change and require_account_match:
+        return "implemented"
+      if prevent_change or require_account_match:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-SPO-007
+    title: "Enable Information Barriers for SharePoint"
+    severity: MEDIUM
+    category: compliance
+    service: sharepoint
+    compliance_mapping:
+      iso27001_2022: ["A.8.3"]
+      nist_csf: ["PR.DS-5"]
+    evaluate: |
+      sp_settings = data.get("sharePointSettings", {})
+      settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
+      info_barriers = settings.get("ibImplicitGroupBased", False) or settings.get("informationBarriersEnabled", False)
+      return "implemented" if info_barriers else "not_implemented"

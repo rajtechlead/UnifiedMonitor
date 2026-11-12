@@ -1,0 +1,130 @@
+version: "3.9"
+
+services:
+  unimonitor:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile
+    image: unimonitor:latest
+    container_name: unimonitor_web
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-unimonitor}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-unimonitor}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    volumes:
+      - reports_data:/app/reports
+    networks:
+      - unimonitor_net
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.worker
+    image: unimonitor-worker:latest
+    container_name: unimonitor_worker
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-unimonitor}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-unimonitor}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A unimonitor.worker.celery_app inspect ping -d celery@$$HOSTNAME || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+    volumes:
+      - reports_data:/app/reports
+    networks:
+      - unimonitor_net
+
+  beat:
+    build:
+      context: ../..
+      dockerfile: deploy/docker/Dockerfile.worker
+    image: unimonitor-worker:latest
+    container_name: unimonitor_beat
+    command: >
+      celery -A unimonitor.worker.celery_app beat
+      --loglevel=info
+      --scheduler=celery.beat:PersistentScheduler
+      --pidfile=/tmp/celerybeat.pid
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-unimonitor}:${POSTGRES_PASSWORD:-changeme}@db:5432/${POSTGRES_DB:-unimonitor}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+    depends_on:
+      - worker
+    restart: unless-stopped
+    networks:
+      - unimonitor_net
+
+  db:
+    image: postgres:16-alpine
+    container_name: unimonitor_db
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-unimonitor}
+      POSTGRES_USER: ${POSTGRES_USER:-unimonitor}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-unimonitor}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - unimonitor_net
+
+  redis:
+    image: redis:7-alpine
+    container_name: unimonitor_redis
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - unimonitor_net
+
+volumes:
+  postgres_data:
+  redis_data:
+  reports_data:
+
+networks:
+  unimonitor_net:
+    driver: bridge

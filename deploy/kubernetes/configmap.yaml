@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: unimonitor-config
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+data:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+  CELERY_BROKER_URL: "redis://unimonitor-redis:6379/0"
+  CELERY_RESULT_BACKEND: "redis://unimonitor-redis:6379/1"
+  REDIS_URL: "redis://unimonitor-redis:6379/0"
+  REPORTS_DIR: "/app/reports"
+  CONTROLS_DIR: "/app/controls"
+  CORS_ORIGINS: "https://unimonitor.example.com"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: unimonitor-secrets
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+type: Opaque
+# Replace stringData values or manage via external secrets operator
+stringData:
+  DATABASE_URL: "postgresql+asyncpg://unimonitor:CHANGEME@unimonitor-postgres:5432/unimonitor"
+  SECRET_KEY: "CHANGE_THIS_SECRET_KEY_32_CHARS_MIN"
+  AZURE_TENANT_ID: ""
+  AZURE_CLIENT_ID: ""
+  AZURE_CLIENT_SECRET: ""
+  AZURE_OPENAI_API_KEY: ""
+  AZURE_OPENAI_ENDPOINT: ""
+  AZURE_OPENAI_DEPLOYMENT: "gpt-4o"

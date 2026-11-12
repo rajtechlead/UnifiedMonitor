@@ -1,0 +1,389 @@
+# UniMonitor GRC Controls — Intune: Device Management & Security
+
+controls:
+  - id: CTRL-INT-001
+    title: "BitLocker Encryption Enforced on Windows Devices"
+    description: >
+      BitLocker Drive Encryption must be enabled and enforced on all Windows devices
+      managed by Intune to protect data at rest in case of device loss or theft.
+    severity: CRITICAL
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.3"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.11"
+      cis_m365_benchmark:
+        - "5.1.2"
+      zero_trust:
+        - "endpoints.device_encryption"
+      soc2:
+        - "CC6.7"
+      hipaa:
+        - "164.312(a)(2)(iv)"
+        - "164.312(e)(2)(ii)"
+      pci_dss_v4:
+        - "3.5.1"
+    evaluate: |
+      policies = data.get("intune_device_configurations", [])
+      bitlocker = [
+          p for p in policies
+          if "bitlocker" in str(p.get("displayName", "")).lower()
+          or "encryption" in str(p.get("displayName", "")).lower()
+      ]
+      if not bitlocker:
+          return "not_implemented"
+      enabled = [
+          p for p in bitlocker
+          if p.get("bitLockerEncryptDevice") is True
+          or p.get("requireDeviceEncryption") is True
+      ]
+      if enabled:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-002
+    title: "Windows Hello for Business Enabled"
+    description: >
+      Windows Hello for Business (passwordless, PIN or biometric) must be configured
+      via Intune policy to reduce reliance on passwords and mitigate credential theft.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-01"
+      nist_800_53_r5:
+        - "IA-2"
+      cis_controls_v8:
+        - "6.3"
+      cis_m365_benchmark:
+        - "5.1.4"
+      zero_trust:
+        - "identity.mfa"
+      soc2:
+        - "CC6.1"
+      cmmc_2:
+        - "IA.1.076"
+    evaluate: |
+      policies = data.get("intune_device_configurations", [])
+      whfb = [
+          p for p in policies
+          if "hello" in str(p.get("displayName", "")).lower()
+          or "passwordless" in str(p.get("displayName", "")).lower()
+      ]
+      if not whfb:
+          return "not_implemented"
+      enabled = [
+          p for p in whfb
+          if p.get("windowsHelloForBusinessBlocked") is False
+          or p.get("useSecurityKeyForSignin") is True
+      ]
+      if enabled:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-003
+    title: "Device Compliance Policy Configured"
+    description: >
+      Intune device compliance policies must be configured to define minimum security
+      requirements (OS version, password, encryption) and mark non-compliant devices
+      appropriately for Conditional Access enforcement.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "CM-2"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.3.1"
+      zero_trust:
+        - "endpoints.compliance"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      policies = data.get("intune_compliance_policies", [])
+      if not policies:
+          return "not_implemented"
+      active = [p for p in policies if p.get("scheduledActionsForRule")]
+      if len(active) >= len(policies) * 0.8:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-004
+    title: "Mobile Device Management Enrollment Required"
+    description: >
+      All corporate-owned and BYOD devices that access corporate resources must be
+      enrolled in Microsoft Intune MDM to ensure policy enforcement and visibility.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+      nist_csf_2:
+        - "ID.AM-01"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "1.1"
+      zero_trust:
+        - "endpoints.managed_device"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      enrollment = data.get("intune_enrollment_restrictions", [])
+      if not enrollment:
+          return "not_implemented"
+      block_personal = any(
+          r.get("platformType") == "android"
+          or r.get("platformType") == "ios"
+          for r in enrollment
+          if r.get("deviceEnrollmentConfigurationType") == "limit"
+      )
+      if block_personal:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-005
+    title: "macOS FileVault Encryption Enforced"
+    description: >
+      FileVault full-disk encryption must be enabled on all macOS devices managed
+      by Intune to protect data at rest.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.3"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.11"
+      hipaa:
+        - "164.312(a)(2)(iv)"
+      soc2:
+        - "CC6.7"
+    evaluate: |
+      macos_configs = [
+          p for p in data.get("intune_device_configurations", [])
+          if p.get("oDataType", "").lower().find("macos") != -1
+          or "macos" in str(p.get("displayName", "")).lower()
+      ]
+      if not macos_configs:
+          return "not_applicable"
+      filevault = [
+          p for p in macos_configs
+          if p.get("fileVaultEnabled") is True
+          or "filevault" in str(p.get("displayName", "")).lower()
+      ]
+      if filevault:
+          return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-INT-006
+    title: "Endpoint Detection and Response (EDR) Onboarding Policy"
+    description: >
+      An Intune security policy must onboard all managed Windows and macOS endpoints
+      to Microsoft Defender for Endpoint EDR for advanced threat detection.
+    severity: CRITICAL
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      cmmc_2:
+        - "IR.2.093"
+    evaluate: |
+      security_configs = data.get("intune_endpoint_security_configs", [])
+      edr_policies = [
+          p for p in security_configs
+          if "edr" in str(p.get("displayName", "")).lower()
+          or "endpoint detection" in str(p.get("displayName", "")).lower()
+          or "defender" in str(p.get("displayName", "")).lower()
+      ]
+      if not edr_policies:
+          return "not_implemented"
+      deployed = [p for p in edr_policies if p.get("isAssigned") is True]
+      if deployed:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-007
+    title: "Device Password / PIN Policy Enforced"
+    description: >
+      Intune configuration profiles must enforce a minimum PIN/password length,
+      complexity, and lockout policy on all managed mobile and desktop devices.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-01"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.2"
+      cis_m365_benchmark:
+        - "5.1.1"
+      pci_dss_v4:
+        - "8.3.6"
+    evaluate: |
+      policies = data.get("intune_device_configurations", [])
+      pin_policies = [
+          p for p in policies
+          if p.get("passwordMinimumLength") is not None
+          or p.get("passcodeMinimumLength") is not None
+      ]
+      if not pin_policies:
+          return "not_implemented"
+      strong = [
+          p for p in pin_policies
+          if (p.get("passwordMinimumLength") or 0) >= 8
+          or (p.get("passcodeMinimumLength") or 0) >= 6
+      ]
+      if len(strong) >= len(pin_policies) * 0.8:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-INT-008
+    title: "iOS/Android App Protection Policies Configured"
+    description: >
+      Intune App Protection Policies (APP/MAM) must be configured for iOS and Android
+      to protect corporate data in managed apps without requiring full device enrollment.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.3"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "2.3"
+      cis_m365_benchmark:
+        - "5.4.1"
+      zero_trust:
+        - "apps.data_protection"
+    evaluate: |
+      app_policies = data.get("intune_app_protection_policies", [])
+      if not app_policies:
+          return "not_implemented"
+      ios = any(p.get("targetedAppManagementLevels", "").lower().find("managed") != -1
+                or p.get("platform", "").lower() == "ios"
+                for p in app_policies)
+      android = any(p.get("platform", "").lower() in ("android", "androidmanaged")
+                    for p in app_policies)
+      if ios and android:
+          return "implemented"
+      if ios or android:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-INT-009
+    title: "Non-Compliant Device Grace Period Limited"
+    description: >
+      The grace period for non-compliant devices in Intune compliance policies must
+      be set to 24 hours or less before action is taken (notify, block, retire),
+      preventing prolonged access from out-of-compliance devices.
+    severity: MEDIUM
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.19"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "CM-2"
+      cis_controls_v8:
+        - "4.1"
+      zero_trust:
+        - "endpoints.compliance"
+    evaluate: |
+      policies = data.get("intune_compliance_policies", [])
+      if not policies:
+          return "not_implemented"
+      tight_grace = []
+      for p in policies:
+          for rule in p.get("scheduledActionsForRule", []):
+              for action in rule.get("scheduledActionConfigurations", []):
+                  grace_hours = action.get("gracePeriodHours", 9999)
+                  if grace_hours <= 24:
+                      tight_grace.append(p)
+                      break
+      if len(tight_grace) >= len(policies) * 0.8:
+          return "implemented"
+      if tight_grace:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-INT-010
+    title: "Windows Update Ring Configured for Security Updates"
+    description: >
+      A Windows Update for Business ring must be configured in Intune to ensure
+      security updates are deployed within 7 days of release to all managed Windows devices.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "PR.IP-12"
+      nist_800_53_r5:
+        - "SI-2"
+      cis_controls_v8:
+        - "7.3"
+      cis_m365_benchmark:
+        - "5.2.1"
+      zero_trust:
+        - "endpoints.patch_management"
+      soc2:
+        - "CC7.1"
+      cmmc_2:
+        - "SI.1.211"
+    evaluate: |
+      update_rings = data.get("intune_update_rings", [])
+      if not update_rings:
+          return "not_implemented"
+      fast_rings = [
+          r for r in update_rings
+          if (r.get("qualityUpdatesDeferralPeriodInDays") or 999) <= 7
+      ]
+      if fast_rings:
+          return "implemented"
+      moderate = [
+          r for r in update_rings
+          if (r.get("qualityUpdatesDeferralPeriodInDays") or 999) <= 30
+      ]
+      if moderate:
+          return "partially_implemented"
+      return "not_implemented"

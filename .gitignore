@@ -1,0 +1,148 @@
+# ============================================================
+# UniMonitor .gitignore
+# ============================================================
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.whl
+
+# ── Virtual environments ─────────────────────────────────────
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.conda/
+
+# ── NEVER commit secrets or credentials ─────────────────────
+*.key
+*.pem
+*.pfx
+*.p12
+*.crt
+*.cer
+vault.enc
+vault.meta
+vault.key
+secrets.json
+credentials.json
+service_account*.json
+*_credentials.json
+*.secret
+*_secret.txt
+
+# ── Environment files ────────────────────────────────────────
+# .env.example IS committed (it's a template, never has real values)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.staging
+
+# ── Local Vault ──────────────────────────────────────────────
+.unimonitor/
+!.unimonitor/.gitkeep
+
+# ── Database ─────────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+unimonitor.db
+
+# ── Reports (generated output) ───────────────────────────────
+reports/
+*.pdf
+*.docx
+!branding/*.pdf
+!tests/**/*.pdf
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+audit_*.jsonl
+
+# ── IDE ──────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Node / Frontend ──────────────────────────────────────────
+node_modules/
+frontend/dist/
+frontend/build/
+frontend/.env
+frontend/.env.local
+*.tsbuildinfo
+
+# ── Testing ──────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# ── Alembic ──────────────────────────────────────────────────
+# (versions/ IS committed — only runtime artifacts excluded)
+alembic/versions/__pycache__/
+
+# ── Windows installer build artifacts ────────────────────────
+installer/dist/
+installer/build/
+installer/*.exe
+!installer/install.nsi
+!installer/version_info.txt
+
+# ── Docker ───────────────────────────────────────────────────
+# (docker-compose.yml IS committed — env files are not)
+deploy/docker/.env
+deploy/docker/*.env.local
+
+# ── Terraform / Bicep ────────────────────────────────────────
+*.tfstate
+*.tfstate.backup
+.terraform/
+*.tfvars
+!*.tfvars.example
+
+# ── Misc ─────────────────────────────────────────────────────
+.cache/
+tmp/
+temp/
+scratch/
+
+# Playwright
+frontend/test-results/
+frontend/playwright-report/
+frontend/playwright/.cache/

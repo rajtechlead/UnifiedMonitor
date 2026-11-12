@@ -1,0 +1,292 @@
+name: Release
+
+# Triggered by pushing a version tag: git tag v1.2.3 && git push --tags
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+env:
+  REGISTRY:   ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VER: "3.12"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 1 — Build & push Docker image to GHCR
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  docker:
+    name: Build & Push Docker Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+      tags:    ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context:    .
+          file:       deploy/docker/Dockerfile
+          push:       true
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 2 — Build Windows EXE + NSIS installer on a Windows runner
+# ─────────────────────────────────────────────────────────────────────────────
+  windows-installer:
+    name: Build Windows Installer (.exe)
+    runs-on: windows-latest
+    needs: docker
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python & dependencies ──────────────────────────────────────────────
+      - name: Set up Python ${{ env.PYTHON_VER }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VER }}
+          cache: pip
+
+      - name: Install build tools + app dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          pip install "pyinstaller>=6.15.0"
+          # Install only the packages needed to build (no optional providers)
+          pip install -e "." --no-deps
+          pip install -e ".[all-secrets]"
+
+      # ── Build frontend (embed into the installer) ──────────────────────────
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        shell: pwsh
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          # Move built assets where FastAPI serves them from
+          if (!(Test-Path "../unimonitor/static")) { mkdir "../unimonitor/static" }
+          Copy-Item -Recurse -Force dist/* ../unimonitor/static/
+
+      # ── PyInstaller — bundle everything into dist/UniMonitor/ ──────────────
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller deploy/windows/unimonitor.spec --clean --noconfirm
+          # Verify the exe was created
+          if (!(Test-Path "dist/UniMonitor/UniMonitor.exe")) {
+            Write-Error "PyInstaller failed — UniMonitor.exe not found"
+            exit 1
+          }
+          Write-Host "PyInstaller output:" (Get-ChildItem dist/UniMonitor | Measure-Object).Count "files"
+
+      # ── Grab a prebuilt NSSM binary for Windows Service support ───────────
+      - name: Download NSSM (Windows Service helper)
+        shell: pwsh
+        run: |
+          $url = "https://nssm.cc/release/nssm-2.24.zip"
+          Invoke-WebRequest -Uri $url -OutFile nssm.zip
+          Expand-Archive nssm.zip -DestinationPath nssm_tmp
+          Copy-Item nssm_tmp/nssm-2.24/win64/nssm.exe dist/UniMonitor/nssm.exe
+          Remove-Item -Recurse nssm.zip, nssm_tmp
+
+      # ── Copy installer guide into the bundle ──────────────────────────────
+      - name: Copy INSTALL.md into bundle
+        shell: pwsh
+        run: |
+          if (Test-Path "INSTALL.md") {
+            Copy-Item INSTALL.md dist/UniMonitor/INSTALL.md
+          }
+
+      # ── NSIS — wrap the folder into a graphical setup wizard ──────────────
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis --no-progress -y
+          # Verify
+          makensis /VERSION
+
+      - name: Inject version into NSIS script
+        shell: pwsh
+        run: |
+          $version = "${{ needs.docker.outputs.version }}"
+          if (!$version) { $version = "1.0.0" }
+          # Strip the leading 'v' if present
+          $version = $version.TrimStart('v')
+          Write-Host "Building installer for version $version"
+          echo "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Create branding assets if missing
+        shell: pwsh
+        run: |
+          # Create a placeholder icon if branding/icon.ico doesn't exist
+          # (CI won't fail on missing icon — NSIS skips it)
+          if (!(Test-Path "branding")) { mkdir branding }
+          if (!(Test-Path "branding/icon.ico")) {
+            # Download a neutral placeholder icon
+            try {
+              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/vscode/main/resources/win32/code.ico" `
+                -OutFile branding/icon.ico -TimeoutSec 10
+            } catch {
+              Write-Host "Could not download icon, proceeding without it"
+            }
+          }
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          makensis `
+            /V4 `
+            "/DVERSION=${{ env.INSTALLER_VERSION }}" `
+            deploy/windows/install.nsi
+          # Check output
+          $exe = "dist/UniMonitor-Setup-${{ env.INSTALLER_VERSION }}-x64.exe"
+          if (!(Test-Path $exe)) {
+            # Try without NSIS (ship the folder as a zip fallback)
+            Write-Warning "NSIS build failed — creating zip fallback"
+            Compress-Archive -Path dist/UniMonitor/* `
+              -DestinationPath "dist/UniMonitor-${{ env.INSTALLER_VERSION }}-x64-portable.zip"
+          } else {
+            Write-Host "Installer created: $exe"
+          }
+
+      # ── Upload both artefacts (installer exe + portable zip) ──────────────
+      - name: Upload Windows installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ env.INSTALLER_VERSION }}
+          retention-days: 30
+          path: |
+            dist/UniMonitor-Setup-*.exe
+            dist/UniMonitor-*-portable.zip
+          if-no-files-found: warn
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Job 3 — Create GitHub Release with all assets attached
+# ─────────────────────────────────────────────────────────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [docker, windows-installer]
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set version env var
+        run: |
+          VERSION="${{ needs.docker.outputs.version }}"
+          VERSION="${VERSION#v}"        # strip leading v
+          echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+
+      - name: Download Windows installer artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installer-${{ env.VERSION }}
+          path: ./release-assets/
+        continue-on-error: true          # don't fail release if installer build failed
+
+      - name: List release assets
+        run: ls -lh release-assets/ 2>/dev/null || echo "No Windows assets"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "UniMonitor v${{ env.VERSION }}"
+          generate_release_notes: true
+          files: |
+            release-assets/UniMonitor-Setup-*.exe
+            release-assets/UniMonitor-*-portable.zip
+          body: |
+            ## UniMonitor v${{ env.VERSION }}
+
+            > **Unified Microsoft 365 Security Monitoring, GRC & Compliance Platform**
+            > Developed by [rajtechlead](https://github.com/rajtechlead) · Contact: rajrsngroup@gmail.com
+
+            ---
+
+            ### 🖥️ Windows Installer
+
+            Download **UniMonitor-Setup-${{ env.VERSION }}-x64.exe** from the assets below and run it.
+            The setup wizard will:
+            - Install UniMonitor to `C:\Program Files\UniMonitor`
+            - Optionally register it as a Windows Service (auto-start)
+            - Create a `.env` configuration file you edit before first start
+            - Add Start Menu and Desktop shortcuts
+
+            **Requirements:** Windows 10/11 or Windows Server 2019/2022 (64-bit). No Python required.
+
+            ---
+
+            ### 🐳 Docker
+
+            ```bash
+            docker pull ghcr.io/${{ github.repository }}:${{ env.VERSION }}
+            ```
+
+            ```bash
+            git clone https://github.com/${{ github.repository }}
+            cd UniMonitor
+            cp deploy/docker/.env.example deploy/docker/.env
+            # Edit .env — set your credentials
+            docker compose -f deploy/docker/docker-compose.yml up -d
+            ```
+
+            ---
+
+            ### 📦 From Source
+
+            ```powershell
+            git clone https://github.com/${{ github.repository }}
+            cd UniMonitor
+            pip install -e .
+            unimonitor setup --run-wizard
+            unimonitor start
+            ```
+
+            ---
+
+            ### 📖 Documentation
+            See [INSTALL.md](https://github.com/${{ github.repository }}/blob/main/INSTALL.md) for full installation guide.
+
+            🤖 Generated with [Claude Code](https://claude.com/claude-code)
+            https://claude.ai/code/session_01P6j7RsWkmoNowC3jqb52St

@@ -1,0 +1,154 @@
+controls:
+  - id: CTRL-TEA-001
+    title: "Restrict External Access in Microsoft Teams"
+    severity: HIGH
+    category: data_protection
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.1"]
+      iso27001_2022: ["A.8.3"]
+      nist_csf: ["PR.AC-3"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      # ExternalAccessPolicy: allow/block external users from communicating
+      allow_external = settings.get("allowExternalAccess", True)
+      allow_teams_consumer = settings.get("allowTeamsConsumer", True)
+      if not allow_external and not allow_teams_consumer:
+        return "implemented"
+      if not allow_external or not allow_teams_consumer:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-TEA-002
+    title: "Disable Guest Access to Teams or Restrict to Specific Domains"
+    severity: HIGH
+    category: data_protection
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.2"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      allow_guest = settings.get("allowGuestAccess", True)
+      if not allow_guest:
+        return "implemented"
+      # Guest access enabled but check if meeting roles restrict it
+      guest_in_teams = settings.get("allowGuestAccessInTeams", True)
+      if not guest_in_teams:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-TEA-003
+    title: "Restrict Unmanaged External Users from Initiating Conversations"
+    severity: MEDIUM
+    category: data_protection
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.3"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      allow_unmanaged = settings.get("allowExternalAccessWithUnmanagedUsers", True)
+      return "implemented" if not allow_unmanaged else "not_implemented"
+
+  - id: CTRL-TEA-004
+    title: "Disable Third-Party Cloud Storage in Teams"
+    severity: MEDIUM
+    category: data_protection
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.5"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      dropbox = settings.get("allowDropboxStorage", False)
+      box = settings.get("allowBoxStorage", False)
+      google_drive = settings.get("allowGoogleDriveStorage", False)
+      egnyte = settings.get("allowEgnyte", False)
+      if not any([dropbox, box, google_drive, egnyte]):
+        return "implemented"
+      if not google_drive and not dropbox:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-TEA-005
+    title: "Restrict Teams Meeting Recording to Org Users"
+    severity: MEDIUM
+    category: data_protection
+    service: teams
+    compliance_mapping:
+      iso27001_2022: ["A.8.11"]
+      nist_csf: ["PR.DS-1"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      recording_for_callee = settings.get("allowMeetingRecordingsForCallee", True)
+      cloud_recording = settings.get("allowCloudRecording", True)
+      transcription = settings.get("allowTranscription", True)
+      # Acceptable to have recording, but should not auto-admit anonymous
+      anonymous_join = settings.get("allowAnonymousUsersToJoinMeeting", True)
+      if not anonymous_join:
+        return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-TEA-006
+    title: "Configure Tenant-Wide Teams App Permission Policy"
+    severity: LOW
+    category: governance
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.6"]
+      iso27001_2022: ["A.8.19"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      # AllowAllOrgApps vs restricted app deployment
+      allow_all_org_apps = settings.get("allowAllOrgApps", True)
+      allow_third_party = settings.get("allowThirdPartyApps", True)
+      if not allow_third_party:
+        return "implemented"
+      if allow_third_party and not allow_all_org_apps:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-TEA-007
+    title: "Enable Meeting Lobby for External Participants"
+    severity: MEDIUM
+    category: identity
+    service: teams
+    compliance_mapping:
+      cis_m365_benchmark: ["8.4"]
+      iso27001_2022: ["A.8.3"]
+    evaluate: |
+      teams_settings = data.get("teamsAppSettings", {})
+      settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
+      # autoAdmittedUsers: EveryoneInCompany, EveryoneInSameAndFederatedCompany, Everyone, OrganizerOnly
+      auto_admitted = settings.get("autoAdmittedUsers", "Everyone")
+      lobby_bypass = settings.get("allowPSTNUsersToBypassLobby", True)
+      if auto_admitted in ["EveryoneInCompany", "OrganizerOnly"] and not lobby_bypass:
+        return "implemented"
+      if auto_admitted in ["EveryoneInCompany", "EveryoneInSameAndFederatedCompany"]:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-TEA-008
+    title: "Disable Teams Workforce Integrations for Non-Approved Partners"
+    severity: LOW
+    category: governance
+    service: teams
+    compliance_mapping:
+      iso27001_2022: ["A.8.19"]
+    evaluate: |
+      workforce = data.get("workforceIntegrations", {}).get("value", [])
+      if not workforce:
+        return "not_applicable"
+      # All integrations should be in an approved state
+      approved = [w for w in workforce if w.get("state") in ["active", "enabled"]]
+      if len(approved) == 0:
+        return "implemented"
+      # Has active integrations — flag for review
+      return "partially_implemented"

@@ -1,0 +1,301 @@
+# UniMonitor GRC Controls — Microsoft Copilot for M365 Security
+# 8 controls: CTRL-COP-001 through CTRL-COP-008
+# Covers data access governance, plugin controls, oversharing prevention,
+# interaction logging, and sensitivity label integration.
+
+controls:
+  - id: CTRL-COP-001
+    title: "Restrict Microsoft 365 Copilot Access to Licensed Users Only"
+    description: >
+      Microsoft 365 Copilot must be assigned only to users with a valid Copilot
+      license and business justification. Broad deployment without governance exposes
+      sensitive data through AI-generated responses.
+    severity: HIGH
+    category: access_control
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.2", "A.8.3"]
+      nist_800_53_r5: ["AC-2", "AC-6"]
+      cis_controls_v8: ["5.1", "6.1"]
+      zero_trust: ["identity.verify_explicitly"]
+      soc2: ["CC6.1", "CC6.3"]
+    rationale: >
+      Copilot surfaces data from SharePoint, Exchange, Teams and OneDrive based on
+      the signed-in user's existing permissions. Unlicensed or ungoverned users can
+      inadvertently access content they would not otherwise discover.
+    remediation: |
+      1. Navigate to Microsoft 365 admin center > Billing > Licenses
+      2. Assign Copilot for Microsoft 365 licenses only to approved users
+      3. Create a security group "Copilot-Approved-Users" and scope the license to it
+      4. Document business justification per user in an access register
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/admin/misc/copilot-overview
+    evaluate: |
+      license_data = data.get("copilotLicenses", {})
+      total = license_data.get("totalAssigned", 0)
+      with_justification = license_data.get("assignedWithJustification", 0)
+      if total == 0:
+          return "not_applicable"
+      if with_justification >= total * 0.95:
+          return "pass"
+      elif with_justification >= total * 0.7:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-002
+    title: "Enable Microsoft Purview Sensitivity Label Integration with Copilot"
+    description: >
+      Microsoft Purview sensitivity labels must be configured to restrict Copilot from
+      processing or summarizing content labeled Confidential or above, unless the
+      requesting user has explicit access to that classification.
+    severity: CRITICAL
+    category: data_protection
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.12", "A.8.3"]
+      nist_800_53_r5: ["AC-4", "SC-28"]
+      cis_controls_v8: ["3.3", "3.7"]
+      zero_trust: ["data.verify_explicitly"]
+      pci_dss_v4: ["3.3.1"]
+      hipaa: ["164.312(a)(1)"]
+      soc2: ["CC6.1"]
+    rationale: >
+      Without sensitivity label enforcement, Copilot may summarize or surface Confidential
+      documents to users who have read access but should not receive AI-synthesized extracts.
+    remediation: |
+      1. Navigate to Microsoft Purview compliance portal > Information protection
+      2. Ensure sensitivity labels are published to all Copilot users
+      3. Configure label policies with Copilot interaction restrictions for Confidential+
+      4. Enable "Prevent Copilot from processing labeled content" for top-secret labels
+    references:
+      - https://learn.microsoft.com/en-us/purview/sensitivity-labels-office-apps#sensitivity-labels-and-microsoft-copilot-for-microsoft-365
+    evaluate: |
+      label_policies = data.get("sensitivityLabelPolicies", {}).get("value", [])
+      copilot_restricted = [
+          p for p in label_policies
+          if p.get("settings", {}).get("copilotRestrictionEnabled") is True
+      ]
+      if not label_policies:
+          return "fail"
+      if copilot_restricted:
+          return "pass"
+      return "partial"
+
+  - id: CTRL-COP-003
+    title: "Enable Microsoft 365 Copilot Interaction Logging and Audit"
+    description: >
+      All Microsoft 365 Copilot user interactions (prompts and responses) must be
+      captured in the Microsoft Purview audit log to support incident investigation
+      and compliance reporting.
+    severity: HIGH
+    category: logging_monitoring
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.15"]
+      nist_800_53_r5: ["AU-2", "AU-12"]
+      cis_controls_v8: ["8.2", "8.5"]
+      soc2: ["CC7.2", "CC7.3"]
+      hipaa: ["164.312(b)"]
+    rationale: >
+      Copilot interaction logs are essential for detecting data exfiltration attempts,
+      prompt injection attacks, and policy violations through AI interfaces.
+    remediation: |
+      1. Navigate to Microsoft Purview compliance portal > Audit
+      2. Verify audit logging is enabled (Audit > Start recording user and admin activity)
+      3. Search for "CopilotInteraction" activity type to confirm events are captured
+      4. Set audit log retention to 180+ days for Copilot activities
+    references:
+      - https://learn.microsoft.com/en-us/purview/audit-copilot
+    evaluate: |
+      audit_config = data.get("auditConfiguration", {})
+      copilot_audit = audit_config.get("copilotInteractionLogging", False)
+      retention_days = audit_config.get("auditRetentionDays", 0)
+      if copilot_audit and retention_days >= 180:
+          return "pass"
+      elif copilot_audit:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-004
+    title: "Restrict Copilot Plugin and Extension Installation to Approved List"
+    description: >
+      Only IT-approved Copilot plugins and extensions may be deployed in the tenant.
+      Users must not be permitted to install third-party Copilot plugins without
+      administrator approval to prevent data leakage through external plugins.
+    severity: HIGH
+    category: access_control
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.19", "A.8.25"]
+      nist_800_53_r5: ["CM-7", "SA-9"]
+      cis_controls_v8: ["2.5", "4.8"]
+      zero_trust: ["apps.verify_explicitly"]
+      soc2: ["CC6.1", "CC6.8"]
+    rationale: >
+      Third-party Copilot plugins can send tenant data to external services.
+      Unapproved plugins bypass DLP policies and data residency requirements.
+    remediation: |
+      1. Navigate to Microsoft 365 admin center > Settings > Integrated apps
+      2. Set user consent for apps: Block (admin approval required)
+      3. Create an approved app list and deploy only via admin
+      4. Disable user ability to add Copilot plugins from the Teams app store
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/admin/misc/copilot-plugins-overview
+    evaluate: |
+      plugin_policy = data.get("copilotPluginPolicy", {})
+      user_install_allowed = plugin_policy.get("allowUserInstall", True)
+      approved_only = plugin_policy.get("approvedPluginsOnly", False)
+      if not user_install_allowed and approved_only:
+          return "pass"
+      elif not user_install_allowed or approved_only:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-005
+    title: "Prevent Copilot from Accessing Overshared SharePoint Content"
+    description: >
+      A SharePoint oversharing assessment must be conducted and remediated before
+      Copilot deployment. Files shared with 'Everyone' or 'Everyone except external users'
+      must be reviewed and restricted to prevent broad AI-surfaced exposure.
+    severity: CRITICAL
+    category: data_protection
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.3", "A.8.12"]
+      nist_800_53_r5: ["AC-3", "AC-6"]
+      cis_controls_v8: ["3.3"]
+      zero_trust: ["data.verify_explicitly", "data.assume_breach"]
+      soc2: ["CC6.1"]
+    rationale: >
+      Copilot surfaces all content the signed-in user can access. Files shared broadly
+      to 'Everyone' are suddenly discoverable via natural-language queries, constituting
+      a significant unintended data exposure.
+    remediation: |
+      1. Run SharePoint Advanced Management "Data access governance" report
+      2. Identify all files/sites shared with Everyone or Everyone except external users
+      3. Restrict sharing to named users or security groups
+      4. Enable SharePoint site access reviews on a quarterly cadence
+      5. Enable "Restrict SharePoint Search" for Copilot to indexed-only content
+    references:
+      - https://learn.microsoft.com/en-us/sharepoint/data-access-governance-reports
+    evaluate: |
+      oversharing = data.get("oversharedContent", {})
+      everyone_files = oversharing.get("filesSharedWithEveryone", 0)
+      total_files = oversharing.get("totalIndexedFiles", 1)
+      if total_files == 0:
+          return "not_applicable"
+      pct = everyone_files / total_files
+      if pct <= 0.01:
+          return "pass"
+      elif pct <= 0.05:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-006
+    title: "Configure Copilot Data Residency and Sovereign Cloud Boundaries"
+    description: >
+      Microsoft 365 Copilot must be configured to process and store interaction data
+      within the organization's contracted data residency region, meeting sovereignty
+      requirements for EU, UK, and regulated industry tenants.
+    severity: HIGH
+    category: data_protection
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.10"]
+      nist_800_53_r5: ["SC-28", "SA-9"]
+      soc2: ["A1.1", "CC6.7"]
+      hipaa: ["164.312(a)(2)(iv)"]
+      gdpr: ["Article 44", "Article 46"]
+    rationale: >
+      AI prompt and response data processed outside contracted regions may violate
+      GDPR data transfer restrictions and industry-specific sovereignty requirements.
+    remediation: |
+      1. Review Microsoft 365 data residency commitments for Copilot in the Trust Center
+      2. Ensure tenant is provisioned in the correct regional geography
+      3. Enable EU Data Boundary if applicable
+      4. Review Copilot data processing addendum in the Microsoft Customer Agreement
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/enterprise/m365-dr-workload-copilot
+    evaluate: |
+      residency = data.get("copilotDataResidency", {})
+      configured = residency.get("residencyConfigured", False)
+      region_match = residency.get("processingRegionMatchesContract", False)
+      if configured and region_match:
+          return "pass"
+      elif configured:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-007
+    title: "Enable Microsoft Copilot for Security Integration with Defender XDR"
+    description: >
+      Microsoft Copilot for Security must be integrated with Defender XDR to enable
+      AI-assisted incident investigation, threat intelligence summarization, and
+      automated triage recommendations for the SOC team.
+    severity: MEDIUM
+    category: incident_response
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.8.16", "A.6.8"]
+      nist_csf_2: ["RS.AN-03", "DE.AE-04"]
+      nist_800_53_r5: ["IR-4", "SI-4"]
+      cis_controls_v8: ["17.4", "17.6"]
+      soc2: ["CC7.3", "CC7.4"]
+    rationale: >
+      Copilot for Security reduces mean time to investigate (MTTI) by summarizing
+      incidents, correlating threat intelligence, and generating KQL queries automatically.
+    remediation: |
+      1. Navigate to security.microsoft.com > Copilot for Security settings
+      2. Enable Copilot for Security plugin for Defender XDR
+      3. Assign Security Copilot capacity units to the workspace
+      4. Configure role assignments: Security Operator (can use), Security Administrator (manage)
+    references:
+      - https://learn.microsoft.com/en-us/copilot/security/get-started-security-copilot
+    evaluate: |
+      copilot_sec = data.get("copilotForSecurity", {})
+      enabled = copilot_sec.get("enabled", False)
+      xdr_connected = copilot_sec.get("defenderXdrConnected", False)
+      capacity_units = copilot_sec.get("capacityUnitsProvisioned", 0)
+      if enabled and xdr_connected and capacity_units > 0:
+          return "pass"
+      elif enabled:
+          return "partial"
+      return "fail"
+
+  - id: CTRL-COP-008
+    title: "Implement Responsible AI Policy and Copilot Acceptable Use Guidelines"
+    description: >
+      The organization must have a documented Responsible AI / Acceptable Use policy
+      for Microsoft 365 Copilot that is acknowledged by all licensed users, covering
+      prohibited uses, data handling expectations, and AI output verification requirements.
+    severity: MEDIUM
+    category: governance
+    service: copilot_m365
+    compliance_mapping:
+      iso27001_2022: ["A.6.3", "A.5.1"]
+      nist_csf_2: ["GV.PO-01", "GV.RM-01"]
+      nist_800_53_r5: ["PL-4", "AT-2"]
+      cis_controls_v8: ["14.1", "14.2"]
+      soc2: ["CC1.3", "CC2.2"]
+    rationale: >
+      Without acceptable use policies, users may submit sensitive PII, confidential
+      IP, or regulated data as Copilot prompts, unaware of retention and processing implications.
+    remediation: |
+      1. Draft a Copilot Acceptable Use Policy covering: prohibited data types in prompts,
+         AI output verification requirements, incident reporting for AI-related issues
+      2. Publish policy via Microsoft Viva Learning or compliance portal
+      3. Require annual acknowledgment from all Copilot-licensed users
+      4. Add Copilot AUP to onboarding checklist
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/admin/misc/responsible-ai-overview
+    evaluate: |
+      policy_data = data.get("responsibleAiPolicy", {})
+      policy_exists = policy_data.get("policyDocumentPublished", False)
+      acknowledgment_pct = policy_data.get("userAcknowledgmentPercentage", 0)
+      if policy_exists and acknowledgment_pct >= 90:
+          return "pass"
+      elif policy_exists and acknowledgment_pct >= 50:
+          return "partial"
+      elif policy_exists:
+          return "partial"
+      return "fail"

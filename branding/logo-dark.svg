@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 80" width="320" height="80" role="img" aria-label="UniMonitor logo (dark theme)">
+  <defs>
+    <linearGradient id="shieldGradDark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#42A5F5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#1976D2;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Shield icon -->
+  <g transform="translate(8, 8)">
+    <path d="M32 4 L58 14 L58 36 C58 50 46 60 32 64 C18 60 6 50 6 36 L6 14 Z"
+          fill="url(#shieldGradDark)" stroke="none"/>
+    <polyline points="20,34 28,42 44,26"
+              fill="none" stroke="white" stroke-width="4"
+              stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="32" cy="34" r="22" fill="none" stroke="#42A5F5"
+            stroke-width="1.5" stroke-dasharray="4 3" opacity="0.5"/>
+  </g>
+
+  <!-- "Uni" text — bright blue on dark -->
+  <text x="82" y="48"
+        font-family="'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif"
+        font-size="32" font-weight="700" letter-spacing="-0.5"
+        fill="#42A5F5">Uni</text>
+
+  <!-- "Monitor" text — white on dark -->
+  <text x="136" y="48"
+        font-family="'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif"
+        font-size="32" font-weight="300" letter-spacing="-0.5"
+        fill="#FFFFFF">Monitor</text>
+
+  <!-- Tagline -->
+  <text x="82" y="66"
+        font-family="'Segoe UI', 'Inter', 'Helvetica Neue', sans-serif"
+        font-size="10" font-weight="400" letter-spacing="2"
+        fill="#8FA8C8" text-anchor="start">UNIFIED M365 GRC PLATFORM</text>
+</svg>

@@ -1,0 +1,55 @@
+version: 2
+
+updates:
+  # ── Python (pip) ────────────────────────────────────────────────────────
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      python-minor:
+        update-types:
+          - minor
+          - patch
+    ignore:
+      # Suppress patch bumps for heavy packages that rarely have security fixes
+      - dependency-name: "sqlalchemy"
+        update-types: ["version-update:semver-patch"]
+    labels:
+      - dependencies
+      - python
+
+  # ── Node / npm ──────────────────────────────────────────────────────────
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "04:30"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    groups:
+      npm-minor:
+        update-types:
+          - minor
+          - patch
+    labels:
+      - dependencies
+      - javascript
+
+  # ── GitHub Actions ───────────────────────────────────────────────────────
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "05:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - github-actions

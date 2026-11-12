@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: unimonitor-api
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: unimonitor-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app: unimonitor-api
+        app.kubernetes.io/name: unimonitor
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: unimonitor
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      initContainers:
+        - name: run-migrations
+          image: ghcr.io/rajtechlead/unimonitor:latest
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: unimonitor-config
+            - secretRef:
+                name: unimonitor-secrets
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+      containers:
+        - name: api
+          image: ghcr.io/rajtechlead/unimonitor:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: unimonitor-config
+            - secretRef:
+                name: unimonitor-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          volumeMounts:
+            - name: reports
+              mountPath: /app/reports
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+      volumes:
+        - name: reports
+          persistentVolumeClaim:
+            claimName: unimonitor-reports
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: unimonitor
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: unimonitor-reports
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard

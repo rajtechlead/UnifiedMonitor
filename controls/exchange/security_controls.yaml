@@ -1,0 +1,177 @@
+controls:
+  - id: CTRL-EXO-001
+    title: "Enable Modern Authentication for Exchange Online"
+    severity: HIGH
+    category: identity
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.1"]
+      iso27001_2022: ["A.8.5"]
+      nist_csf: ["PR.AC-7"]
+    evaluate: |
+      org_config = data.get("exchangeOrgConfig", {})
+      if isinstance(org_config, dict):
+        value = org_config.get("value", [])
+        configs = value if isinstance(value, list) else [org_config]
+      else:
+        configs = []
+      for cfg in configs:
+        if cfg.get("OAuthEnabled") is True or cfg.get("modernAuthEnabled") is True:
+          return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-EXO-002
+    title: "Disable Basic Authentication Protocols"
+    severity: HIGH
+    category: identity
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.2"]
+      iso27001_2022: ["A.8.5"]
+    evaluate: |
+      auth_policies = data.get("exchangeAuthPolicies", {}).get("value", [])
+      if not auth_policies:
+        return "not_implemented"
+      basic_disabled = all(
+        not policy.get("AllowBasicAuthPop", True)
+        and not policy.get("AllowBasicAuthImap", True)
+        and not policy.get("AllowBasicAuthSmtp", True)
+        for policy in auth_policies
+      )
+      return "implemented" if basic_disabled else "not_implemented"
+
+  - id: CTRL-EXO-003
+    title: "Enable DKIM Signing for Custom Domains"
+    severity: MEDIUM
+    category: data_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.5"]
+      iso27001_2022: ["A.8.20"]
+      nist_csf: ["PR.DS-2"]
+    evaluate: |
+      dkim_configs = data.get("dkimSigningConfig", {}).get("value", [])
+      if not dkim_configs:
+        return "not_implemented"
+      custom_domains = [d for d in dkim_configs if not d.get("Domain", "").endswith(".onmicrosoft.com")]
+      if not custom_domains:
+        return "not_applicable"
+      all_enabled = all(d.get("Enabled", False) for d in custom_domains)
+      return "implemented" if all_enabled else "not_implemented"
+
+  - id: CTRL-EXO-004
+    title: "Enable Anti-Phishing Policy"
+    severity: HIGH
+    category: threat_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.6"]
+      iso27001_2022: ["A.8.7"]
+      nist_csf: ["DE.CM-1"]
+    evaluate: |
+      anti_phish = data.get("antiPhishPolicies", {}).get("value", [])
+      if not anti_phish:
+        return "not_implemented"
+      enabled_policies = [p for p in anti_phish if p.get("Enabled", False) and p.get("IsDefault") is not True]
+      default_policies = [p for p in anti_phish if p.get("IsDefault") is True]
+      if enabled_policies:
+        return "implemented"
+      if default_policies:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-EXO-005
+    title: "Enable Safe Attachments Policy"
+    severity: HIGH
+    category: threat_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.7"]
+      iso27001_2022: ["A.8.7"]
+      nist_csf: ["PR.DS-5"]
+    evaluate: |
+      safe_attachments = data.get("safeAttachmentPolicies", {}).get("value", [])
+      if not safe_attachments:
+        return "not_implemented"
+      enabled_policies = [p for p in safe_attachments if p.get("Enable", False) or p.get("Action") not in [None, "Off"]]
+      return "implemented" if enabled_policies else "not_implemented"
+
+  - id: CTRL-EXO-006
+    title: "Enable Safe Links Policy"
+    severity: HIGH
+    category: threat_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.8"]
+      iso27001_2022: ["A.8.7"]
+    evaluate: |
+      safe_links = data.get("safeLinksPolicies", {}).get("value", [])
+      if not safe_links:
+        return "not_implemented"
+      enabled = [p for p in safe_links if p.get("IsEnabled", False) or p.get("EnableSafeLinksForEmail", False)]
+      return "implemented" if enabled else "not_implemented"
+
+  - id: CTRL-EXO-007
+    title: "Configure Email Malware Filter Policy"
+    severity: HIGH
+    category: threat_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.3"]
+      iso27001_2022: ["A.8.7"]
+    evaluate: |
+      malware_policies = data.get("malwareFilterPolicies", {}).get("value", [])
+      if not malware_policies:
+        return "not_implemented"
+      has_zap = any(p.get("ZapEnabled", False) for p in malware_policies)
+      has_notify = any(p.get("EnableExternalSenderAdminNotifications", False) for p in malware_policies)
+      if has_zap and has_notify:
+        return "implemented"
+      if has_zap or has_notify:
+        return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-EXO-008
+    title: "Disable Auto-Forwarding to External Domains"
+    severity: HIGH
+    category: data_protection
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["2.1.4"]
+      iso27001_2022: ["A.8.12"]
+      nist_csf: ["PR.DS-5"]
+    evaluate: |
+      transport_rules = data.get("transportRules", {}).get("value", [])
+      outbound_spam = data.get("outboundSpamPolicy", {}).get("value", [])
+      # Check outbound spam policy blocks forwarding
+      for policy in outbound_spam:
+        if policy.get("AutoForwardingMode") in ["Off", "Automatic"] or policy.get("BlockAutoForward", False):
+          return "implemented"
+      # Check for transport rule blocking external forwarding
+      blocking_rules = [
+        r for r in transport_rules
+        if "ForwardingSmtpAddress" in str(r.get("Conditions", []))
+        and r.get("State") == "Enabled"
+      ]
+      if blocking_rules:
+        return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-EXO-009
+    title: "Enable Audit Logging for Exchange"
+    severity: MEDIUM
+    category: compliance
+    service: exchange
+    compliance_mapping:
+      cis_m365_benchmark: ["3.2"]
+      iso27001_2022: ["A.8.15"]
+      nist_csf: ["DE.AE-3"]
+    evaluate: |
+      org_config = data.get("exchangeOrgConfig", {})
+      configs = org_config.get("value", [org_config]) if isinstance(org_config, dict) else []
+      for cfg in configs:
+        if cfg.get("AuditDisabled") is False or cfg.get("AuditEnabled") is True:
+          return "implemented"
+        if cfg.get("AuditDisabled") is True:
+          return "not_implemented"
+      return "not_implemented"

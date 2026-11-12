@@ -1,0 +1,111 @@
+# UniMonitor GRC Controls — Devices: App Protection & Baselines
+
+controls:
+  - id: CTRL-DEV-010
+    title: "App Protection Policies Deployed for Mobile Devices"
+    description: >
+      Intune App Protection Policies (MAM) must be deployed for iOS and Android
+      to control how corporate data is used in managed apps on personal devices.
+    severity: HIGH
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+        - "A.8.3"
+      nist_csf_2:
+        - "PR.DS-01"
+      cis_m365_benchmark:
+        - "6.4.1"
+      zero_trust:
+        - "devices.data_loss_prevention"
+      hipaa:
+        - "164.312(c)(1)"
+      pci_dss_v4:
+        - "12.3.3"
+    rationale: "MAM policies prevent data leakage from corporate apps to personal apps on BYOD devices."
+    remediation: |
+      1. Navigate to Intune > Apps > App protection policies
+      2. Create policies for iOS and Android targeting Microsoft Office/Teams/Outlook apps
+      3. Configure: Encrypt app data, Require PIN, Prevent backup to personal storage
+      4. Assign to All users or mobile-user groups
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/app-protection-policy
+    evaluate: |
+      policies = data.get("appProtectionPolicies", {}).get("value", [])
+      if not policies:
+          return "not_implemented"
+      ios_policy = any("ios" in p.get("@odata.type", "").lower() for p in policies)
+      android_policy = any("android" in p.get("@odata.type", "").lower() for p in policies)
+      if ios_policy and android_policy:
+          return "implemented"
+      return "partially_implemented" if (ios_policy or android_policy) else "not_implemented"
+
+  - id: CTRL-DEV-011
+    title: "Mobile Threat Defense Connector Enabled"
+    description: >
+      A Mobile Threat Defense (MTD) connector must be enabled in Intune to detect
+      and respond to mobile device threats from MTD partners.
+    severity: HIGH
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "DE.CM-01"
+      cis_m365_benchmark:
+        - "6.5.1"
+      zero_trust:
+        - "devices.verify_device_health"
+    rationale: "MTD provides threat intelligence for mobile devices that standard compliance checks miss."
+    remediation: |
+      1. Navigate to Intune > Tenant administration > Connectors and tokens > Mobile Threat Defense
+      2. Add a connector (Defender for Endpoint or third-party MTD partner)
+      3. Toggle on 'Connect Android/iOS devices... to mobile threat defense'
+      4. Set compliance policy to use MTD threat level
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/mobile-threat-defense
+    evaluate: |
+      connectors = data.get("mtdConnectors", {}).get("value", [])
+      if not connectors:
+          return "not_implemented"
+      active = [c for c in connectors if c.get("partnerState") == "available"]
+      return "implemented" if active else "partially_implemented"
+
+  - id: CTRL-DEV-012
+    title: "Windows Security Baseline Applied"
+    description: >
+      A Microsoft-recommended Windows security baseline profile must be deployed
+      to all Windows devices via Intune to enforce over 200 security settings.
+    severity: HIGH
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_800_53_r5:
+        - "CM-6"
+        - "CM-7"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "6.6.1"
+      zero_trust:
+        - "devices.verify_device_health"
+      cmmc_2:
+        - "CM.2.061"
+    rationale: "Security baselines provide battle-tested hardening configurations that reduce attack surface."
+    remediation: |
+      1. Navigate to Intune > Endpoint security > Security baselines
+      2. Select Windows Security Baseline, create a profile
+      3. Configure settings (defaults are recommended)
+      4. Assign to Windows devices group
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines
+    evaluate: |
+      baselines = data.get("securityBaselines", {}).get("value", [])
+      if not baselines:
+          return "not_implemented"
+      windows_baselines = [b for b in baselines if "Windows" in b.get("displayName", "")]
+      return "implemented" if windows_baselines else "partially_implemented"

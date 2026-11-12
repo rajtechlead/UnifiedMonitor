@@ -1,0 +1,119 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: unimonitor-api
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: unimonitor-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8000
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: unimonitor-redis
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: unimonitor-redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+      protocol: TCP
+---
+# PostgreSQL - use a managed DB in production instead
+apiVersion: v1
+kind: Service
+metadata:
+  name: unimonitor-postgres
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: unimonitor-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432
+      protocol: TCP
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: unimonitor-postgres
+  namespace: unimonitor
+  labels:
+    app.kubernetes.io/name: unimonitor
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: unimonitor-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: unimonitor-postgres
+  template:
+    metadata:
+      labels:
+        app: unimonitor-postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: unimonitor
+            - name: POSTGRES_USER
+              value: unimonitor
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: unimonitor-postgres-secret
+                  key: password
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "2Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 20Gi
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: unimonitor-postgres-secret
+  namespace: unimonitor
+type: Opaque
+stringData:
+  password: "CHANGEME_STRONG_DB_PASSWORD"

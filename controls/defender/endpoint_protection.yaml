@@ -1,0 +1,329 @@
+# UniMonitor GRC Controls — Defender: Endpoint Protection
+
+controls:
+  - id: CTRL-DEF-001
+    title: "Microsoft Defender Antivirus Real-Time Protection Enabled"
+    description: >
+      Microsoft Defender Antivirus with real-time protection must be enabled on all
+      Windows endpoints and configured via Intune or Group Policy.
+    severity: CRITICAL
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-3"
+      cis_controls_v8:
+        - "10.1"
+      cis_m365_benchmark:
+        - "7.1.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      soc2:
+        - "CC6.8"
+      cmmc_2:
+        - "SI.1.210"
+      hipaa:
+        - "164.308(a)(5)(ii)(B)"
+      pci_dss_v4:
+        - "5.2.1"
+    rationale: "Real-time protection is the foundational layer of endpoint threat detection."
+    remediation: |
+      1. In Intune, create a Device Configuration profile for Endpoint Protection
+      2. Enable Microsoft Defender Antivirus > Real-time protection
+      3. Enable cloud-delivered protection and automatic sample submission
+      4. Assign to Windows devices
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/configure-real-time-protection-microsoft-defender-antivirus
+    evaluate: |
+      mde = data.get("mdeOnboarding", {})
+      if not mde:
+          return "not_applicable"
+      onboarded = mde.get("onboardedDeviceCount", 0)
+      total = mde.get("enrolledIntoDepCount", 0) + onboarded
+      if total == 0:
+          return "not_applicable"
+      ratio = onboarded / total if total else 0
+      if ratio >= 0.95:
+          return "implemented"
+      if ratio >= 0.5:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-DEF-002
+    title: "Attack Surface Reduction Rules Configured"
+    description: >
+      Microsoft Defender Attack Surface Reduction (ASR) rules must be configured
+      in enforce mode for critical rules protecting against common attack vectors.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "PR.PS-04"
+      cis_controls_v8:
+        - "10.5"
+      cis_m365_benchmark:
+        - "7.2.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      soc2:
+        - "CC6.8"
+    rationale: "ASR rules block malicious behaviors like Office macros launching processes, ransomware techniques."
+    remediation: |
+      1. In Intune > Endpoint security > Attack surface reduction
+      2. Create an ASR policy for Windows devices
+      3. Enable critical ASR rules in Enforce mode:
+         - Block Office macro execution from Win32 API calls
+         - Block credential stealing from LSASS
+         - Block ransomware behavior
+      4. Use Audit mode first, then enforce
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/attack-surface-reduction
+    evaluate: |
+      # Check via Secure Score controls
+      score_controls = data.get("secureScoreControls", {}).get("value", [])
+      asr_control = next(
+          (c for c in score_controls if "attack surface" in c.get("title", "").lower()), None
+      )
+      if asr_control:
+          score = asr_control.get("controlScore", 0)
+          max_score = asr_control.get("maxScore", 10)
+          ratio = score / max_score if max_score else 0
+          if ratio >= 0.8:
+              return "implemented"
+          if ratio >= 0.4:
+              return "partially_implemented"
+          return "not_implemented"
+      return "not_applicable"
+
+  - id: CTRL-DEF-003
+    title: "Tamper Protection Enabled in Defender"
+    description: >
+      Microsoft Defender Tamper Protection must be enabled to prevent malware and
+      attackers from disabling security features.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      cis_m365_benchmark:
+        - "7.3.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      soc2:
+        - "CC6.8"
+    rationale: "Without tamper protection, malware can disable Defender before delivering its payload."
+    remediation: |
+      1. Navigate to Microsoft Defender Security Center > Settings > Advanced features
+      2. Enable Tamper Protection
+      3. Alternatively, deploy via Intune Endpoint Protection policy
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/prevent-changes-to-security-settings-with-tamper-protection
+    evaluate: |
+      score_controls = data.get("secureScoreControls", {}).get("value", [])
+      tamper_control = next(
+          (c for c in score_controls if "tamper" in c.get("title", "").lower()), None
+      )
+      if tamper_control:
+          score = tamper_control.get("controlScore", 0)
+          max_score = tamper_control.get("maxScore", 1)
+          return "implemented" if score >= max_score else "not_implemented"
+      configs = data.get("deviceConfigurations", {}).get("value", [])
+      return "not_applicable" if not configs else "partially_implemented"
+
+  - id: CTRL-DEF-004
+    title: "Microsoft Defender for Endpoint Onboarded"
+    description: >
+      Microsoft Defender for Endpoint (MDE) Plan 2 must be deployed and devices
+      onboarded to enable advanced threat hunting, EDR, and automated investigation.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      cis_controls_v8:
+        - "13.7"
+      cis_m365_benchmark:
+        - "7.4.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      soc2:
+        - "CC7.1"
+    rationale: "MDE EDR capabilities detect sophisticated attacks that signature-based AV misses."
+    remediation: |
+      1. Purchase Microsoft Defender for Endpoint Plan 2 or E5 license
+      2. Enable MDE in Microsoft 365 Defender portal
+      3. Deploy onboarding package via Intune or GPO
+      4. Verify devices appear in Defender Security Center
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-365/security/defender-endpoint/onboard-configure
+    evaluate: |
+      mde = data.get("mdeOnboarding", {})
+      onboarded = mde.get("onboardedDeviceCount", 0)
+      if onboarded > 0:
+          return "implemented"
+      incidents = data.get("incidents", {}).get("value", [])
+      alerts = data.get("alerts", {}).get("value", [])
+      if incidents or alerts:
+          return "implemented"  # MDE active if producing data
+      return "not_implemented"
+
+  - id: CTRL-DEF-005
+    title: "Defender for Cloud Apps Connected"
+    description: >
+      Microsoft Defender for Cloud Apps (MDCA) must be connected to the Microsoft 365
+      tenant to provide shadow-IT discovery, cloud app risk assessment, and anomalous
+      user activity detection.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.6"
+      cis_m365_benchmark:
+        - "6.4.1"
+      zero_trust:
+        - "apps.visibility"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      mcas_apps = data.get("cloud_app_security_connected_apps", [])
+      if mcas_apps:
+          return "implemented"
+      mcas_enabled = data.get("cloud_app_security_enabled", False)
+      if mcas_enabled:
+          return "partially_implemented"
+      return "not_implemented"
+
+  - id: CTRL-DEF-006
+    title: "Attack Surface Reduction (ASR) Rules Enabled"
+    description: >
+      Microsoft Defender Attack Surface Reduction rules must be configured in
+      block or audit mode via Intune or Group Policy to reduce exposure to common
+      attack vectors such as macro-based malware and exploit techniques.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "PR.IP-12"
+      nist_800_53_r5:
+        - "SI-3"
+      cis_controls_v8:
+        - "10.5"
+      cis_m365_benchmark:
+        - "7.2.1"
+      zero_trust:
+        - "endpoints.threat_protection"
+      cmmc_2:
+        - "SI.1.210"
+    evaluate: |
+      policies = data.get("intune_device_configurations", [])
+      asr_policies = [
+          p for p in policies
+          if "asr" in str(p.get("displayName", "")).lower()
+          or "attack surface" in str(p.get("displayName", "")).lower()
+      ]
+      if not asr_policies:
+          return "not_implemented"
+      block_rules = [
+          p for p in asr_policies
+          if any(
+              v in ("block", "warn")
+              for v in str(p.get("attackSurfaceReductionRules", {})).split()
+          )
+      ]
+      if block_rules:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-DEF-007
+    title: "Network Protection Enabled"
+    description: >
+      Microsoft Defender Network Protection must be enabled in block mode to prevent
+      users and apps from accessing malicious domains, phishing sites, and exploit-hosting
+      infrastructure.
+    severity: HIGH
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.PT-04"
+      nist_800_53_r5:
+        - "SC-7"
+      cis_controls_v8:
+        - "13.8"
+      zero_trust:
+        - "network.traffic_inspection"
+    evaluate: |
+      policies = data.get("intune_device_configurations", [])
+      net_prot = [
+          p for p in policies
+          if p.get("defenderNetworkProtection") == "enable"
+          or "network protection" in str(p.get("displayName", "")).lower()
+      ]
+      if not net_prot:
+          return "not_implemented"
+      block_mode = [
+          p for p in net_prot
+          if p.get("defenderNetworkProtection") == "enable"
+      ]
+      if block_mode:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-DEF-008
+    title: "Defender Vulnerability Management Remediation SLA Configured"
+    description: >
+      Microsoft Defender Vulnerability Management (MDVM) must be licensed and a
+      remediation SLA configured so that CRITICAL vulnerabilities are remediated within
+      30 days and HIGH vulnerabilities within 60 days of discovery.
+    severity: MEDIUM
+    category: defender
+    service: defender
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "ID.RA-01"
+      nist_800_53_r5:
+        - "RA-5"
+      cis_controls_v8:
+        - "7.1"
+      cis_m365_benchmark:
+        - "7.3.1"
+      zero_trust:
+        - "endpoints.vulnerability_management"
+      soc2:
+        - "CC7.1"
+    evaluate: |
+      vuln_mgmt = data.get("defender_vulnerability_management", {})
+      if not vuln_mgmt:
+          return "not_implemented"
+      exposure_score = vuln_mgmt.get("exposureScore")
+      if exposure_score is not None and exposure_score < 50:
+          return "implemented"
+      if exposure_score is not None:
+          return "partially_implemented"
+      return "partially_implemented"

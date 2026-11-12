@@ -1,0 +1,168 @@
+# UniMonitor GRC Controls — Devices: Compliance Policies
+
+controls:
+  - id: CTRL-DEV-001
+    title: "Device Compliance Policies Assigned to All Users"
+    description: >
+      Intune device compliance policies must be created and assigned to cover
+      all device platforms (Windows, iOS, Android, macOS) used in the organization.
+    severity: CRITICAL
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-2"
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "6.1.1"
+      zero_trust:
+        - "devices.verify_device_health"
+      soc2:
+        - "CC6.6"
+      cmmc_2:
+        - "CM.2.061"
+      hipaa:
+        - "164.312(a)(2)(iv)"
+      pci_dss_v4:
+        - "12.3.3"
+    rationale: "Device compliance enforces baseline security on all endpoints accessing corporate data."
+    remediation: |
+      1. Navigate to Intune > Devices > Compliance policies
+      2. Create compliance policies for each platform used
+      3. Assign policies to 'All users' or relevant groups
+      4. Set non-compliance actions (mark non-compliant after grace period)
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/device-compliance-get-started
+    evaluate: |
+      policies = data.get("deviceCompliancePolicies", {}).get("value", [])
+      if not policies:
+          return "not_implemented"
+      assigned = [p for p in policies if p.get("assignments")]
+      if len(assigned) == 0:
+          return "not_implemented"
+      if len(assigned) < len(policies):
+          return "partially_implemented"
+      return "implemented"
+
+  - id: CTRL-DEV-002
+    title: "BitLocker Encryption Required on Windows Devices"
+    description: >
+      Windows device compliance policy must require BitLocker encryption to be enabled
+      on all managed Windows devices.
+    severity: HIGH
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.24"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.11"
+      cis_m365_benchmark:
+        - "6.2.1"
+      zero_trust:
+        - "devices.verify_device_health"
+      hipaa:
+        - "164.312(a)(2)(iv)"
+      pci_dss_v4:
+        - "3.4.1"
+    rationale: "BitLocker protects data at rest against physical theft or loss of devices."
+    remediation: |
+      1. Navigate to Intune > Devices > Compliance policies > Windows 10/11 policy
+      2. Under Device Health, set 'Require BitLocker' to Required
+      3. Save and assign the policy
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/compliance-policy-create-windows
+    evaluate: |
+      policies = data.get("deviceCompliancePolicies", {}).get("value", [])
+      windows_policies = [
+          p for p in policies
+          if "windows" in p.get("@odata.type", "").lower()
+      ]
+      if not windows_policies:
+          return "not_applicable"
+      bitlocker_required = [
+          p for p in windows_policies
+          if p.get("bitLockerEnabled") or p.get("storageRequireDeviceEncryption")
+      ]
+      if len(bitlocker_required) == len(windows_policies):
+          return "implemented"
+      return "partially_implemented" if bitlocker_required else "not_implemented"
+
+  - id: CTRL-DEV-003
+    title: "Minimum OS Version Enforced"
+    description: >
+      Device compliance policies must specify minimum supported OS versions to prevent
+      outdated, vulnerable operating systems from accessing corporate resources.
+    severity: MEDIUM
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "PR.PS-02"
+      cis_controls_v8:
+        - "2.2"
+      cis_m365_benchmark:
+        - "6.3.1"
+      zero_trust:
+        - "devices.verify_device_health"
+    rationale: "Outdated OS versions contain unpatched vulnerabilities that attackers can exploit."
+    remediation: |
+      1. In each compliance policy, set minimum OS version for the platform
+      2. Windows: Set minimum version to supported Windows 10/11 build
+      3. iOS/Android: Set minimum version to current - 2 major versions
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/device-compliance-get-started
+    evaluate: |
+      policies = data.get("deviceCompliancePolicies", {}).get("value", [])
+      if not policies:
+          return "not_applicable"
+      has_os_version = [
+          p for p in policies
+          if p.get("osMinimumVersion") or p.get("minAndroidSecurityPatchLevel")
+      ]
+      if len(has_os_version) >= len(policies) * 0.8:
+          return "implemented"
+      return "partially_implemented" if has_os_version else "not_implemented"
+
+  - id: CTRL-DEV-004
+    title: "Non-Compliant Device Action Configured"
+    description: >
+      Device compliance policies must have an action configured for non-compliant devices,
+      such as marking them non-compliant immediately or after a grace period.
+    severity: HIGH
+    category: devices
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+      cis_m365_benchmark:
+        - "6.1.3"
+      zero_trust:
+        - "devices.verify_device_health"
+      soc2:
+        - "CC6.6"
+    rationale: "Without enforcement actions, compliance policies have no effect on device access."
+    remediation: |
+      1. In each compliance policy, go to Actions for noncompliance
+      2. Add action: Mark device noncompliant with 0-day grace period for critical policies
+      3. Optionally add: Send email notification, Retire/wipe after extended non-compliance
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/actions-for-noncompliance
+    evaluate: |
+      policies = data.get("deviceCompliancePolicies", {}).get("value", [])
+      if not policies:
+          return "not_applicable"
+      with_actions = [p for p in policies if p.get("scheduledActionsForRule")]
+      if len(with_actions) == len(policies):
+          return "implemented"
+      return "partially_implemented" if with_actions else "not_implemented"
