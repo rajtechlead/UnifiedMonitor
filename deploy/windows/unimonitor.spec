@@ -44,8 +44,8 @@ hiddenimports = [
     # Pydantic
     "pydantic.networks",
     "pydantic_settings",
-    # Passlib bcrypt
-    "passlib.handlers.bcrypt",
+    # Direct bcrypt (passlib removed; bcrypt>=4.0.0 used directly)
+    "bcrypt",
     # Cryptography
     "cryptography.hazmat.backends.openssl",
     # JOSE JWT
