@@ -17,7 +17,7 @@ test.describe('Smoke — public pages', () => {
     // Should have an email field, password field and a submit button
     await expect(page.getByLabel(/email/i)).toBeVisible()
     await expect(page.getByLabel(/password/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /sign in|log in/i })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Sign In', exact: true })).toBeVisible()
   })
 
   test('login page shows "Sign in with Microsoft" button', async ({ page }) => {
@@ -31,7 +31,7 @@ test.describe('Smoke — public pages', () => {
     await page.goto('/login')
     await page.getByLabel(/email/i).fill('nobody@nowhere.invalid')
     await page.getByLabel(/password/i).fill('wrongpassword')
-    await page.getByRole('button', { name: /sign in|log in/i }).click()
+    await page.getByRole('button', { name: 'Sign In', exact: true }).click()
     // Should show an error — not redirect
     await expect(page).toHaveURL(/\/login/)
     await expect(

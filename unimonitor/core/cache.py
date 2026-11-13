@@ -88,7 +88,6 @@ async def init_cache() -> None:
 
 async def close_cache() -> None:
     """Close Redis cache connection."""
-    import aioredis
     try:
         redis = await get_redis()
         await redis.close()
