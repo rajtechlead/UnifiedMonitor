@@ -164,6 +164,7 @@ def calculate_framework_coverage(
 # Lightweight dict-based API (used by tests and engine without ORM objects)
 # ---------------------------------------------------------------------------
 
+
 def compute_score(raw_findings: list[dict]) -> float:
     """
     Compute a 0–100 security score from a list of raw finding dicts.

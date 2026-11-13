@@ -13,6 +13,7 @@ Every secret read, write, rotation, and deletion is logged with:
 Audit events are emitted via structlog (picked up by OTEL log exporter)
 and optionally written to a local append-only audit file.
 """
+
 from __future__ import annotations
 
 import time
@@ -48,6 +49,7 @@ class SecretAuditLog:
             return
         try:
             import json
+
             with self._audit_file.open("a", encoding="utf-8") as f:
                 f.write(json.dumps(record, default=str) + "\n")
         except Exception as exc:

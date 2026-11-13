@@ -38,11 +38,7 @@ def send_daily_digests() -> dict:
         sent = 0
         failed = 0
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(NotificationSetting)
-                .join(Tenant)
-                .where(Tenant.is_active, NotificationSetting.daily_digest)
-            )
+            result = await db.execute(select(NotificationSetting).join(Tenant).where(Tenant.is_active, NotificationSetting.daily_digest))
             settings_list = result.scalars().all()
 
             for settings in settings_list:
@@ -82,11 +78,7 @@ def send_weekly_digests() -> dict:
         sent = 0
         failed = 0
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(NotificationSetting)
-                .join(Tenant)
-                .where(Tenant.is_active, NotificationSetting.weekly_digest)
-            )
+            result = await db.execute(select(NotificationSetting).join(Tenant).where(Tenant.is_active, NotificationSetting.weekly_digest))
             settings_list = result.scalars().all()
 
             for settings in settings_list:
@@ -132,9 +124,7 @@ def dispatch_finding_alert(
             if not finding:
                 return {"status": "skipped", "reason": "finding not found"}
 
-            result = await db.execute(
-                select(NotificationSetting).where(NotificationSetting.tenant_id == tenant_id)
-            )
+            result = await db.execute(select(NotificationSetting).where(NotificationSetting.tenant_id == tenant_id))
             settings = result.scalar_one_or_none()
             if not settings or not settings.immediate_alerts:
                 return {"status": "skipped", "reason": "alerts disabled"}

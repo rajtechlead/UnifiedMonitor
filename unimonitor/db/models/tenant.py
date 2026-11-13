@@ -1,4 +1,5 @@
 """Tenant model — multi-tenant isolation unit."""
+
 from __future__ import annotations
 
 import uuid
@@ -17,9 +18,7 @@ if TYPE_CHECKING:
 class Tenant(Base):
     __tablename__ = "tenants"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     # Azure tenant ID (GUID) or "local" for local deployments
     # Also aliased as entra_tenant_id in the API layer
     tenant_id: Mapped[str] = mapped_column(String(36), unique=True, index=True, nullable=False)
@@ -39,9 +38,7 @@ class Tenant(Base):
     client_secret: Mapped[str | None] = mapped_column(String(512), nullable=True)
 
     # Collection tracking
-    last_collection_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    last_collection_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_collection_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_collection_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
@@ -53,12 +50,8 @@ class Tenant(Base):
         """Alias for tenant_id — used by the API layer."""
         return self.tenant_id
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     users: Mapped[list[AppUser]] = relationship("AppUser", back_populates="tenant", lazy="select")
@@ -81,20 +74,12 @@ class TenantConfig(Base):
 
     __tablename__ = "tenant_configs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     key: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     # value is a secret reference (e.g. "azure_key_vault://...") or plain config value
     value: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_secret_ref: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)

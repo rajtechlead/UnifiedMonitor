@@ -36,11 +36,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Initialise database
     from unimonitor.db.base import init_db
+
     await init_db()
     logger.info("Database initialised")
 
     # Initialise Redis cache
     from unimonitor.core.cache import init_cache
+
     await init_cache()
     logger.info("Cache initialised")
 
@@ -54,6 +56,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     # Shutdown
     from unimonitor.core.cache import close_cache
+
     await close_cache()
     logger.info("UniMonitor shutdown complete")
 
@@ -87,8 +90,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="UniMonitor",
         description=(
-            "Unified Monitoring and GRC Solution for Microsoft 365 — "
-            "continuous monitoring, compliance automation, and security operations."
+            "Unified Monitoring and GRC Solution for Microsoft 365 — continuous monitoring, compliance automation, and security operations."
         ),
         version=APP_VERSION,
         docs_url="/api/docs" if not settings.is_production else None,
@@ -160,8 +162,8 @@ def create_app() -> FastAPI:
 
     # ── API routers ──────────────────────────────────────────
     from unimonitor.api.v1.router import api_v1_router
-    app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
+    app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
     return app
 

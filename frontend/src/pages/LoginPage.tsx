@@ -102,10 +102,11 @@ export default function LoginPage() {
         {/* Local login form */}
         <form onSubmit={handleLogin}>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+            <label htmlFor="email" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
               Email
             </label>
             <input
+              id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
@@ -120,10 +121,11 @@ export default function LoginPage() {
             />
           </div>
           <div style={{ marginBottom: 24 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+            <label htmlFor="password" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
               Password
             </label>
             <input
+              id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}

@@ -26,12 +26,11 @@ _RESULT_MAP: dict[str, str] = {
     "n/a": "not_applicable",
     "na": "not_applicable",
 }
-_VALID_STATES: frozenset[str] = frozenset(
-    {"implemented", "partially_implemented", "not_implemented", "not_applicable"}
-)
+_VALID_STATES: frozenset[str] = frozenset({"implemented", "partially_implemented", "not_implemented", "not_applicable"})
 
 
 # ── ControlDefinition dataclass ───────────────────────────────
+
 
 @dataclass
 class ControlDefinition:
@@ -73,6 +72,7 @@ class ControlDefinition:
 
 
 # ── ControlLoader class ───────────────────────────────────────
+
 
 class ControlLoader:
     """Load :class:`ControlDefinition` objects from a directory of YAML files.
@@ -128,6 +128,7 @@ class ControlLoader:
 
 # ── Parsing helpers ───────────────────────────────────────────
 
+
 def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
     """Parse a single control entry from the list-based YAML format."""
     ctrl_id = ctrl.get("id", "")
@@ -177,10 +178,7 @@ def _parse_legacy_format(raw: dict, path: Path) -> ControlDefinition | None:
     if evaluation:
         condition = evaluation.get("condition", "")
         if condition:
-            eval_code = (
-                f"def evaluate(data):\n"
-                f"    return 'implemented' if {condition} else 'not_implemented'"
-            )
+            eval_code = f"def evaluate(data):\n    return 'implemented' if {condition} else 'not_implemented'"
 
     return ControlDefinition(
         id=ctrl_id,
@@ -309,9 +307,7 @@ def _normalise(raw: dict, path: Path) -> dict:
         "frameworks": frameworks,
         "data_keys": data_keys,
         "evaluation": check.get("evaluation"),
-        "remediation_steps": [
-            s.get("action", "") for s in remediation.get("steps", [])
-        ],
+        "remediation_steps": [s.get("action", "") for s in remediation.get("steps", [])],
         "remediation_summary": remediation.get("summary", ""),
         "compliance_mapping": compliance,
         "tags": metadata.get("tags", []),

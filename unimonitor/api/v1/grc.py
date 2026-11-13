@@ -18,6 +18,7 @@ router = APIRouter()
 
 # ── Schemas ──────────────────────────────────────────────────
 
+
 class FrameworkCoverage(BaseModel):
     framework_id: str
     framework_name: str
@@ -95,6 +96,7 @@ class EvidenceUploadResponse(BaseModel):
 
 # ── Endpoints ────────────────────────────────────────────────
 
+
 @router.get("/frameworks", response_model=list[FrameworkCoverage])
 async def list_frameworks_with_coverage(
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -110,16 +112,18 @@ async def list_frameworks_with_coverage(
     result = []
     for fw in SUPPORTED_FRAMEWORKS:
         cov = coverages.get(fw["id"], {})
-        result.append(FrameworkCoverage(
-            framework_id=fw["id"],
-            framework_name=fw["name"],
-            coverage_pct=cov.get("coverage_pct", 0.0),
-            controls_total=cov.get("controls_total", 0),
-            controls_implemented=cov.get("controls_implemented", 0),
-            controls_partial=cov.get("controls_partial", 0),
-            controls_not_implemented=cov.get("controls_not_implemented", 0),
-            controls_not_applicable=cov.get("controls_not_applicable", 0),
-        ))
+        result.append(
+            FrameworkCoverage(
+                framework_id=fw["id"],
+                framework_name=fw["name"],
+                coverage_pct=cov.get("coverage_pct", 0.0),
+                controls_total=cov.get("controls_total", 0),
+                controls_implemented=cov.get("controls_implemented", 0),
+                controls_partial=cov.get("controls_partial", 0),
+                controls_not_implemented=cov.get("controls_not_implemented", 0),
+                controls_not_applicable=cov.get("controls_not_applicable", 0),
+            )
+        )
     return result
 
 
@@ -138,9 +142,7 @@ async def framework_coverage(
     from unimonitor.grc.scoring import compute_framework_coverage
 
     async with async_session_factory() as session:
-        coverages = await compute_framework_coverage(
-            session, tenant_id=tenant_id, framework_id=framework_id
-        )
+        coverages = await compute_framework_coverage(session, tenant_id=tenant_id, framework_id=framework_id)
 
     cov = coverages.get(framework_id, {})
     return FrameworkCoverage(
@@ -182,15 +184,17 @@ async def framework_controls(
                 external_control_id=control.external_id,
                 tenant_id=tenant_id,
             )
-            result.append({
-                "control_id": control.id,
-                "external_id": control.external_id,
-                "name": control.name,
-                "category": control.category,
-                "severity": control.severity,
-                "state": finding.state if finding else "not_implemented",
-                "last_seen": finding.last_seen_at.isoformat() if finding else None,
-            })
+            result.append(
+                {
+                    "control_id": control.id,
+                    "external_id": control.external_id,
+                    "name": control.name,
+                    "category": control.category,
+                    "severity": control.severity,
+                    "state": finding.state if finding else "not_implemented",
+                    "last_seen": finding.last_seen_at.isoformat() if finding else None,
+                }
+            )
 
     return result
 
@@ -314,10 +318,7 @@ async def risk_scoring(
             )
             for item in result.get("breakdown", [])
         ],
-        methodology=(
-            "Risk score = (Critical×10 + High×8 + Medium×5 + Low×3 + Informational×1) "
-            "normalised to 0–100. Lower is better."
-        ),
+        methodology=("Risk score = (Critical×10 + High×8 + Medium×5 + Low×3 + Informational×1) normalised to 0–100. Lower is better."),
         generated_at=datetime.now(UTC),
     )
 

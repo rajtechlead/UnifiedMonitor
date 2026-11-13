@@ -19,6 +19,7 @@ router = APIRouter()
 
 # ── Schemas ──────────────────────────────────────────────────
 
+
 class FindingResponse(BaseModel):
     id: str
     tenant_id: str
@@ -41,6 +42,7 @@ class FindingResponse(BaseModel):
 
     def model_post_init(self, _context) -> None:
         import json
+
         if isinstance(self.ai_remediation, str):
             try:
                 self.ai_remediation = json.loads(self.ai_remediation)
@@ -304,6 +306,7 @@ async def trigger_ai_remediation(
 
     if finding.ai_remediation and not body.force_refresh:
         import json
+
         try:
             return {"finding_id": finding_id, "status": "cached", "remediation": json.loads(finding.ai_remediation)}
         except (ValueError, TypeError):
@@ -311,6 +314,7 @@ async def trigger_ai_remediation(
 
     try:
         from unimonitor.worker.tasks import generate_ai_remediation_task
+
         task = generate_ai_remediation_task.delay(finding_id=finding_id)
         return {
             "finding_id": finding_id,
@@ -320,7 +324,7 @@ async def trigger_ai_remediation(
         }
     except Exception as exc:
         logger.error("ai_remediation_dispatch_failed", finding_id=finding_id, error=str(exc))
-        raise HTTPException(status_code=503, detail="Failed to dispatch AI remediation task")
+        raise HTTPException(status_code=503, detail="Failed to dispatch AI remediation task") from exc
 
 
 @router.get("/{finding_id}/history", response_model=list[FindingHistoryItem])

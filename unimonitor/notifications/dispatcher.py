@@ -115,12 +115,14 @@ class NotificationDispatcher:
             "@context": "http://schema.org/extensions",
             "themeColor": "1776D2",
             "summary": subject,
-            "sections": [{
-                "activityTitle": f"**{subject}**",
-                "activitySubtitle": f"Tenant: {self.tenant_id}",
-                "text": body[:1000],
-                "markdown": True,
-            }],
+            "sections": [
+                {
+                    "activityTitle": f"**{subject}**",
+                    "activitySubtitle": f"Tenant: {self.tenant_id}",
+                    "text": body[:1000],
+                    "markdown": True,
+                }
+            ],
         }
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json=payload)
@@ -142,10 +144,12 @@ class NotificationDispatcher:
                 },
                 {
                     "type": "context",
-                    "elements": [{
-                        "type": "mrkdwn",
-                        "text": f"UniMonitor | Tenant: `{self.tenant_id}` | {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
-                    }],
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": f"UniMonitor | Tenant: `{self.tenant_id}` | {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}",
+                        }
+                    ],
                 },
             ],
         }

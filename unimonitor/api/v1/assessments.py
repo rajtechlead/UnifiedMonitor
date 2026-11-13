@@ -19,6 +19,7 @@ router = APIRouter()
 
 # ── Schemas ──────────────────────────────────────────────────
 
+
 class AssessmentCreate(BaseModel):
     tenant_id: str = ""
     name: str = Field(..., min_length=1, max_length=256)
@@ -94,6 +95,7 @@ class PaginatedRuns(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────
 
+
 def _assessment_to_response(assessment, latest_run=None) -> AssessmentResponse:
     return AssessmentResponse(
         id=assessment.id,
@@ -109,6 +111,7 @@ def _assessment_to_response(assessment, latest_run=None) -> AssessmentResponse:
 
 
 # ── Endpoints ────────────────────────────────────────────────
+
 
 @router.get("", response_model=PaginatedAssessments)
 async def list_assessments(
@@ -249,6 +252,7 @@ async def trigger_run(
     task_id = f"local-{run.id}"
     try:
         from unimonitor.worker.tasks import run_assessment_task
+
         task = run_assessment_task.delay(
             assessment_id=assessment_id,
             run_id=run.id,
@@ -329,6 +333,7 @@ async def cancel_run(
     if run.task_id:
         try:
             from unimonitor.worker.celery_app import celery_app
+
             celery_app.control.revoke(run.task_id, terminate=True)
         except Exception as exc:
             logger.warning("celery_revoke_failed", task_id=run.task_id, error=str(exc))

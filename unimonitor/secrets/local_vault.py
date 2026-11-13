@@ -20,6 +20,7 @@ the key lives on a USB / separate path from the encrypted data.
 Requires:
     pip install cryptography
 """
+
 from __future__ import annotations
 
 import json
@@ -59,16 +60,12 @@ class LocalVaultProvider:
         try:
             from cryptography.fernet import Fernet
         except ImportError as exc:
-            raise ImportError(
-                "Local Vault support requires: pip install cryptography"
-            ) from exc
+            raise ImportError("Local Vault support requires: pip install cryptography") from exc
 
         self._vault_dir = Path(vault_dir or os.environ.get("VAULT_DIR", DEFAULT_VAULT_DIR))
         self._enc_path = self._vault_dir / _VAULT_ENC_FILE
         self._meta_path = self._vault_dir / _VAULT_META_FILE
-        self._key_path = Path(
-            key_path or os.environ.get("VAULT_KEY_PATH", self._vault_dir / _VAULT_KEY_FILE)
-        )
+        self._key_path = Path(key_path or os.environ.get("VAULT_KEY_PATH", self._vault_dir / _VAULT_KEY_FILE))
         self._fernet: Fernet | None = None
         logger.info("Local Vault provider initialized", vault_dir=str(self._vault_dir))
 
@@ -81,7 +78,7 @@ class LocalVaultProvider:
         # Restrict directory permissions on POSIX
         try:
             os.chmod(self._vault_dir, stat.S_IRWXU)
-        except Exception:
+        except Exception:  # noqa: S110
             pass  # Windows — skip chmod
 
     def _load_or_create_key(self) -> bytes:
@@ -99,7 +96,7 @@ class LocalVaultProvider:
         self._key_path.write_bytes(key)
         try:
             os.chmod(self._key_path, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         logger.info("New vault master key generated", key_path=str(self._key_path))
         return key
@@ -136,7 +133,7 @@ class LocalVaultProvider:
         self._enc_path.write_bytes(ciphertext)
         try:
             os.chmod(self._enc_path, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     def _read_meta(self) -> dict[str, dict]:

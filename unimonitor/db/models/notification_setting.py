@@ -18,12 +18,8 @@ if TYPE_CHECKING:
 class NotificationSetting(Base):
     __tablename__ = "notification_settings"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), unique=True, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), unique=True, index=True)
 
     # SMTP
     smtp_enabled: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -43,8 +39,6 @@ class NotificationSetting(Base):
     alert_severity_threshold: Mapped[str] = mapped_column(String(32), default="HIGH")
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="notification_setting")

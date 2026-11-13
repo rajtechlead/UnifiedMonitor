@@ -14,7 +14,6 @@ from unimonitor.db.repositories.base import BaseRepository
 
 
 class TenantRepository(BaseRepository[Tenant]):
-
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(Tenant, session)
 
@@ -40,9 +39,7 @@ class TenantRepository(BaseRepository[Tenant]):
 
     async def get_by_entra_id(self, entra_tenant_id: str) -> Tenant | None:
         """Look up by the Azure AD / Entra tenant ID (tenant_id column)."""
-        result = await self.session.execute(
-            select(Tenant).where(Tenant.tenant_id == entra_tenant_id)
-        )
+        result = await self.session.execute(select(Tenant).where(Tenant.tenant_id == entra_tenant_id))
         return result.scalar_one_or_none()
 
     async def get_by_ms_tenant_id(self, ms_tenant_id: str) -> Tenant | None:
@@ -81,13 +78,7 @@ class TenantRepository(BaseRepository[Tenant]):
 
         # Rows
         offset = (page - 1) * page_size
-        rows_q = (
-            select(Tenant)
-            .where(where_clause)
-            .order_by(Tenant.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
-        )
+        rows_q = select(Tenant).where(where_clause).order_by(Tenant.created_at.desc()).offset(offset).limit(page_size)
         rows_result = await self.session.execute(rows_q)
         return rows_result.scalars().all(), total
 
@@ -127,9 +118,7 @@ class TenantRepository(BaseRepository[Tenant]):
     # ── Config helpers ────────────────────────────────────────────
 
     async def get_with_config(self, tenant_id: str) -> Tenant | None:
-        result = await self.session.execute(
-            select(Tenant).where(Tenant.id == tenant_id)
-        )
+        result = await self.session.execute(select(Tenant).where(Tenant.id == tenant_id))
         return result.scalar_one_or_none()
 
     async def create(self, **kwargs: Any) -> Tenant:  # type: ignore[override]
@@ -163,6 +152,7 @@ class UserRepository(BaseRepository):  # type: ignore[type-arg]
 
     def __init__(self, session: AsyncSession) -> None:
         from unimonitor.db.models.user import AppUser
+
         super().__init__(AppUser, session)
 
     async def upsert_from_entra(self, user_info: dict):
@@ -175,15 +165,11 @@ class UserRepository(BaseRepository):  # type: ignore[type-arg]
         email = user_info.get("email", "")
 
         # Try by entra_oid first, then email
-        result = await self.session.execute(
-            select(AppUser).where(AppUser.entra_oid == entra_oid)
-        )
+        result = await self.session.execute(select(AppUser).where(AppUser.entra_oid == entra_oid))
         db_user = result.scalar_one_or_none()
 
         if not db_user and email:
-            result = await self.session.execute(
-                select(AppUser).where(AppUser.email == email)
-            )
+            result = await self.session.execute(select(AppUser).where(AppUser.email == email))
             db_user = result.scalar_one_or_none()
 
         if db_user:

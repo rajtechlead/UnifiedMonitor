@@ -27,6 +27,7 @@ class UniMonitorError(Exception):
 
 # ── Authentication & Authorisation ──────────────────────────
 
+
 class AuthenticationError(UniMonitorError):
     status_code = status.HTTP_401_UNAUTHORIZED
     error_code = "AUTHENTICATION_FAILED"
@@ -47,6 +48,7 @@ class InvalidTokenError(AuthenticationError):
 
 # ── Resource errors ──────────────────────────────────────────
 
+
 class NotFoundError(UniMonitorError):
     status_code = status.HTTP_404_NOT_FOUND
     error_code = "NOT_FOUND"
@@ -63,6 +65,7 @@ class ValidationError(UniMonitorError):
 
 
 # ── Graph / External API errors ──────────────────────────────
+
 
 class GraphAPIError(UniMonitorError):
     status_code = status.HTTP_502_BAD_GATEWAY
@@ -86,6 +89,7 @@ class GraphTimeoutError(GraphAPIError):
 
 # ── Assessment / GRC errors ──────────────────────────────────
 
+
 class AssessmentError(UniMonitorError):
     error_code = "ASSESSMENT_ERROR"
 
@@ -101,11 +105,13 @@ class FrameworkNotFoundError(NotFoundError):
 
 # ── Database errors ──────────────────────────────────────────
 
+
 class DatabaseError(UniMonitorError):
     error_code = "DATABASE_ERROR"
 
 
 # ── FastAPI exception handlers ───────────────────────────────
+
 
 async def unimonitor_exception_handler(
     request: Request,

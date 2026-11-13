@@ -60,6 +60,7 @@ engine = _create_engine()
 
 # SQLite: enable WAL mode and foreign keys
 if settings.is_sqlite:
+
     @event.listens_for(engine.sync_engine, "connect")
     def set_sqlite_pragma(dbapi_conn, connection_record):
         cursor = dbapi_conn.cursor()
@@ -121,3 +122,9 @@ async def db_session_context() -> AsyncGenerator[AsyncSession, None]:
             raise
         finally:
             await session.close()
+
+
+# Aliases used by main.py startup/shutdown lifecycle
+async def init_db() -> None:
+    """Initialise database (create tables if not present). Alias for create_all_tables."""
+    await create_all_tables()

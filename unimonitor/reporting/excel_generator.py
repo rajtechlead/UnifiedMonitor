@@ -11,13 +11,11 @@ try:
     import openpyxl
     from openpyxl.styles import (
         Alignment,
-        Border,
         Font,
         PatternFill,
-        Side,
-        numbers,
     )
     from openpyxl.utils import get_column_letter
+
     HAS_OPENPYXL = True
 except ImportError:
     HAS_OPENPYXL = False
@@ -71,7 +69,7 @@ class ExcelReportGenerator(BaseReportGenerator):
             for cell in column:
                 try:
                     max_len = max(max_len, len(str(cell.value or "")))
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
             ws.column_dimensions[col_letter].width = min(max_len + 4, 50)
 
@@ -175,8 +173,7 @@ class ExcelReportGenerator(BaseReportGenerator):
             state = getattr(f, "state", "not_implemented") or "not_implemented"
             for fw in fw_ids:
                 if fw not in framework_stats:
-                    framework_stats[fw] = {"total": 0, "implemented": 0, "partially_implemented": 0,
-                                           "not_implemented": 0, "not_applicable": 0}
+                    framework_stats[fw] = {"total": 0, "implemented": 0, "partially_implemented": 0, "not_implemented": 0, "not_applicable": 0}
                 framework_stats[fw]["total"] += 1
                 framework_stats[fw][state] = framework_stats[fw].get(state, 0) + 1
 

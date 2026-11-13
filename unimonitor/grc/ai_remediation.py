@@ -16,6 +16,7 @@ logger = get_logger(__name__)
 
 # ── AIRemediationEngine class ─────────────────────────────────
 
+
 class AIRemediationEngine:
     """Generate structured remediation guidance for security findings.
 
@@ -37,6 +38,7 @@ class AIRemediationEngine:
         ``"rule_based"`` when the fallback path is used or ``"azure_openai"``
         when the AI path succeeds.
         """
+
         # Extract fields from the finding (supports dicts and ORM objects)
         def _get(key: str, default: Any = "") -> Any:
             if isinstance(finding, dict):
@@ -283,7 +285,10 @@ def _rule_based_remediation(
     category_refs = {
         "Identity": [
             {"title": "Entra ID Security", "url": "https://learn.microsoft.com/en-us/entra/identity/"},
-            {"title": "Conditional Access Best Practices", "url": "https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access"},
+            {
+                "title": "Conditional Access Best Practices",
+                "url": "https://learn.microsoft.com/en-us/entra/identity/conditional-access/plan-conditional-access",
+            },
         ],
         "Devices": [
             {"title": "Intune Security", "url": "https://learn.microsoft.com/en-us/mem/intune/protect/"},

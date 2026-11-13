@@ -64,11 +64,17 @@ class BaseReportGenerator(ABC):
     def _summary_stats(self) -> dict[str, Any]:
         """Return a dict of summary statistics across findings."""
         counts: dict[str, int] = {
-            "CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "INFORMATIONAL": 0,
+            "CRITICAL": 0,
+            "HIGH": 0,
+            "MEDIUM": 0,
+            "LOW": 0,
+            "INFORMATIONAL": 0,
         }
         state_counts: dict[str, int] = {
-            "implemented": 0, "partially_implemented": 0,
-            "not_implemented": 0, "not_applicable": 0,
+            "implemented": 0,
+            "partially_implemented": 0,
+            "not_implemented": 0,
+            "not_applicable": 0,
         }
         for f in self.findings:
             sev = (self._get_finding_attr(f, "severity") or "INFORMATIONAL").upper()

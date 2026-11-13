@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
-import { Save, Bell, Mail, Users, MessageSquare, Shield } from 'lucide-react'
+import { Save, Bell, Mail, MessageSquare, Shield } from 'lucide-react'
 
 type NotificationSettings = {
   smtp_enabled: boolean

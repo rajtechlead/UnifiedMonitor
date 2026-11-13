@@ -9,6 +9,7 @@ Commands::
     unimonitor smoke-test   — Run smoke tests against a running instance
     unimonitor secrets      — Secret management utilities
 """
+
 from __future__ import annotations
 
 import sys
@@ -23,7 +24,7 @@ def main() -> None:
 
 
 @main.command()
-@click.option("--host", default="0.0.0.0", show_default=True, help="Bind host")
+@click.option("--host", default="0.0.0.0", show_default=True, help="Bind host")  # noqa: S104
 @click.option("--port", default=8000, show_default=True, type=int, help="Bind port")
 @click.option("--workers", default=1, show_default=True, type=int, help="Uvicorn worker count")
 @click.option("--reload", is_flag=True, default=False, help="Auto-reload on code changes (dev only)")
@@ -53,6 +54,7 @@ def setup(run_wizard: bool) -> None:
     if run_wizard:
         try:
             from scripts.setup_wizard import main as wizard_main
+
             wizard_main()
         except ImportError:
             click.echo("Setup wizard not found. Run migrations only.", err=True)
@@ -61,6 +63,7 @@ def setup(run_wizard: bool) -> None:
     import asyncio
 
     from scripts.setup import run_setup
+
     asyncio.run(run_setup())
 
 
@@ -85,8 +88,10 @@ def migrate() -> None:
 def smoke_test(url: str) -> None:
     """Run smoke tests against a running UniMonitor instance."""
     import asyncio
+
     try:
         from scripts.smoke_test import run_smoke_tests
+
         success = asyncio.run(run_smoke_tests(base_url=url))
         sys.exit(0 if success else 1)
     except ImportError:

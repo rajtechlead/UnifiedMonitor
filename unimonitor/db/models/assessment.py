@@ -29,12 +29,8 @@ class Assessment(Base):
 
     __tablename__ = "assessments"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(256))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Comma-separated framework IDs
@@ -42,14 +38,10 @@ class Assessment(Base):
     # Comma-separated collector names
     collectors: Mapped[str] = mapped_column(String(512), default="")
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="assessments")
-    runs: Mapped[list[AssessmentRun]] = relationship(
-        "AssessmentRun", back_populates="assessment", cascade="all, delete-orphan"
-    )
+    runs: Mapped[list[AssessmentRun]] = relationship("AssessmentRun", back_populates="assessment", cascade="all, delete-orphan")
 
     def framework_list(self) -> list[str]:
         return [f.strip() for f in self.frameworks.split(",") if f.strip()]
@@ -63,15 +55,9 @@ class AssessmentRun(Base):
 
     __tablename__ = "assessment_runs"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    assessment_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("assessments.id", ondelete="CASCADE"), index=True
-    )
-    status: Mapped[str] = mapped_column(
-        String(32), default=AssessmentStatus.PENDING.value, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    assessment_id: Mapped[str] = mapped_column(String(36), ForeignKey("assessments.id", ondelete="CASCADE"), index=True)
+    status: Mapped[str] = mapped_column(String(32), default=AssessmentStatus.PENDING.value, index=True)
     # Trigger: "scheduled", "manual", "api"
     trigger: Mapped[str] = mapped_column(String(32), default="manual")
     triggered_by: Mapped[str | None] = mapped_column(String(36), nullable=True)  # user ID
@@ -91,12 +77,8 @@ class AssessmentRun(Base):
     controls_passed: Mapped[int] = mapped_column(Integer, default=0)
 
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Celery task ID for status tracking
     task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 

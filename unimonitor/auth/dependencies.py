@@ -44,12 +44,12 @@ async def get_current_active_user(
 
 def require_role(*roles: UserRole):
     """Dependency factory: require the user to have one of the given roles."""
+
     async def _check(current_user: AppUser = Depends(get_current_user)) -> AppUser:
         if not current_user.has_role(*roles):
-            raise AuthorisationError(
-                f"Role '{current_user.role}' is not authorised for this action."
-            )
+            raise AuthorisationError(f"Role '{current_user.role}' is not authorised for this action.")
         return current_user
+
     return _check
 
 
@@ -58,12 +58,8 @@ def require_admin():
 
 
 def require_analyst():
-    return require_role(
-        UserRole.ADMIN, UserRole.SECURITY_ANALYST, UserRole.SOC_ANALYST
-    )
+    return require_role(UserRole.ADMIN, UserRole.SECURITY_ANALYST, UserRole.SOC_ANALYST)
 
 
 def require_compliance():
-    return require_role(
-        UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.AUDITOR
-    )
+    return require_role(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.AUDITOR)

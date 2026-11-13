@@ -149,7 +149,7 @@ class EntraIdCollector:
                 "/users",
                 params={
                     "$select": "id,displayName,userPrincipalName,accountEnabled,assignedLicenses,"
-                               "signInSessionsValidFromDateTime,lastPasswordChangeDateTime",
+                    "signInSessionsValidFromDateTime,lastPasswordChangeDateTime",
                     "$top": "999",
                 },
                 max_pages=10,

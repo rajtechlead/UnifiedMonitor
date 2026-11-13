@@ -1,6 +1,7 @@
 """
 Shared pytest fixtures for UniMonitor tests.
 """
+
 import asyncio
 import os
 from collections.abc import AsyncGenerator, Generator
@@ -13,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Use in-memory SQLite for tests
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-32chars")
-os.environ.setdefault("UNIMONITOR_ENV", "test")           # avoids production secret-key validation
+os.environ.setdefault("UNIMONITOR_ENV", "test")  # avoids production secret-key validation
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
@@ -98,6 +99,7 @@ async def client(db_session: AsyncSession, _session_factory) -> AsyncGenerator[A
 async def tenant(db_session: AsyncSession):
     """Create a test tenant."""
     from unimonitor.db.models.tenant import Tenant
+
     t = Tenant(
         id="test-tenant-id-00000000000001",
         name="Test Organization",
@@ -116,6 +118,7 @@ async def admin_user(db_session: AsyncSession, tenant):
     import bcrypt as _bcrypt
 
     from unimonitor.db.models.user import AppUser
+
     _hashed = _bcrypt.hashpw(b"TestPassword123!", _bcrypt.gensalt()).decode("utf-8")
     u = AppUser(
         id="test-user-id-000000000000001",

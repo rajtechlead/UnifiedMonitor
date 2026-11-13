@@ -34,7 +34,7 @@ router = APIRouter()
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
-    token_type: str = "bearer"
+    token_type: str = "bearer"  # noqa: S105
     expires_in: int
 
 
@@ -68,9 +68,7 @@ async def login_local(
 
     settings = get_settings()
 
-    result = await db.execute(
-        select(AppUser).where(AppUser.email == form_data.username)
-    )
+    result = await db.execute(select(AppUser).where(AppUser.email == form_data.username))
     db_user = result.scalar_one_or_none()
 
     if not db_user or not db_user.hashed_password:
@@ -156,7 +154,7 @@ async def oauth_callback(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to exchange authorization code for token",
-        )
+        ) from exc
 
     # Fetch user info from Graph /me
     try:
@@ -166,7 +164,7 @@ async def oauth_callback(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Failed to retrieve user information",
-        )
+        ) from exc
 
     # Upsert user in DB
     from unimonitor.db.base import async_session_factory
@@ -217,7 +215,7 @@ async def refresh_token(
     try:
         payload = decode_refresh_token(body.refresh_token)
     except Exception:
-        raise HTTPException(
+        raise HTTPException(  # noqa: B904
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
@@ -261,15 +259,17 @@ async def logout(
     # Extract JTI from raw JWT payload (not stored on AppUser ORM object)
     if credentials:
         from unimonitor.auth.jwt import validate_access_token
+
         try:
             payload = validate_access_token(credentials.credentials)
             jti = payload.get("jti")
             if jti:
                 exp = payload.get("exp", 0)
                 import time
+
                 ttl = max(int(exp - time.time()), 1)
                 await cache_set(f"token_blacklist:{jti}", True, ttl=ttl)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
     logger.info("user_logged_out", user_id=current_user.id)
 

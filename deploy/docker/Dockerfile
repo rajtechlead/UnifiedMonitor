@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 # Install Python dependencies (cached layer)
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 RUN pip install --no-cache-dir --break-system-packages -e ".[production]" 2>/dev/null || \
     pip install --no-cache-dir -e ".[production]"
 

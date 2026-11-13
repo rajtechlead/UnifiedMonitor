@@ -71,6 +71,7 @@ async def acquire_token_for_client(
         error = result.get("error_description", result.get("error", "Unknown"))
         logger.error("MSAL token acquisition failed", error=error, tenant_id=tenant_id)
         from unimonitor.exceptions import AuthenticationError
+
         raise AuthenticationError(f"Failed to acquire Graph token: {error}")
 
     return result["access_token"]
@@ -102,6 +103,7 @@ def build_authorize_url(state: str) -> str:
 async def exchange_code_for_token(code: str) -> dict:
     """Exchange the auth code for tokens (delegated flow, async wrapper)."""
     import asyncio
+
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _exchange_code_for_token_sync, code)
 
@@ -117,15 +119,15 @@ def _exchange_code_for_token_sync(code: str) -> dict:
     )
     if "error" in result:
         from unimonitor.exceptions import AuthenticationError
-        raise AuthenticationError(
-            f"Token exchange failed: {result.get('error_description', result['error'])}"
-        )
+
+        raise AuthenticationError(f"Token exchange failed: {result.get('error_description', result['error'])}")
     return result
 
 
 async def get_entra_user_info(access_token: str) -> dict:
     """Fetch the signed-in user's profile from Microsoft Graph /me endpoint."""
     import httpx
+
     async with httpx.AsyncClient() as client:
         response = await client.get(
             "https://graph.microsoft.com/v1.0/me",

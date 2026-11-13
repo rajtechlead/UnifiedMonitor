@@ -53,9 +53,7 @@ class FrameworkCrosswalk:
                         self._index[fw_id][ref] = []
                     self._index[fw_id][ref].append(ctrl)
 
-    def find_by_reference(
-        self, framework_id: str, reference: str
-    ) -> list[ControlDefinition]:
+    def find_by_reference(self, framework_id: str, reference: str) -> list[ControlDefinition]:
         """Return controls that map *reference* in *framework_id*."""
         fw_id = framework_id.lower()
         return self._index.get(fw_id, {}).get(reference, [])
@@ -172,12 +170,14 @@ def gap_analysis(
         else:
             not_implemented += 1
             sev = ctrl.get("severity", "medium")
-            gaps_by_severity.get(sev, gaps_by_severity["medium"]).append({
-                "control_id": ctrl_id,
-                "name": ctrl["name"],
-                "category": ctrl["category"],
-                "remediation_summary": ctrl.get("remediation_summary", ""),
-            })
+            gaps_by_severity.get(sev, gaps_by_severity["medium"]).append(
+                {
+                    "control_id": ctrl_id,
+                    "name": ctrl["name"],
+                    "category": ctrl["category"],
+                    "remediation_summary": ctrl.get("remediation_summary", ""),
+                }
+            )
 
     total = len(framework_controls) - not_applicable
     coverage_pct = round(((implemented + partial * 0.5) / total) * 100, 2) if total > 0 else 0.0

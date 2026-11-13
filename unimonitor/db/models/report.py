@@ -22,17 +22,13 @@ class ReportStatus(enum.StrEnum):
 class Report(Base):
     __tablename__ = "reports"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     assessment_run_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("assessment_runs.id", ondelete="SET NULL"), nullable=True, index=True
     )
     status: Mapped[str] = mapped_column(String(32), default=ReportStatus.PENDING.value)
-    formats: Mapped[str | None] = mapped_column(Text, nullable=True)   # JSON list: ["pdf", "excel"]
+    formats: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON list: ["pdf", "excel"]
     file_paths: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON dict: {fmt: path}
     report_type: Mapped[str] = mapped_column(String(64), default="full")
     task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)

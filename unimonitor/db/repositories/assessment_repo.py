@@ -14,7 +14,6 @@ from unimonitor.db.repositories.base import BaseRepository
 
 
 class AssessmentRepository(BaseRepository[Assessment]):
-
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(Assessment, session)
 
@@ -53,21 +52,14 @@ class AssessmentRepository(BaseRepository[Assessment]):
     # ── Active tenants ────────────────────────────────────────────
 
     async def get_active_for_tenant(self, tenant_id: str) -> Sequence[Assessment]:
-        result = await self.session.execute(
-            select(Assessment).where(
-                and_(Assessment.tenant_id == tenant_id, Assessment.is_active.is_(True))
-            )
-        )
+        result = await self.session.execute(select(Assessment).where(and_(Assessment.tenant_id == tenant_id, Assessment.is_active.is_(True))))
         return result.scalars().all()
 
     # ── Run helpers ───────────────────────────────────────────────
 
     async def get_latest_run(self, assessment_id: str) -> AssessmentRun | None:
         result = await self.session.execute(
-            select(AssessmentRun)
-            .where(AssessmentRun.assessment_id == assessment_id)
-            .order_by(desc(AssessmentRun.started_at))
-            .limit(1)
+            select(AssessmentRun).where(AssessmentRun.assessment_id == assessment_id).order_by(desc(AssessmentRun.started_at)).limit(1)
         )
         return result.scalar_one_or_none()
 
@@ -95,6 +87,7 @@ class AssessmentRepository(BaseRepository[Assessment]):
         run = await self.session.get(AssessmentRun, run_id)
         if run is None:
             from unimonitor.exceptions import NotFoundError
+
             raise NotFoundError(f"AssessmentRun '{run_id}' not found")
         for key, value in kwargs.items():
             setattr(run, key, value)
@@ -108,11 +101,7 @@ class AssessmentRepository(BaseRepository[Assessment]):
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[Sequence[AssessmentRun], int]:
-        total_result = await self.session.execute(
-            select(func.count()).select_from(AssessmentRun).where(
-                AssessmentRun.assessment_id == assessment_id
-            )
-        )
+        total_result = await self.session.execute(select(func.count()).select_from(AssessmentRun).where(AssessmentRun.assessment_id == assessment_id))
         total = total_result.scalar_one()
         offset = (page - 1) * page_size
         runs_result = await self.session.execute(
@@ -123,7 +112,6 @@ class AssessmentRepository(BaseRepository[Assessment]):
             .limit(page_size)
         )
         return runs_result.scalars().all(), total
-
 
     async def get_latest_completed_run(self, tenant_id: str | None = None) -> AssessmentRun | None:
         """Return the most recent completed run, optionally filtered by tenant."""
@@ -138,11 +126,10 @@ class AssessmentRepository(BaseRepository[Assessment]):
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def get_score_trends(
-        self, tenant_id: str | None = None, days: int = 30
-    ) -> list[dict]:
+    async def get_score_trends(self, tenant_id: str | None = None, days: int = 30) -> list[dict]:
         """Return daily score trend data for the last N days."""
         from datetime import datetime, timedelta
+
         cutoff = datetime.now(UTC) - timedelta(days=days)
         stmt = (
             select(AssessmentRun)
@@ -168,9 +155,7 @@ class AssessmentRepository(BaseRepository[Assessment]):
             for r in runs
         ]
 
-    async def get_finding_trends(
-        self, tenant_id: str | None = None, days: int = 30
-    ) -> list[dict]:
+    async def get_finding_trends(self, tenant_id: str | None = None, days: int = 30) -> list[dict]:
         """Return daily new-finding counts for the past ``days`` days.
 
         Each row: ``{"date": "YYYY-MM-DD", "total": int, "critical": int,
@@ -204,15 +189,9 @@ class AssessmentRepository(BaseRepository[Assessment]):
                         if dialect_name == "postgresql"
                         else func.iif(Finding.severity == "critical", 1, 0)
                     ).label("critical"),
-                    func.sum(
-                        func.iif(Finding.severity == "high", 1, 0)
-                    ).label("high"),
-                    func.sum(
-                        func.iif(Finding.severity == "medium", 1, 0)
-                    ).label("medium"),
-                    func.sum(
-                        func.iif(Finding.severity == "low", 1, 0)
-                    ).label("low"),
+                    func.sum(func.iif(Finding.severity == "high", 1, 0)).label("high"),
+                    func.sum(func.iif(Finding.severity == "medium", 1, 0)).label("medium"),
+                    func.sum(func.iif(Finding.severity == "low", 1, 0)).label("low"),
                 )
                 .where(Finding.first_detected_at >= cutoff)
                 .group_by(text("1"))
@@ -242,7 +221,6 @@ class AssessmentRepository(BaseRepository[Assessment]):
 
 
 class AssessmentRunRepository(BaseRepository[AssessmentRun]):
-
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(AssessmentRun, session)
 
@@ -278,6 +256,7 @@ class AssessmentRunRepository(BaseRepository[AssessmentRun]):
         counts: dict,
     ) -> AssessmentRun:
         from datetime import datetime
+
         run = await self.get_or_raise(run_id)
         run.status = AssessmentStatus.COMPLETED.value
         run.completed_at = datetime.now(UTC)
@@ -296,6 +275,7 @@ class AssessmentRunRepository(BaseRepository[AssessmentRun]):
 
     async def mark_failed(self, run_id: str, error_message: str) -> AssessmentRun:
         from datetime import datetime
+
         run = await self.get_or_raise(run_id)
         run.status = AssessmentStatus.FAILED.value
         run.completed_at = datetime.now(UTC)

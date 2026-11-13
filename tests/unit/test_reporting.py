@@ -1,6 +1,7 @@
 """
 Unit tests for the reporting generators.
 """
+
 import csv
 import json
 from pathlib import Path
@@ -146,9 +147,7 @@ class TestJsonGenerator:
         with open(path) as f:
             data = json.load(f)
 
-        finding_with_ai = next(
-            (f for f in data["findings"] if f.get("ai_remediation")), None
-        )
+        finding_with_ai = next((f for f in data["findings"] if f.get("ai_remediation")), None)
         assert finding_with_ai is not None
 
 

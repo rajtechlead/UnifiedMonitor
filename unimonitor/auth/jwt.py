@@ -57,10 +57,10 @@ def decode_token(token: str) -> dict[str, Any]:
             algorithms=[settings.JWT_ALGORITHM],
         )
         return payload
-    except ExpiredSignatureError:
-        raise TokenExpiredError("Access token has expired.")
+    except ExpiredSignatureError as exc:
+        raise TokenExpiredError("Access token has expired.") from exc
     except JWTError as exc:
-        raise InvalidTokenError(f"Invalid token: {exc}")
+        raise InvalidTokenError(f"Invalid token: {exc}") from exc
 
 
 def validate_access_token(token: str) -> dict[str, Any]:

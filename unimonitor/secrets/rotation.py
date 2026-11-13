@@ -12,6 +12,7 @@ Rotation policy is stored in secret tags:
   last_rotated_at   : ISO timestamp
   rotation_hook     : "unimonitor.secrets.hooks:on_rotate_client_secret"
 """
+
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable

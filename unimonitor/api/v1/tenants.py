@@ -17,6 +17,7 @@ router = APIRouter()
 
 # ── Pydantic schemas ─────────────────────────────────────────
 
+
 class TenantCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=256)
     display_name: str = Field(..., min_length=1, max_length=256)
@@ -79,6 +80,7 @@ class PaginatedTenants(BaseModel):
 
 
 # ── Endpoints ────────────────────────────────────────────────
+
 
 @router.get("", response_model=PaginatedTenants)
 async def list_tenants(

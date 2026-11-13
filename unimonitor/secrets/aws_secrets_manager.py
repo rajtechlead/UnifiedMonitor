@@ -10,6 +10,7 @@ Authentication (boto3 standard chain):
   3. IAM Role (EC2 / ECS task role / Lambda)
   4. IAM Identity Center (SSO)
 """
+
 from __future__ import annotations
 
 import time
@@ -34,9 +35,7 @@ class AWSSecretsManagerProvider:
         try:
             import boto3
         except ImportError as exc:
-            raise ImportError(
-                "AWS Secrets Manager support requires: pip install boto3"
-            ) from exc
+            raise ImportError("AWS Secrets Manager support requires: pip install boto3") from exc
 
         import boto3
 
@@ -60,18 +59,17 @@ class AWSSecretsManagerProvider:
 
         try:
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None, lambda: self._client.get_secret_value(**kwargs)
-            )
+            response = await loop.run_in_executor(None, lambda: self._client.get_secret_value(**kwargs))
             if "SecretString" in response:
                 return response["SecretString"]
             # Binary secret — decode as UTF-8
             import base64
+
             return base64.b64decode(response["SecretBinary"]).decode("utf-8")
         except ClientError as exc:
             code = exc.response["Error"]["Code"]
             if code in ("ResourceNotFoundException", "InvalidRequestException"):
-                raise KeyError(f"Secret '{name}' not found in AWS Secrets Manager ({self._region})")
+                raise KeyError(f"Secret '{name}' not found in AWS Secrets Manager ({self._region})") from exc
             logger.error("AWS SM get_secret failed", name=name, error=str(exc))
             raise
 
@@ -95,9 +93,7 @@ class AWSSecretsManagerProvider:
                 create_kwargs: dict = {"Name": name, "SecretString": value}
                 if tags:
                     create_kwargs["Tags"] = [{"Key": k, "Value": v} for k, v in tags.items()]
-                response = await loop.run_in_executor(
-                    None, lambda: self._client.create_secret(**create_kwargs)
-                )
+                response = await loop.run_in_executor(None, lambda: self._client.create_secret(**create_kwargs))
                 version = response.get("VersionId")
             else:
                 raise
@@ -119,9 +115,7 @@ class AWSSecretsManagerProvider:
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 None,
-                lambda: self._client.delete_secret(
-                    SecretId=name, RecoveryWindowInDays=recovery_window_days
-                ),
+                lambda: self._client.delete_secret(SecretId=name, RecoveryWindowInDays=recovery_window_days),
             )
             logger.info("AWS SM secret deletion scheduled", name=name, window_days=recovery_window_days)
         except ClientError as exc:

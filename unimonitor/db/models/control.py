@@ -16,9 +16,7 @@ class Framework(Base):
 
     __tablename__ = "frameworks"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     # Short identifier: "iso27001", "nist_csf", "cis_controls_v8", etc.
     slug: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(256))
@@ -27,13 +25,9 @@ class Framework(Base):
     # Icon/badge for UI
     icon: Mapped[str | None] = mapped_column(String(64), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
-    controls: Mapped[list[Control]] = relationship(
-        "Control", back_populates="framework", cascade="all, delete-orphan"
-    )
+    controls: Mapped[list[Control]] = relationship("Control", back_populates="framework", cascade="all, delete-orphan")
 
 
 class Control(Base):
@@ -41,12 +35,8 @@ class Control(Base):
 
     __tablename__ = "controls"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    framework_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("frameworks.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    framework_id: Mapped[str] = mapped_column(String(36), ForeignKey("frameworks.id", ondelete="CASCADE"), index=True)
     # Control reference number (e.g. "A.5.1", "PR.AA-01")
     reference: Mapped[str] = mapped_column(String(64), index=True)
     title: Mapped[str] = mapped_column(String(512))
@@ -59,9 +49,7 @@ class Control(Base):
     graph_endpoints: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Recommended severity if failing
     default_severity: Mapped[str] = mapped_column(String(32), default="medium")
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     framework: Mapped[Framework] = relationship("Framework", back_populates="controls")
     mappings: Mapped[list[ControlMapping]] = relationship(
@@ -78,21 +66,13 @@ class ControlMapping(Base):
 
     __tablename__ = "control_mappings"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    source_control_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("controls.id", ondelete="CASCADE"), index=True
-    )
-    target_control_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("controls.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    source_control_id: Mapped[str] = mapped_column(String(36), ForeignKey("controls.id", ondelete="CASCADE"), index=True)
+    target_control_id: Mapped[str] = mapped_column(String(36), ForeignKey("controls.id", ondelete="CASCADE"), index=True)
     # Mapping strength: "full", "partial", "related"
     relationship_type: Mapped[str] = mapped_column(String(32), default="full")
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     source_control: Mapped[Control] = relationship(
         "Control",

@@ -21,6 +21,7 @@ router = APIRouter()
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
+
 class SmtpSettings(BaseModel):
     host: str = ""
     port: int = 587
@@ -105,6 +106,7 @@ class TestNotificationResponse(BaseModel):
 
 # ── Helper: load/persist settings via tenant JSON column ──────────────────
 
+
 async def _get_tenant(tenant_id: str, db: AsyncSession) -> Tenant:
     result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
     tenant = result.scalar_one_or_none()
@@ -120,6 +122,7 @@ def _mask(value: str) -> str:
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/settings",
@@ -137,6 +140,7 @@ async def get_notification_settings(
     raw: dict[str, Any] = {}
     if hasattr(tenant, "notification_settings") and tenant.notification_settings:
         import json
+
         try:
             raw = json.loads(tenant.notification_settings)
         except (json.JSONDecodeError, TypeError):
@@ -305,15 +309,19 @@ async def test_notification(
             if not webhook_url:
                 return TestNotificationResponse(channel=channel, success=False, message="Teams webhook URL not configured")
             import httpx
+
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(webhook_url, json={
-                    "@type": "MessageCard",
-                    "@context": "https://schema.org/extensions",
-                    "summary": "UniMonitor Test Notification",
-                    "themeColor": "0078D4",
-                    "title": "UniMonitor — Test Notification",
-                    "text": f"Test notification from UniMonitor for tenant **{tenant.name}**. Sent by {current_user.email}.",
-                })
+                resp = await client.post(
+                    webhook_url,
+                    json={
+                        "@type": "MessageCard",
+                        "@context": "https://schema.org/extensions",
+                        "summary": "UniMonitor Test Notification",
+                        "themeColor": "0078D4",
+                        "title": "UniMonitor — Test Notification",
+                        "text": f"Test notification from UniMonitor for tenant **{tenant.name}**. Sent by {current_user.email}.",
+                    },
+                )
                 if resp.is_success:
                     return TestNotificationResponse(channel=channel, success=True, message="Teams notification sent successfully")
                 else:
@@ -324,10 +332,14 @@ async def test_notification(
             if not webhook_url:
                 return TestNotificationResponse(channel=channel, success=False, message="Slack webhook URL not configured")
             import httpx
+
             async with httpx.AsyncClient(timeout=10) as client:
-                resp = await client.post(webhook_url, json={
-                    "text": f":white_check_mark: UniMonitor test notification for tenant *{tenant.name}*. Sent by {current_user.email}.",
-                })
+                resp = await client.post(
+                    webhook_url,
+                    json={
+                        "text": f":white_check_mark: UniMonitor test notification for tenant *{tenant.name}*. Sent by {current_user.email}.",
+                    },
+                )
                 if resp.is_success:
                     return TestNotificationResponse(channel=channel, success=True, message="Slack notification sent successfully")
                 else:
@@ -340,6 +352,7 @@ async def test_notification(
             recipient = request.recipient or current_user.email
             import smtplib
             from email.mime.text import MIMEText
+
             msg = MIMEText(f"Test notification from UniMonitor.\n\nTenant: {tenant.name}\nSent by: {current_user.email}")
             msg["Subject"] = "UniMonitor — Test Notification"
             msg["From"] = smtp_cfg.get("from_address", smtp_cfg.get("username", ""))
@@ -357,10 +370,12 @@ async def test_notification(
             if not wh_cfg.get("enabled") or not wh_cfg.get("url"):
                 return TestNotificationResponse(channel=channel, success=False, message="Webhook not configured or disabled")
             import httpx
+
             headers = {**wh_cfg.get("headers", {}), "Content-Type": "application/json"}
             if wh_cfg.get("secret"):
                 import hashlib
                 import hmac
+
                 body = json.dumps(test_payload).encode()
                 sig = hmac.new(wh_cfg["secret"].encode(), body, hashlib.sha256).hexdigest()
                 headers["X-UniMonitor-Signature"] = f"sha256={sig}"

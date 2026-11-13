@@ -164,3 +164,8 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+
+def run_setup() -> None:
+    """Entry point callable from unimonitor CLI."""
+    asyncio.run(main())

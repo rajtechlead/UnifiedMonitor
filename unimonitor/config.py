@@ -8,7 +8,7 @@ from typing import Literal
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-_DEFAULT_SECRET_KEY = "change-me-in-production"
+_DEFAULT_SECRET_KEY = "change-me-in-production"  # noqa: S105
 
 
 class Settings(BaseSettings):
@@ -116,20 +116,18 @@ class Settings(BaseSettings):
     def parse_cors(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
             import json
+
             return json.loads(v)
         return v
 
     @model_validator(mode="after")
     def reject_default_secret_key_in_production(self) -> Settings:
         """Refuse to start in production with the default SECRET_KEY."""
-        if (
-            self.UNIMONITOR_ENV == "production"
-            and self.UNIMONITOR_SECRET_KEY == _DEFAULT_SECRET_KEY
-        ):
+        if self.UNIMONITOR_ENV == "production" and self.UNIMONITOR_SECRET_KEY == _DEFAULT_SECRET_KEY:
             raise ValueError(
                 "UNIMONITOR_SECRET_KEY must be changed from the default value before "
                 "running in production. Generate a key with: "
-                "python -c \"import secrets; print(secrets.token_hex(32))\""
+                'python -c "import secrets; print(secrets.token_hex(32))"'
             )
         return self
 
@@ -146,7 +144,7 @@ class Settings(BaseSettings):
         return f"{self.GRAPH_API_BASE_URL}/{self.GRAPH_API_VERSION}"
 
     @property
-    def REPORTS_DIR(self) -> str:
+    def REPORTS_DIR(self) -> str:  # noqa: N802
         """Alias for REPORT_STORAGE_PATH — used by report generators."""
         return self.REPORT_STORAGE_PATH
 

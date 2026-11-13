@@ -10,6 +10,7 @@ Authentication order (DefaultAzureCredential):
   3. ManagedIdentityCredential (Azure VM / App Service)
   4. AzureCliCredential (local dev)
 """
+
 from __future__ import annotations
 
 import time
@@ -34,9 +35,7 @@ class AzureKeyVaultProvider:
             from azure.identity import DefaultAzureCredential
             from azure.keyvault.secrets import SecretClient
         except ImportError as exc:
-            raise ImportError(
-                "Azure Key Vault support requires: pip install azure-keyvault-secrets azure-identity"
-            ) from exc
+            raise ImportError("Azure Key Vault support requires: pip install azure-keyvault-secrets azure-identity") from exc
 
         self._vault_url = vault_url
         self._credential = DefaultAzureCredential()
@@ -51,14 +50,12 @@ class AzureKeyVaultProvider:
 
         try:
             loop = asyncio.get_event_loop()
-            secret = await loop.run_in_executor(
-                None, lambda: self._client.get_secret(name, version=version)
-            )
+            secret = await loop.run_in_executor(None, lambda: self._client.get_secret(name, version=version))
             if secret.value is None:
                 raise KeyError(f"Secret '{name}' has no value in Azure Key Vault")
             return secret.value
-        except ResourceNotFoundError:
-            raise KeyError(f"Secret '{name}' not found in Azure Key Vault ({self._vault_url})")
+        except ResourceNotFoundError as exc:
+            raise KeyError(f"Secret '{name}' not found in Azure Key Vault ({self._vault_url})") from exc
         except Exception as exc:
             logger.error("Azure Key Vault get_secret failed", name=name, error=str(exc))
             raise
@@ -69,9 +66,7 @@ class AzureKeyVaultProvider:
 
         try:
             loop = asyncio.get_event_loop()
-            props = await loop.run_in_executor(
-                None, lambda: self._client.set_secret(name, value, tags=tags or {})
-            )
+            props = await loop.run_in_executor(None, lambda: self._client.set_secret(name, value, tags=tags or {}))
             return SecretMetadata(
                 name=name,
                 provider=self.provider_type,
@@ -104,9 +99,7 @@ class AzureKeyVaultProvider:
         import asyncio
 
         loop = asyncio.get_event_loop()
-        props_list = await loop.run_in_executor(
-            None, lambda: list(self._client.list_properties_of_secrets())
-        )
+        props_list = await loop.run_in_executor(None, lambda: list(self._client.list_properties_of_secrets()))
         results = []
         for props in props_list:
             if prefix and not props.name.startswith(prefix):

@@ -73,10 +73,7 @@ class AssessmentEngine:
             # Filter by framework if specified
             if frameworks:
                 fw_set = {f.lower() for f in frameworks}
-                controls: list[ControlDefinition] = [
-                    c for c in all_ctrl_defs
-                    if any(fw.lower() in fw_set for fw in c.compliance_mapping.keys())
-                ]
+                controls: list[ControlDefinition] = [c for c in all_ctrl_defs if any(fw.lower() in fw_set for fw in c.compliance_mapping.keys())]
                 if not controls:
                     controls = all_ctrl_defs  # fallback: run all if none match
             else:

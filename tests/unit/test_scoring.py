@@ -7,6 +7,7 @@ class TestFindingScoring:
     def test_severity_order(self):
         """Higher severities have higher weights than lower ones."""
         from unimonitor.grc.scoring import SEVERITY_WEIGHTS
+
         assert SEVERITY_WEIGHTS["CRITICAL"] > SEVERITY_WEIGHTS["HIGH"]
         assert SEVERITY_WEIGHTS["HIGH"] > SEVERITY_WEIGHTS["MEDIUM"]
         assert SEVERITY_WEIGHTS["MEDIUM"] > SEVERITY_WEIGHTS["LOW"]

@@ -46,12 +46,8 @@ class Finding(Base):
 
     __tablename__ = "findings"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     assessment_run_id: Mapped[str | None] = mapped_column(
         String(36),
         ForeignKey("assessment_runs.id", ondelete="SET NULL"),
@@ -69,9 +65,7 @@ class Finding(Base):
     title: Mapped[str] = mapped_column(String(512))
     description: Mapped[str] = mapped_column(Text)
     severity: Mapped[str] = mapped_column(String(32), index=True)
-    state: Mapped[str] = mapped_column(
-        String(32), default=FindingState.NOT_IMPLEMENTED.value, index=True
-    )
+    state: Mapped[str] = mapped_column(String(32), default=FindingState.NOT_IMPLEMENTED.value, index=True)
     # Category / pillar (e.g. "Identity", "Devices")
     category: Mapped[str] = mapped_column(String(64), index=True)
     service: Mapped[str] = mapped_column(String(64), index=True)  # e.g. "entra_id"
@@ -80,29 +74,17 @@ class Finding(Base):
     # Risk scoring
     risk_score: Mapped[int] = mapped_column(Integer, default=0)
     # Flags
-    is_suppressed: Mapped[bool] = mapped_column(
-        default=False
-    )
+    is_suppressed: Mapped[bool] = mapped_column(default=False)
     suppression_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    first_detected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-    resolved_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    first_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     # Relationships
     tenant: Mapped[Tenant] = relationship("Tenant", back_populates="findings")
     control: Mapped[Control | None] = relationship("Control", back_populates="findings")
-    evidence: Mapped[list[FindingEvidence]] = relationship(
-        "FindingEvidence", back_populates="finding", cascade="all, delete-orphan"
-    )
-    history: Mapped[list[FindingHistory]] = relationship(
-        "FindingHistory", back_populates="finding", cascade="all, delete-orphan"
-    )
+    evidence: Mapped[list[FindingEvidence]] = relationship("FindingEvidence", back_populates="finding", cascade="all, delete-orphan")
+    history: Mapped[list[FindingHistory]] = relationship("FindingHistory", back_populates="finding", cascade="all, delete-orphan")
 
     @property
     def severity_weight(self) -> int:
@@ -117,18 +99,12 @@ class FindingEvidence(Base):
 
     __tablename__ = "finding_evidence"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    finding_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("findings.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    finding_id: Mapped[str] = mapped_column(String(36), ForeignKey("findings.id", ondelete="CASCADE"), index=True)
     evidence_type: Mapped[str] = mapped_column(String(64))  # "api_response", "screenshot", "log"
     source: Mapped[str] = mapped_column(String(256))  # Graph API endpoint or description
     content: Mapped[str] = mapped_column(Text)  # JSON or text evidence
-    collected_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     finding: Mapped[Finding] = relationship("Finding", back_populates="evidence")
 
@@ -138,18 +114,12 @@ class FindingHistory(Base):
 
     __tablename__ = "finding_history"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    finding_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("findings.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    finding_id: Mapped[str] = mapped_column(String(36), ForeignKey("findings.id", ondelete="CASCADE"), index=True)
     previous_state: Mapped[str] = mapped_column(String(32))
     new_state: Mapped[str] = mapped_column(String(32))
     changed_by: Mapped[str | None] = mapped_column(String(36), nullable=True)  # user ID
     comment: Mapped[str | None] = mapped_column(Text, nullable=True)
-    changed_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     finding: Mapped[Finding] = relationship("Finding", back_populates="history")

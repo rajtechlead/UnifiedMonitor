@@ -1,6 +1,7 @@
 """
 Unit tests for the AI remediation engine (rule-based fallback path).
 """
+
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -34,9 +35,15 @@ class TestRuleBasedRemediation:
         result = await engine.generate_remediation(finding)
 
         required_fields = [
-            "summary", "steps", "priority", "effort",
-            "risk_if_ignored", "references", "automation_script",
-            "estimated_time", "source",
+            "summary",
+            "steps",
+            "priority",
+            "effort",
+            "risk_if_ignored",
+            "references",
+            "automation_script",
+            "estimated_time",
+            "source",
         ]
         for field in required_fields:
             assert field in result, f"Missing field: {field}"
@@ -60,8 +67,7 @@ class TestRuleBasedRemediation:
         low = await engine.generate_remediation(self._make_finding(severity="LOW"))
 
         priority_order = {"critical": 4, "high": 3, "medium": 2, "low": 1}
-        assert priority_order.get(critical["priority"].lower(), 0) >= \
-               priority_order.get(low["priority"].lower(), 0)
+        assert priority_order.get(critical["priority"].lower(), 0) >= priority_order.get(low["priority"].lower(), 0)
 
     @pytest.mark.asyncio
     async def test_fallback_steps_are_non_empty_list(self):

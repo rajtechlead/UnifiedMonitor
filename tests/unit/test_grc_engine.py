@@ -1,9 +1,11 @@
 """
 Unit tests for the GRC engine — control loading, scoring, evaluate().
 """
+
 from pathlib import Path
 
 # ── Control loader ────────────────────────────────────────────────────────────
+
 
 class TestControlLoader:
     def test_load_yaml_control(self, tmp_path: Path):
@@ -36,6 +38,7 @@ controls:
         control_file.write_text(yaml_content)
 
         from unimonitor.grc.control_loader import ControlLoader
+
         loader = ControlLoader(controls_dir=str(tmp_path))
         controls = loader.load_all()
 
@@ -66,6 +69,7 @@ controls:
 """
         (tmp_path / "test2.yaml").write_text(yaml_content)
         from unimonitor.grc.control_loader import ControlLoader
+
         loader = ControlLoader(controls_dir=str(tmp_path))
         controls = loader.load_all()
         ctrl = controls[0]
@@ -100,6 +104,7 @@ controls:
 """
         (tmp_path / "test3.yaml").write_text(yaml_content)
         from unimonitor.grc.control_loader import ControlLoader
+
         loader = ControlLoader(controls_dir=str(tmp_path))
         controls = loader.load_all()
         ctrl = controls[0]
@@ -127,6 +132,7 @@ controls:
       def evaluate(data): return "implemented"
 """)
         from unimonitor.grc.control_loader import ControlLoader
+
         loader = ControlLoader(controls_dir=str(tmp_path))
         controls = loader.load_all()
         assert len(controls) == 2
@@ -134,10 +140,12 @@ controls:
 
 # ── Scoring engine ────────────────────────────────────────────────────────────
 
+
 class TestScoringEngine:
     def test_severity_weights(self):
         """Severity weights are correct per spec."""
         from unimonitor.grc.scoring import SEVERITY_WEIGHTS
+
         assert SEVERITY_WEIGHTS["CRITICAL"] == 10
         assert SEVERITY_WEIGHTS["HIGH"] == 8
         assert SEVERITY_WEIGHTS["MEDIUM"] == 5
@@ -172,9 +180,9 @@ class TestScoringEngine:
         from unimonitor.grc.scoring import compute_score
 
         findings = [
-            {"severity": "CRITICAL", "state": "implemented"},       # weight 10
-            {"severity": "HIGH", "state": "not_implemented"},        # weight 8
-            {"severity": "MEDIUM", "state": "partially_implemented"},# weight 5, half credit
+            {"severity": "CRITICAL", "state": "implemented"},  # weight 10
+            {"severity": "HIGH", "state": "not_implemented"},  # weight 8
+            {"severity": "MEDIUM", "state": "partially_implemented"},  # weight 5, half credit
         ]
         score = compute_score(findings)
         # 10 + 0 + 2.5 out of 10 + 8 + 5 = 12.5 / 23 ≈ 54.3
@@ -195,10 +203,12 @@ class TestScoringEngine:
     def test_score_empty_findings(self):
         """Empty findings list returns 100 (nothing failing)."""
         from unimonitor.grc.scoring import compute_score
+
         assert compute_score([]) == 100
 
 
 # ── Framework crosswalk ───────────────────────────────────────────────────────
+
 
 class TestFrameworkCrosswalk:
     def test_crosswalk_lookup(self, tmp_path: Path):

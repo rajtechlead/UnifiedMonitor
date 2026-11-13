@@ -4,6 +4,7 @@ Unit tests for the secret management system.
 Tests run without any cloud provider credentials — Local Vault and in-memory
 mocking only.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -12,10 +13,12 @@ import pytest
 # Local Vault tests
 # ---------------------------------------------------------------------------
 
+
 class TestLocalVault:
     @pytest.fixture
     def vault(self, tmp_path):
         from unimonitor.secrets.local_vault import LocalVaultProvider
+
         return LocalVaultProvider(vault_dir=tmp_path / "vault")
 
     @pytest.mark.asyncio
@@ -75,6 +78,7 @@ class TestLocalVault:
     async def test_encryption_persists(self, tmp_path):
         """Restart the vault and verify data survives."""
         from unimonitor.secrets.local_vault import LocalVaultProvider
+
         vault1 = LocalVaultProvider(vault_dir=tmp_path / "vault")
         await vault1.set_secret("persistent/key", "persistent-value")
 
@@ -88,26 +92,31 @@ class TestLocalVault:
 # SecretCache tests
 # ---------------------------------------------------------------------------
 
+
 class TestSecretCache:
     def test_set_and_get(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=60)
         cache.set("key", "value")
         assert cache.get("key") == "value"
 
     def test_miss_returns_none(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=60)
         assert cache.get("missing") is None
 
     def test_ttl_zero_disables_caching(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=0)
         cache.set("key", "value")
         assert cache.get("key") is None
 
     def test_invalidate(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=60)
         cache.set("key", "value")
         cache.invalidate("key")
@@ -115,6 +124,7 @@ class TestSecretCache:
 
     def test_clear(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=60)
         cache.set("a", "1")
         cache.set("b", "2")
@@ -126,6 +136,7 @@ class TestSecretCache:
         import time
 
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=1)
         cache.set("key", "value")
         # Manually expire by patching the entry's timestamp
@@ -135,6 +146,7 @@ class TestSecretCache:
 
     def test_stats(self):
         from unimonitor.secrets.cache import SecretCache
+
         cache = SecretCache(ttl_seconds=60)
         cache.set("a", "1")
         cache.set("b", "2")
@@ -147,15 +159,18 @@ class TestSecretCache:
 # SecretResolver tests
 # ---------------------------------------------------------------------------
 
+
 class TestSecretResolver:
     @pytest.fixture
     def local_provider(self, tmp_path):
         from unimonitor.secrets.local_vault import LocalVaultProvider
+
         return LocalVaultProvider(vault_dir=tmp_path / "vault")
 
     @pytest.mark.asyncio
     async def test_get_caches_result(self, local_provider):
         from unimonitor.secrets.resolver import SecretResolver
+
         resolver = SecretResolver(primary_provider=local_provider, cache_ttl=60)
         await local_provider.set_secret("my/key", "cached-value")
 
@@ -168,6 +183,7 @@ class TestSecretResolver:
     @pytest.mark.asyncio
     async def test_set_and_get(self, local_provider):
         from unimonitor.secrets.resolver import SecretResolver
+
         resolver = SecretResolver(primary_provider=local_provider)
         await resolver.set("set/key", "set-value")
         assert await resolver.get("set/key") == "set-value"
@@ -175,6 +191,7 @@ class TestSecretResolver:
     @pytest.mark.asyncio
     async def test_rotate_invalidates_cache(self, local_provider):
         from unimonitor.secrets.resolver import SecretResolver
+
         resolver = SecretResolver(primary_provider=local_provider, cache_ttl=3600)
         await local_provider.set_secret("rotate/key", "old")
         # Warm up cache
@@ -196,9 +213,7 @@ class TestSecretResolver:
         broken_dir = tmp_path / "broken_vault"
         broken_dir.mkdir(parents=True, exist_ok=True)
         (broken_dir / "vault.enc").write_bytes(b"corrupted-data")
-        (broken_dir / "vault.key").write_bytes(
-            b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-        )
+        (broken_dir / "vault.key").write_bytes(b"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
         # Fallback that works
         fallback = LocalVaultProvider(vault_dir=tmp_path / "fallback_vault")
@@ -246,6 +261,7 @@ class TestSecretResolver:
 # ---------------------------------------------------------------------------
 # Provider protocol compliance (duck-type check)
 # ---------------------------------------------------------------------------
+
 
 class TestProviderProtocolCompliance:
     @pytest.mark.asyncio

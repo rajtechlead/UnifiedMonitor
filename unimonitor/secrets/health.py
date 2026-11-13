@@ -1,6 +1,7 @@
 """
 Secret provider health checks and aggregated health reporting.
 """
+
 from __future__ import annotations
 
 from collections.abc import Sequence

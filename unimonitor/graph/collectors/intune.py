@@ -58,8 +58,8 @@ class IntuneCollector:
                 "/deviceManagement/managedDevices",
                 params={
                     "$select": "id,deviceName,operatingSystem,osVersion,complianceState,"
-                               "managementAgent,deviceEnrollmentType,lastSyncDateTime,"
-                               "azureADDeviceId,userPrincipalName",
+                    "managementAgent,deviceEnrollmentType,lastSyncDateTime,"
+                    "azureADDeviceId,userPrincipalName",
                     "$top": "500",
                 },
                 max_pages=20,

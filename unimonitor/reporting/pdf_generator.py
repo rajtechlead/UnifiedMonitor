@@ -8,22 +8,18 @@ from unimonitor.reporting.base import BaseReportGenerator
 
 try:
     from reportlab.lib import colors
-    from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-    from reportlab.lib.pagesizes import A4, letter
+    from reportlab.lib.pagesizes import letter
     from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-    from reportlab.lib.units import cm, inch
+    from reportlab.lib.units import cm
     from reportlab.platypus import (
-        Flowable,
-        Frame,
         HRFlowable,
-        Image,
-        PageTemplate,
         Paragraph,
         SimpleDocTemplate,
         Spacer,
         Table,
         TableStyle,
     )
+
     HAS_REPORTLAB = True
 except ImportError:
     HAS_REPORTLAB = False
@@ -36,8 +32,8 @@ SEVERITY_COLORS = {
     "INFORMATIONAL": (0.7, 0.7, 0.7),
 }
 
-UNIMONITOR_BLUE = (0.09, 0.46, 0.82)   # #1776D2
-UNIMONITOR_DARK = (0.1, 0.12, 0.18)    # #1A1F2E
+UNIMONITOR_BLUE = (0.09, 0.46, 0.82)  # #1776D2
+UNIMONITOR_DARK = (0.1, 0.12, 0.18)  # #1A1F2E
 
 
 class PdfReportGenerator(BaseReportGenerator):
@@ -98,25 +94,26 @@ class PdfReportGenerator(BaseReportGenerator):
             ["Total Findings", str(stats["total_findings"])],
         ]
         score_table = Table(score_data, colWidths=[8 * cm, 4 * cm])
-        score_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.Color(*UNIMONITOR_BLUE)),
-            ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-            ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-            ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
-            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.Color(0.95, 0.97, 1)]),
-            ("FONTSIZE", (0, 0), (-1, -1), 11),
-            ("PADDING", (0, 0), (-1, -1), 6),
-        ]))
+        score_table.setStyle(
+            TableStyle(
+                [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.Color(*UNIMONITOR_BLUE)),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("GRID", (0, 0), (-1, -1), 0.5, colors.grey),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.Color(0.95, 0.97, 1)]),
+                    ("FONTSIZE", (0, 0), (-1, -1), 11),
+                    ("PADDING", (0, 0), (-1, -1), 6),
+                ]
+            )
+        )
         story.append(score_table)
         story.append(Spacer(1, 0.6 * cm))
 
         # ── Severity breakdown ───────────────────────────────────────────────
         story.append(Paragraph("Finding Severity Breakdown", h2))
         story.append(Spacer(1, 0.3 * cm))
-        sev_data = [["Severity", "Count"]] + [
-            [sev, str(cnt)]
-            for sev, cnt in stats["severity_counts"].items()
-        ]
+        sev_data = [["Severity", "Count"]] + [[sev, str(cnt)] for sev, cnt in stats["severity_counts"].items()]
         sev_table = Table(sev_data, colWidths=[8 * cm, 4 * cm])
         sev_style = [
             ("BACKGROUND", (0, 0), (-1, 0), colors.Color(*UNIMONITOR_BLUE)),
@@ -142,20 +139,20 @@ class PdfReportGenerator(BaseReportGenerator):
             findings_data = [["Control ID", "Title", "Severity", "Status"]]
             sorted_findings = sorted(
                 self.findings,
-                key=lambda f: {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}.get(
-                    (f.severity or "INFORMATIONAL").upper(), 5
-                ),
+                key=lambda f: {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}.get((f.severity or "INFORMATIONAL").upper(), 5),
             )
             cell_style = ParagraphStyle("cell", fontSize=8, wordWrap="CJK")
             for f in sorted_findings[:200]:  # cap at 200 rows
                 sev = (getattr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
                 state = getattr(f, "state", "not_implemented") or "not_implemented"
-                findings_data.append([
-                    Paragraph(getattr(f, "external_control_id", f.id[:8]), cell_style),
-                    Paragraph(getattr(f, "title", "")[:120], cell_style),
-                    Paragraph(sev, cell_style),
-                    Paragraph(state.replace("_", " ").title(), cell_style),
-                ])
+                findings_data.append(
+                    [
+                        Paragraph(getattr(f, "external_control_id", f.id[:8]), cell_style),
+                        Paragraph(getattr(f, "title", "")[:120], cell_style),
+                        Paragraph(sev, cell_style),
+                        Paragraph(state.replace("_", " ").title(), cell_style),
+                    ]
+                )
 
             findings_table = Table(findings_data, colWidths=col_widths, repeatRows=1)
             f_style = [

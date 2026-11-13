@@ -16,12 +16,8 @@ class RiskItem(Base):
 
     __tablename__ = "risk_items"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     title: Mapped[str] = mapped_column(String(512))
     description: Mapped[str] = mapped_column(Text)
     category: Mapped[str] = mapped_column(String(64), index=True)
@@ -37,16 +33,10 @@ class RiskItem(Base):
     owner: Mapped[str | None] = mapped_column(String(256), nullable=True)
     due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     is_accepted: Mapped[bool] = mapped_column(default=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    scores: Mapped[list[RiskScore]] = relationship(
-        "RiskScore", back_populates="risk_item", cascade="all, delete-orphan"
-    )
+    scores: Mapped[list[RiskScore]] = relationship("RiskScore", back_populates="risk_item", cascade="all, delete-orphan")
 
 
 class RiskScore(Base):
@@ -54,20 +44,12 @@ class RiskScore(Base):
 
     __tablename__ = "risk_scores"
 
-    id: Mapped[str] = mapped_column(
-        String(36), primary_key=True, default=lambda: str(uuid.uuid4())
-    )
-    tenant_id: Mapped[str] = mapped_column(
-        String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True
-    )
-    risk_item_id: Mapped[str | None] = mapped_column(
-        String(36), ForeignKey("risk_items.id", ondelete="CASCADE"), nullable=True, index=True
-    )
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
+    risk_item_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("risk_items.id", ondelete="CASCADE"), nullable=True, index=True)
     score: Mapped[float] = mapped_column(Float)
     max_score: Mapped[float] = mapped_column(Float, default=100.0)
     score_type: Mapped[str] = mapped_column(String(32))  # "security", "compliance", "risk"
-    scored_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), index=True
-    )
+    scored_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     risk_item: Mapped[RiskItem | None] = relationship("RiskItem", back_populates="scores")

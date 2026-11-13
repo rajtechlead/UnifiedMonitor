@@ -70,9 +70,7 @@ def generate_report_task(
                 raise ValueError(f"AssessmentRun {run_id} not found")
 
             # Load findings
-            result = await db.execute(
-                select(Finding).where(Finding.assessment_id == run.assessment_id)
-            )
+            result = await db.execute(select(Finding).where(Finding.assessment_id == run.assessment_id))
             findings = result.scalars().all()
 
             report.status = ReportStatus.GENERATING.value

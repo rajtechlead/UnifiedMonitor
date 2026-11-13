@@ -28,20 +28,22 @@ class JsonReportGenerator(BaseReportGenerator):
                 except Exception:
                     ai_rem = {"raw": str(ai_raw)}
 
-            findings_data.append({
-                "id": f_id,
-                "control_id": g(f, "control_id") or g(f, "external_control_id", f_id),
-                "title": g(f, "title", ""),
-                "severity": (g(f, "severity", "") or "").upper(),
-                "state": g(f, "state", ""),
-                "category": g(f, "category", ""),
-                "service": g(f, "service", ""),
-                "description": g(f, "description", ""),
-                "ai_remediation": ai_rem,
-                "first_detected_at": str(g(f, "first_detected_at", "") or ""),
-                "last_seen_at": str(g(f, "last_seen_at", "") or ""),
-                "resolved_at": str(g(f, "resolved_at", "") or ""),
-            })
+            findings_data.append(
+                {
+                    "id": f_id,
+                    "control_id": g(f, "control_id") or g(f, "external_control_id", f_id),
+                    "title": g(f, "title", ""),
+                    "severity": (g(f, "severity", "") or "").upper(),
+                    "state": g(f, "state", ""),
+                    "category": g(f, "category", ""),
+                    "service": g(f, "service", ""),
+                    "description": g(f, "description", ""),
+                    "ai_remediation": ai_rem,
+                    "first_detected_at": str(g(f, "first_detected_at", "") or ""),
+                    "last_seen_at": str(g(f, "last_seen_at", "") or ""),
+                    "resolved_at": str(g(f, "resolved_at", "") or ""),
+                }
+            )
 
         report = {
             "report_type": report_type,

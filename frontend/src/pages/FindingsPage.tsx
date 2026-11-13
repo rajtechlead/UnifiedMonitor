@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { findingsApi } from '../hooks/useApi'
-import { Search, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { Search, ChevronDown, ChevronUp } from 'lucide-react'
 
 type Finding = {
   id: string

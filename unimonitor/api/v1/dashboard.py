@@ -19,6 +19,7 @@ router = APIRouter()
 
 # ── Common schemas ────────────────────────────────────────────
 
+
 class ScoreSummary(BaseModel):
     security_score: float
     compliance_score: float
@@ -162,6 +163,7 @@ class TrendsResponse(BaseModel):
 
 # ── Shared helpers (accept db session) ───────────────────────
 
+
 async def _get_scores_for_tenant(db: AsyncSession, tenant_id: str | None) -> tuple[float, float, float]:
     """Return (security, compliance, risk) scores."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -240,6 +242,7 @@ async def _build_framework_coverage(db: AsyncSession, tenant_id: str | None) -> 
 
 
 # ── Endpoints ────────────────────────────────────────────────
+
 
 @router.get("/overview", response_model=OverviewResponse)
 async def dashboard_overview(

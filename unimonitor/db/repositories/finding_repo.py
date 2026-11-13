@@ -13,7 +13,6 @@ from unimonitor.db.repositories.base import BaseRepository
 
 
 class FindingRepository(BaseRepository[Finding]):
-
     def __init__(self, session: AsyncSession) -> None:
         super().__init__(Finding, session)
 
@@ -52,29 +51,17 @@ class FindingRepository(BaseRepository[Finding]):
         suppressed_count = supp_result.scalar_one()
 
         # By severity
-        sev_q = (
-            select(Finding.severity, func.count(Finding.id))
-            .where(and_(*base_cond) if base_cond else True)
-            .group_by(Finding.severity)
-        )
+        sev_q = select(Finding.severity, func.count(Finding.id)).where(and_(*base_cond) if base_cond else True).group_by(Finding.severity)
         sev_result = await self.session.execute(sev_q)
         by_severity = {row[0]: row[1] for row in sev_result.all()}
 
         # By state
-        state_q = (
-            select(Finding.state, func.count(Finding.id))
-            .where(and_(*base_cond) if base_cond else True)
-            .group_by(Finding.state)
-        )
+        state_q = select(Finding.state, func.count(Finding.id)).where(and_(*base_cond) if base_cond else True).group_by(Finding.state)
         state_result = await self.session.execute(state_q)
         by_state = {row[0]: row[1] for row in state_result.all()}
 
         # By category
-        cat_q = (
-            select(Finding.category, func.count(Finding.id))
-            .where(and_(*base_cond) if base_cond else True)
-            .group_by(Finding.category)
-        )
+        cat_q = select(Finding.category, func.count(Finding.id)).where(and_(*base_cond) if base_cond else True).group_by(Finding.category)
         cat_result = await self.session.execute(cat_q)
         by_category = {row[0]: row[1] for row in cat_result.all()}
 
@@ -138,44 +125,9 @@ class FindingRepository(BaseRepository[Finding]):
         order = desc(sort_col) if sort_desc else asc(sort_col)
 
         offset = (page - 1) * page_size
-        rows_q = (
-            select(Finding)
-            .where(where_clause)
-            .order_by(order)
-            .offset(offset)
-            .limit(page_size)
-        )
+        rows_q = select(Finding).where(where_clause).order_by(order).offset(offset).limit(page_size)
         rows_result = await self.session.execute(rows_q)
         return rows_result.scalars().all(), total
-
-    # ── History ───────────────────────────────────────────────────
-
-    async def add_history(
-        self,
-        finding_id: str,
-        previous_state: str,
-        new_state: str,
-        changed_by: str | None = None,
-        comment: str | None = None,
-    ) -> FindingHistory:
-        history = FindingHistory(
-            finding_id=finding_id,
-            previous_state=previous_state,
-            new_state=new_state,
-            changed_by=changed_by,
-            comment=comment,
-        )
-        self.session.add(history)
-        await self.session.flush()
-        return history
-
-    async def get_history(self, finding_id: str) -> Sequence[FindingHistory]:
-        result = await self.session.execute(
-            select(FindingHistory)
-            .where(FindingHistory.finding_id == finding_id)
-            .order_by(desc(FindingHistory.changed_at))
-        )
-        return result.scalars().all()
 
     # ── Legacy helpers (kept for backward compat) ─────────────────
 
@@ -225,11 +177,7 @@ class FindingRepository(BaseRepository[Finding]):
         return {row[0]: row[1] for row in result.all()}
 
     async def get_state_summary(self, tenant_id: str) -> dict[str, int]:
-        stmt = (
-            select(Finding.state, func.count(Finding.id))
-            .where(Finding.tenant_id == tenant_id)
-            .group_by(Finding.state)
-        )
+        stmt = select(Finding.state, func.count(Finding.id)).where(Finding.tenant_id == tenant_id).group_by(Finding.state)
         result = await self.session.execute(stmt)
         return {row[0]: row[1] for row in result.all()}
 
@@ -274,9 +222,7 @@ class FindingRepository(BaseRepository[Finding]):
             await self.session.flush()
             return finding, True
 
-    async def change_state(
-        self, finding_id: str, new_state: str, changed_by: str | None = None, comment: str | None = None
-    ) -> Finding:
+    async def change_state(self, finding_id: str, new_state: str, changed_by: str | None = None, comment: str | None = None) -> Finding:
         finding = await self.get_or_raise(finding_id)
         old_state = finding.state
         finding.state = new_state
@@ -338,11 +284,7 @@ class FindingRepository(BaseRepository[Finding]):
     ) -> list[dict]:
         """Return risk heatmap cells (likelihood x impact)."""
         # Basic implementation: group by severity as proxy for likelihood/impact
-        stmt = (
-            select(Finding.severity, func.count(Finding.id).label("cnt"))
-            .where(Finding.is_suppressed.is_(False))
-            .group_by(Finding.severity)
-        )
+        stmt = select(Finding.severity, func.count(Finding.id).label("cnt")).where(Finding.is_suppressed.is_(False)).group_by(Finding.severity)
         if tenant_id:
             stmt = stmt.where(Finding.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
@@ -359,12 +301,14 @@ class FindingRepository(BaseRepository[Finding]):
         cells = []
         for sev, count in rows:
             coords = sev_to_coords.get(sev, (3, 3))
-            cells.append({
-                "likelihood": coords[0],
-                "impact": coords[1],
-                "count": count,
-                "finding_ids": [],
-            })
+            cells.append(
+                {
+                    "likelihood": coords[0],
+                    "impact": coords[1],
+                    "count": count,
+                    "finding_ids": [],
+                }
+            )
         return cells
 
     async def get_recent_activity(
@@ -373,12 +317,7 @@ class FindingRepository(BaseRepository[Finding]):
         limit: int = 10,
     ) -> list[dict]:
         """Return recent finding state changes as activity items."""
-        stmt = (
-            select(FindingHistory)
-            .join(Finding, FindingHistory.finding_id == Finding.id)
-            .order_by(desc(FindingHistory.changed_at))
-            .limit(limit)
-        )
+        stmt = select(FindingHistory).join(Finding, FindingHistory.finding_id == Finding.id).order_by(desc(FindingHistory.changed_at)).limit(limit)
         if tenant_id:
             stmt = stmt.where(Finding.tenant_id == tenant_id)
         result = await self.session.execute(stmt)
@@ -420,10 +359,6 @@ class FindingRepository(BaseRepository[Finding]):
         finding_id: str,
     ) -> Sequence[FindingHistory]:
         """Return all state-change history for a finding."""
-        stmt = (
-            select(FindingHistory)
-            .where(FindingHistory.finding_id == finding_id)
-            .order_by(desc(FindingHistory.changed_at))
-        )
+        stmt = select(FindingHistory).where(FindingHistory.finding_id == finding_id).order_by(desc(FindingHistory.changed_at))
         result = await self.session.execute(stmt)
         return result.scalars().all()

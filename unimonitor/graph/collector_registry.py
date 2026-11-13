@@ -88,6 +88,7 @@ class CollectorRegistry:
 
 # ── Individual collectors ──────────────────────────────────────────────────
 
+
 async def _safe_get(gc: GraphClient, endpoint: str, key: str) -> dict[str, Any]:
     """Get a Graph endpoint, return empty on failure."""
     try:

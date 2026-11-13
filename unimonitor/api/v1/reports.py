@@ -64,6 +64,7 @@ _reports_store: dict[str, dict] = {}
 
 # ── Endpoints ────────────────────────────────────────────────
 
+
 @router.post("/generate", response_model=ReportStatusResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_report(
     body: ReportGenerateRequest,
@@ -93,6 +94,7 @@ async def generate_report(
     # Try Celery dispatch
     try:
         from unimonitor.worker.tasks import generate_report_task
+
         task = generate_report_task.delay(
             report_id=report_id,
             report_type=body.report_type,
@@ -112,6 +114,7 @@ async def generate_report(
     try:
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.repositories.assessment_repo import ReportRepository
+
         async with async_session_factory() as session:
             repo = ReportRepository(session)
             await repo.create_report(**{k: v for k, v in report_record.items() if k not in ("config",)})
@@ -119,10 +122,7 @@ async def generate_report(
         _reports_store[report_id] = report_record
 
     logger.info("report_queued", report_id=report_id, type=body.report_type, format=body.report_format)
-    return ReportStatusResponse(**{
-        k: v for k, v in report_record.items()
-        if k in ReportStatusResponse.model_fields
-    })
+    return ReportStatusResponse(**{k: v for k, v in report_record.items() if k in ReportStatusResponse.model_fields})
 
 
 @router.get("", response_model=ReportListResponse)
@@ -138,6 +138,7 @@ async def list_reports(
     try:
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.repositories.assessment_repo import ReportRepository
+
         async with async_session_factory() as session:
             repo = ReportRepository(session)
             reports, total = await repo.list_reports(
@@ -148,7 +149,7 @@ async def list_reports(
             )
         items = [ReportStatusResponse.model_validate(r) for r in reports]
         return ReportListResponse(items=items, total=total)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     # In-memory fallback
@@ -159,11 +160,8 @@ async def list_reports(
         all_records = [r for r in all_records if r.get("report_type") == report_type]
     total = len(all_records)
     start = (page - 1) * page_size
-    page_records = all_records[start: start + page_size]
-    items = [
-        ReportStatusResponse(**{k: v for k, v in r.items() if k in ReportStatusResponse.model_fields})
-        for r in page_records
-    ]
+    page_records = all_records[start : start + page_size]
+    items = [ReportStatusResponse(**{k: v for k, v in r.items() if k in ReportStatusResponse.model_fields}) for r in page_records]
     return ReportListResponse(items=items, total=total)
 
 
@@ -171,8 +169,10 @@ async def list_reports(
 # FastAPI routes are matched in definition order; /runs must precede /{report_id}
 # or the literal "runs" will be captured as a report_id path parameter.
 
+
 class RunReportSummary(BaseModel):
     """Lightweight assessment-run record for the Reports page run picker."""
+
     run_id: str
     assessment_id: str
     tenant_id: str
@@ -186,7 +186,7 @@ class RunReportSummary(BaseModel):
     high_count: int
     started_at: datetime
     completed_at: datetime | None
-    report_id: str | None = None          # associated report if one exists
+    report_id: str | None = None  # associated report if one exists
     report_status: str | None = None
 
     model_config = {"from_attributes": True}
@@ -218,9 +218,7 @@ async def list_report_runs(
         from unimonitor.db.models.assessment import AssessmentRun
 
         async with async_session_factory() as session:
-            stmt = select(AssessmentRun).where(
-                AssessmentRun.status.in_(["completed", "failed"])
-            )
+            stmt = select(AssessmentRun).where(AssessmentRun.status.in_(["completed", "failed"]))
             if tenant_id:
                 stmt = stmt.where(AssessmentRun.tenant_id == tenant_id)
             elif hasattr(current_user, "tenant_id") and current_user.tenant_id and current_user.role != "admin":
@@ -248,23 +246,25 @@ async def list_report_runs(
                         rpt_id = rid
                         rpt_status = rec.get("status")
                         break
-                items.append(RunReportSummary(
-                    run_id=run.id,
-                    assessment_id=run.assessment_id,
-                    tenant_id=run.tenant_id,
-                    status=run.status,
-                    security_score=run.security_score,
-                    compliance_score=run.compliance_score,
-                    risk_score=run.risk_score,
-                    total_controls_checked=run.total_controls_checked or 0,
-                    controls_passed=run.controls_passed or 0,
-                    critical_count=run.critical_count or 0,
-                    high_count=run.high_count or 0,
-                    started_at=run.created_at,
-                    completed_at=run.completed_at,
-                    report_id=rpt_id,
-                    report_status=rpt_status,
-                ))
+                items.append(
+                    RunReportSummary(
+                        run_id=run.id,
+                        assessment_id=run.assessment_id,
+                        tenant_id=run.tenant_id,
+                        status=run.status,
+                        security_score=run.security_score,
+                        compliance_score=run.compliance_score,
+                        risk_score=run.risk_score,
+                        total_controls_checked=run.total_controls_checked or 0,
+                        controls_passed=run.controls_passed or 0,
+                        critical_count=run.critical_count or 0,
+                        high_count=run.high_count or 0,
+                        started_at=run.created_at,
+                        completed_at=run.completed_at,
+                        report_id=rpt_id,
+                        report_status=rpt_status,
+                    )
+                )
 
             return PaginatedRunReports(
                 items=items,
@@ -289,12 +289,13 @@ async def get_report_status(
     try:
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.repositories.assessment_repo import ReportRepository
+
         async with async_session_factory() as session:
             repo = ReportRepository(session)
             report = await repo.get_report_by_id(report_id)
             if report:
                 return ReportStatusResponse.model_validate(report)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     # In-memory
@@ -311,6 +312,7 @@ async def download_report(
 ) -> FileResponse:
     """Download a completed report file."""
     from unimonitor.config import get_settings
+
     settings = get_settings()
 
     # Locate file
@@ -340,6 +342,7 @@ async def delete_report(
 ) -> None:
     """Delete a report and its file."""
     from unimonitor.config import get_settings
+
     settings = get_settings()
 
     # Remove file
@@ -356,10 +359,11 @@ async def delete_report(
     try:
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.repositories.assessment_repo import ReportRepository
+
         async with async_session_factory() as session:
             repo = ReportRepository(session)
             await repo.delete_report(report_id)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     logger.info("report_deleted", report_id=report_id, by=current_user.id)

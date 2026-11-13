@@ -11,6 +11,7 @@ Security notes:
   - Default TTL = 300s (5 minutes). Set to 0 to disable caching.
   - Cache is invalidated immediately on rotation.
 """
+
 from __future__ import annotations
 
 import time

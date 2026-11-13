@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   RadialBarChart, RadialBar, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, Cell, LineChart, Line, CartesianGrid, Legend,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Cell, LineChart, Line, CartesianGrid,
 } from 'recharts'
 import { dashboardApi, findingsApi } from '../hooks/useApi'
 import { AlertTriangle, CheckCircle, TrendingUp, Shield } from 'lucide-react'

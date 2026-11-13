@@ -20,11 +20,12 @@ class BaseRepository[ModelType: Base]:
         self.model = model
         self.session = session
 
-    async def get(self, id: Any) -> ModelType | None:
+    async def get(self, id: Any) -> ModelType | None:  # noqa: A002
         return await self.session.get(self.model, id)
 
-    async def get_or_raise(self, id: Any) -> ModelType:
+    async def get_or_raise(self, id: Any) -> ModelType:  # noqa: A002
         from unimonitor.exceptions import NotFoundError
+
         obj = await self.get(id)
         if obj is None:
             raise NotFoundError(f"{self.model.__name__} with id '{id}' not found.")

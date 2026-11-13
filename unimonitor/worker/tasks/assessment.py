@@ -116,11 +116,7 @@ def run_scheduled_assessments() -> dict:
 
         triggered = 0
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(Assessment)
-                .join(Tenant)
-                .where(Tenant.is_active, Assessment.is_active)
-            )
+            result = await db.execute(select(Assessment).join(Tenant).where(Tenant.is_active, Assessment.is_active))
             assessments = result.scalars().all()
 
             for assessment in assessments:

@@ -158,10 +158,10 @@ class GraphClient:
         }
         try:
             resp = await self._http_client.get(url, headers=headers, params=params)
-        except httpx.TimeoutException:
-            raise GraphTimeoutError(f"Graph API timed out for {endpoint}")
+        except httpx.TimeoutException as exc:
+            raise GraphTimeoutError(f"Graph API timed out for {endpoint}") from exc
         except httpx.HTTPError as exc:
-            raise GraphAPIError(f"Graph API HTTP error for {endpoint}: {exc}")
+            raise GraphAPIError(f"Graph API HTTP error for {endpoint}: {exc}") from exc
 
         if resp.status_code == 429:
             retry_after = int(resp.headers.get("Retry-After", "10"))
@@ -178,6 +178,7 @@ class GraphClient:
         if resp.status_code == 401:
             self._token = None  # Force token refresh
             from unimonitor.exceptions import AuthenticationError
+
             raise AuthenticationError(f"Unauthorised accessing {endpoint}")
 
         if not resp.is_success:

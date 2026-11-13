@@ -14,8 +14,8 @@ class FrameworkMeta:
     name: str
     version: str
     description: str
-    category: str           # "security" | "privacy" | "ai" | "industry"
-    region: str             # "global" | "us" | "eu" | ...
+    category: str  # "security" | "privacy" | "ai" | "industry"
+    region: str  # "global" | "us" | "eu" | ...
     control_prefix: str
     url: str
     total_controls: int = 0

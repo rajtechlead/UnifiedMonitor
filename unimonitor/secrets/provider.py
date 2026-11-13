@@ -4,6 +4,7 @@ Abstract SecretProvider protocol.
 All concrete providers (Azure Key Vault, AWS Secrets Manager, Local Vault)
 implement this protocol so the resolver can swap them without changing call sites.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field

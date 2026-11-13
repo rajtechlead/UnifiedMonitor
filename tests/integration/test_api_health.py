@@ -1,6 +1,7 @@
 """
 Integration tests for core API endpoints.
 """
+
 import pytest
 from httpx import AsyncClient
 
@@ -36,7 +37,7 @@ class TestAuthEndpoints:
         assert r.status_code == 200
         data = r.json()
         assert "access_token" in data
-        assert data["token_type"] == "bearer"
+        assert data["token_type"] == "bearer"  # noqa: S105
 
     async def test_login_wrong_password(self, client: AsyncClient, admin_user):
         """Wrong password returns 401."""

@@ -23,6 +23,7 @@ router = APIRouter()
 
 # ── Schemas ────────────────────────────────────────────────────────────────
 
+
 class PlatformHealthResponse(BaseModel):
     status: str
     timestamp: datetime
@@ -130,6 +131,7 @@ COLLECTOR_DEFINITIONS = [
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/health",
     response_model=PlatformHealthResponse,
@@ -169,6 +171,7 @@ async def get_platform_health(
     celery_status: dict[str, Any] = {"status": "unknown"}
     try:
         from unimonitor.worker.celery_app import celery_app
+
         inspect = celery_app.control.inspect(timeout=2.0)
         ping_result = inspect.ping()
         if ping_result:
@@ -186,6 +189,7 @@ async def get_platform_health(
         tenant = result.scalar_one_or_none()
         if tenant:
             from unimonitor.graph.client import GraphClient
+
             async with GraphClient(
                 tenant_id=tenant.entra_tenant_id,
                 client_id=tenant.client_id,
@@ -299,6 +303,7 @@ async def run_collector(
 
     try:
         from unimonitor.worker.tasks.assessment import run_single_collector_task
+
         task = run_single_collector_task.delay(
             tenant_id=tenant_id,
             collector_name=collector_name,
@@ -318,7 +323,7 @@ async def run_collector(
         )
     except Exception as exc:
         logger.error("Failed to queue collector", collector=collector_name, error=str(exc))
-        raise HTTPException(status_code=500, detail="Failed to queue collector task")
+        raise HTTPException(status_code=500, detail="Failed to queue collector task") from exc
 
 
 @router.get(

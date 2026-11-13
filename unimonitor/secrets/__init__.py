@@ -15,6 +15,7 @@ Usage::
     resolver = await get_secret_resolver()
     value = await resolver.get("unimonitor/db/password")
 """
+
 from __future__ import annotations
 
 from unimonitor.secrets.provider import SecretMetadata, SecretProvider

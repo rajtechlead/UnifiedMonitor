@@ -41,7 +41,7 @@ async def cache_set(key: str, value: Any, ttl: int | None = None) -> None:
         client = await get_redis()
         serialised = json.dumps(value, default=str)
         await client.set(key, serialised, ex=ttl or settings.REDIS_CACHE_TTL)
-    except Exception:
+    except Exception:  # noqa: S110
         pass  # Cache failures are non-fatal
 
 
@@ -49,7 +49,7 @@ async def cache_delete(key: str) -> None:
     try:
         client = await get_redis()
         await client.delete(key)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 
@@ -77,3 +77,20 @@ def make_assessment_cache_key(tenant_id: str, run_id: str) -> str:
 
 def make_dashboard_cache_key(tenant_id: str, view: str) -> str:
     return f"dashboard:{tenant_id}:{view}"
+
+
+# Aliases used by main.py startup/shutdown lifecycle
+async def init_cache() -> None:
+    """Initialise Redis cache connection (no-op; connection is lazy)."""
+    # Redis connections are created lazily on first use; this is a no-op lifecycle hook.
+    pass
+
+
+async def close_cache() -> None:
+    """Close Redis cache connection."""
+    import aioredis
+    try:
+        redis = await get_redis()
+        await redis.close()
+    except Exception:  # noqa: S110
+        pass

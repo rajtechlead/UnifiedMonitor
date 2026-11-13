@@ -19,6 +19,7 @@ Failover:
   to Local Vault (if it is not already the primary). Set
   SECRETS_FAILOVER_ENABLED=false to disable failover.
 """
+
 from __future__ import annotations
 
 import os
@@ -85,9 +86,7 @@ class SecretResolver:
 
         # Failover to fallback
         if self._fallback:
-            async with self._audit.track(
-                AuditOperation.GET, name, str(self._fallback.provider_type)
-            ):
+            async with self._audit.track(AuditOperation.GET, name, str(self._fallback.provider_type)):
                 value = await self._fallback.get_secret(name, version)
                 self._cache.set(cache_key, value)
                 return value
@@ -188,6 +187,7 @@ async def get_secret_resolver() -> SecretResolver:
     if failover_enabled and provider_name != "local_vault":
         try:
             from unimonitor.secrets.local_vault import LocalVaultProvider
+
             fallback = LocalVaultProvider()
         except Exception as exc:
             logger.warning("Could not initialize Local Vault fallback", error=str(exc))
@@ -212,22 +212,23 @@ def _build_provider(provider_name: str):
     if provider_name == "azure_key_vault":
         vault_url = os.environ.get("AZURE_KEY_VAULT_URL")
         if not vault_url:
-            raise ValueError(
-                "AZURE_KEY_VAULT_URL must be set when SECRETS_PROVIDER=azure_key_vault"
-            )
+            raise ValueError("AZURE_KEY_VAULT_URL must be set when SECRETS_PROVIDER=azure_key_vault")
         from unimonitor.secrets.azure_keyvault import AzureKeyVaultProvider
+
         return AzureKeyVaultProvider(vault_url=vault_url)
 
     elif provider_name == "aws_secrets_manager":
         region = os.environ.get("AWS_REGION", os.environ.get("AWS_DEFAULT_REGION", "us-east-1"))
         endpoint_url = os.environ.get("AWS_SECRETS_MANAGER_ENDPOINT_URL")
         from unimonitor.secrets.aws_secrets_manager import AWSSecretsManagerProvider
+
         return AWSSecretsManagerProvider(region_name=region, endpoint_url=endpoint_url)
 
     else:  # local_vault (default)
         vault_dir = os.environ.get("VAULT_DIR")
         key_path = os.environ.get("VAULT_KEY_PATH")
         from unimonitor.secrets.local_vault import LocalVaultProvider
+
         return LocalVaultProvider(
             vault_dir=vault_dir,
             key_path=key_path,
