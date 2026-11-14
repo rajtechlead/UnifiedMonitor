@@ -67,21 +67,21 @@ class NotificationDispatcher:
                 try:
                     await self._send_smtp(emails, subject, body)
                 except Exception as exc:
-                    logger.error("SMTP send failed", error=str(exc), tenant_id=self.tenant_id)
+                    logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
         teams_url = getattr(settings_obj, "teams_webhook_url", None)
         if teams_url:
             try:
                 await self._send_teams_webhook(teams_url, subject, body)
             except Exception as exc:
-                logger.error("Teams webhook failed", error=str(exc), tenant_id=self.tenant_id)
+                logger.error("Teams webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
         slack_url = getattr(settings_obj, "slack_webhook_url", None)
         if slack_url:
             try:
                 await self._send_slack_webhook(slack_url, subject, body)
             except Exception as exc:
-                logger.error("Slack webhook failed", error=str(exc), tenant_id=self.tenant_id)
+                logger.error("Slack webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
     async def _send_smtp(self, to_emails: list[str], subject: str, body: str) -> None:
         """Send via SMTP using smtplib (sync fallback)."""
@@ -91,7 +91,7 @@ class NotificationDispatcher:
 
         msg = MIMEMultipart("alternative")
         msg["Subject"] = subject
-        msg["From"] = settings.SMTP_FROM_EMAIL or "unimonitor@noreply.local"
+        msg["From"] = settings.SMTP_FROM or "unimonitor@noreply.local"
         msg["To"] = ", ".join(to_emails)
         msg.attach(MIMEText(body, "plain"))
 
@@ -100,13 +100,11 @@ class NotificationDispatcher:
         msg.attach(MIMEText(f"<html><body>{html_body}</body></html>", "html"))
 
         with smtplib.SMTP(settings.SMTP_HOST or "localhost", settings.SMTP_PORT or 587) as server:
-            if settings.SMTP_TLS:
-                server.starttls()
-            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
-                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            if settings.SMTP_USER and settings.SMTP_PASSWORD:
+                server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
             server.sendmail(msg["From"], to_emails, msg.as_string())
 
-        logger.info("SMTP sent", to=to_emails, subject=subject)
+        logger.info("SMTP sent", extra={"to": to_emails, "subject": subject})
 
     async def _send_teams_webhook(self, webhook_url: str, subject: str, body: str) -> None:
         """Send Microsoft Teams Adaptive Card via webhook."""
@@ -127,7 +125,7 @@ class NotificationDispatcher:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json=payload)
             resp.raise_for_status()
-        logger.info("Teams webhook sent", subject=subject)
+        logger.info("Teams webhook sent", extra={"subject": subject})
 
     async def _send_slack_webhook(self, webhook_url: str, subject: str, body: str) -> None:
         """Send Slack message via incoming webhook."""
@@ -156,7 +154,7 @@ class NotificationDispatcher:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(webhook_url, json=payload)
             resp.raise_for_status()
-        logger.info("Slack webhook sent", subject=subject)
+        logger.info("Slack webhook sent", extra={"subject": subject})
 
     # ── Digest builders ──────────────────────────────────────────────────────
 
