@@ -57,9 +57,7 @@ class AssessmentEngine:
         """Execute an assessment run end-to-end."""
         logger.info(
             "Assessment run started",
-            run_id=run.id,
-            tenant_id=self.tenant_id,
-            frameworks=frameworks,
+            extra={"run_id": run.id, "tenant_id": self.tenant_id, "frameworks": frameworks},
         )
 
         # Mark as running
@@ -78,7 +76,7 @@ class AssessmentEngine:
                     controls = all_ctrl_defs  # fallback: run all if none match
             else:
                 controls = all_ctrl_defs
-            logger.info("Controls loaded", count=len(controls), run_id=run.id)
+            logger.info("Controls loaded", extra={"count": len(controls), "run_id": run.id})
 
             # 2. Collect data from Graph API
             collector_registry = CollectorRegistry(
@@ -88,7 +86,7 @@ class AssessmentEngine:
             )
             collector_names = collectors or list(CollectorRegistry.ALL_COLLECTORS)
             collected_data = await collector_registry.collect_all(collector_names)
-            logger.info("Data collected", collectors=len(collected_data), run_id=run.id)
+            logger.info("Data collected", extra={"collectors": len(collected_data), "run_id": run.id})
 
             # 3. Evaluate controls
             findings: list[Finding] = []
@@ -113,9 +111,7 @@ class AssessmentEngine:
                 except Exception as exc:
                     logger.error(
                         "Control evaluation error",
-                        control=control_def.id,
-                        error=str(exc),
-                        run_id=run.id,
+                        extra={"control": control_def.id, "error": str(exc), "run_id": run.id},
                     )
                     return None
 
@@ -146,15 +142,17 @@ class AssessmentEngine:
             await self.db.commit()
             logger.info(
                 "Assessment run completed",
-                run_id=run.id,
-                security_score=run.security_score,
-                compliance_score=run.compliance_score,
-                findings=len(findings),
+                extra={
+                    "run_id": run.id,
+                    "security_score": run.security_score,
+                    "compliance_score": run.compliance_score,
+                    "findings": len(findings),
+                },
             )
             return run
 
         except Exception as exc:
-            logger.error("Assessment run failed", run_id=run.id, error=str(exc))
+            logger.error("Assessment run failed", extra={"run_id": run.id, "error": str(exc)})
             run.status = AssessmentStatus.FAILED.value
             run.error_message = str(exc)[:2000]
             run.completed_at = datetime.now(UTC)
@@ -203,8 +201,7 @@ class AssessmentEngine:
         except Exception as exc:
             logger.debug(
                 "Control eval error",
-                control=control_id,
-                error=str(exc),
+                extra={"control": control_id, "error": str(exc)},
             )
             state = FindingState.NOT_IMPLEMENTED.value
             evidence_text = f"Evaluation error: {exc}"
