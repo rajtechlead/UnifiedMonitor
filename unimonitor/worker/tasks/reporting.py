@@ -70,7 +70,7 @@ def generate_report_task(
                 raise ValueError(f"AssessmentRun {run_id} not found")
 
             # Load findings
-            result = await db.execute(select(Finding).where(Finding.assessment_id == run.assessment_id))
+            result = await db.execute(select(Finding).where(Finding.assessment_run_id == run.id))
             findings = result.scalars().all()
 
             report.status = ReportStatus.GENERATING.value
@@ -88,14 +88,14 @@ def generate_report_task(
             for fmt in formats:
                 gen_cls = generators.get(fmt)
                 if gen_cls is None:
-                    logger.warning("Unknown report format", fmt=fmt)
+                    logger.warning("Unknown report format", extra={"fmt": fmt})
                     continue
                 try:
                     gen = gen_cls(tenant_id=tenant_id, run=run, findings=findings)
                     file_path = await gen.generate(report_type=report_type)
                     generated_files[fmt] = file_path
                 except Exception as exc:
-                    logger.error("Report generation failed", fmt=fmt, error=str(exc))
+                    logger.error("Report generation failed", extra={"fmt": fmt, "error": str(exc)})
 
             report.status = ReportStatus.COMPLETED.value if generated_files else ReportStatus.FAILED.value
             report.file_paths = generated_files

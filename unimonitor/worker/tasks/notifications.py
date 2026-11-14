@@ -49,8 +49,7 @@ def send_daily_digests() -> dict:
                 except Exception as exc:
                     logger.error(
                         "Daily digest failed",
-                        tenant_id=settings.tenant_id,
-                        error=str(exc),
+                        extra={"tenant_id": settings.tenant_id, "error": str(exc)},
                     )
                     failed += 1
 
@@ -89,8 +88,7 @@ def send_weekly_digests() -> dict:
                 except Exception as exc:
                     logger.error(
                         "Weekly digest failed",
-                        tenant_id=settings.tenant_id,
-                        error=str(exc),
+                        extra={"tenant_id": settings.tenant_id, "error": str(exc)},
                     )
                     failed += 1
 
