@@ -25,7 +25,7 @@ export default function LoginPage() {
       })
       setAuth(res.data.access_token, res.data.user)
       navigate('/')
-    } catch (err: unknown) {
+    } catch (_err: unknown) {
       setError('Invalid credentials. Please try again.')
     } finally {
       setLoading(false)
