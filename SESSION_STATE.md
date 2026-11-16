@@ -61,6 +61,13 @@ frontend dependency migrations already merged. Trackers have now been reconciled
   - New `GET /api/v1/dashboard/audit` endpoint (audit trail was previously DB-only, no API).
   - Routes + sidebar navigation for Risk, SOC, Audit.
 - Added `tests/integration/test_dashboard_views.py` (5 tests).
+- Expanded the control library from 100 to 158 controls, closing the named monitoring gaps:
+  Intune security baselines (+8), application inventory (+6), Defender for Office (+8),
+  Defender for Identity (+7), Defender for Cloud Apps (+7), Insider Risk (+8), eDiscovery (+6),
+  Copilot Studio (+8). Added `tests/unit/test_control_library.py` guarding unique ids, valid
+  severities, registered framework keys, required-area coverage and evaluator safety.
+- Fixed 12 pre-existing controls that mapped to the unregistered key `nist_csf` instead of
+  `nist_csf_2`, so their NIST CSF mapping never resolved.
 - Fixed 157 ruff + 2 mypy errors that existed on HEAD (CI would have been red): import sorting,
   line length, unused imports/variables, `print` in CLI scripts, dummy-credential false positives.
 
@@ -92,9 +99,8 @@ None.
 1. Windows installer build, fresh install, upgrade and rollback validation.
 2. Docker Compose end-to-end validation.
 3. Remaining frontend majors: `react` 18 → 19, `@vitejs/plugin-react` 4 → 6.
-4. Control library depth — 100 controls across 10 areas. Still missing dedicated controls for
-   Intune Security Baselines, Application Inventory, Defender for Office/Identity/Cloud Apps/XDR,
-   Insider Risk, eDiscovery, Copilot Studio, and PIM depth (4 controls).
+4. ~~Control library depth~~ — closed 2026-11-16 (100 → 158 controls); the remaining need is
+   collector data coverage for the new controls, not definitions. PIM depth stays thin (4 controls).
 5. `ecdsa` / `python-jose` CVEs — decide between accepting the risk and migrating to `pyjwt`.
 6. `PROJECT_AUDIT.md` (L-001, deferred by owner decision).
 7. Test coverage re-measurement (last measurement 62% at `79dfb98`).
@@ -125,7 +131,8 @@ same-vendor upgrades within the approved stack, not substitutions.
 
 | Component | Status | Notes |
 |---|---|---|
-| Python tests | ✅ 467/467 | 44s, 7 warnings (AsyncMock never-awaited in mocks) |
+| Python tests | ✅ 473/473 | 47s, 7 warnings (AsyncMock never-awaited in mocks) |
+| Control library | ✅ 158 controls | 18 YAML files, all framework keys resolve |
 | Ruff check | ✅ CLEAN | 0 errors (was 157 on HEAD) |
 | Ruff format | ✅ CLEAN | 132 files formatted |
 | mypy | ✅ CLEAN | 87 source files |

@@ -25,7 +25,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 467/467 | 44s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 473/473 | 47s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Control library | ✅ 158 controls | 18 YAML files; unique ids, valid severities, all framework keys registered |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
 | Ruff format | ✅ CLEAN | 132 files |
 | mypy | ✅ CLEAN | 87 source files |
@@ -40,8 +41,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 401 | across 20 files |
-| Integration tests | ✅ PASS | 61 | health, e2e journeys, dashboard views |
+| Unit tests | ✅ PASS | 416 | across 21 files |
+| Integration tests | ✅ PASS | 57 | health, e2e journeys, dashboard views |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
@@ -114,7 +115,7 @@ Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjw
 | Test coverage | 62% (measured at `79dfb98`) |
 | Security | 58% (two unfixable upstream CVEs, no live-tenant auth test) |
 | Deployment | 70% (Docker CI green, Linux PyInstaller green, Windows pending) |
-| Requirements coverage | 80% (all 13 frameworks, all 6 dashboard views; control library thin) |
+| Requirements coverage | 85% (all 13 frameworks, all 6 dashboard views, 7 monitoring areas closed; collector data still partial) |
 | Documentation | 90% |
 | Overall | ~75% |
 
@@ -122,8 +123,8 @@ Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjw
 
 - [x] Backend Build Passes
 - [x] Frontend Build Passes
-- [x] Unit Tests Pass (401)
-- [x] Integration Tests Pass (61)
+- [x] Unit Tests Pass (416)
+- [x] Integration Tests Pass (57)
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)

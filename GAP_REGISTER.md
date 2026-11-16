@@ -18,7 +18,6 @@ None
 |---|---|---|---|
 | M-006 | NSIS installer not tested | `deploy/windows/` | ⬜ P5-003 — Windows environment required |
 | M-013 | Release tag not pushed; no tag exists in any clone | `.git` | 🟡 recreate + push with tag permission |
-| M-014 | Control library depth — 100 controls, 10 areas; missing Intune baselines, app inventory, Defender Office/Identity/Cloud Apps/XDR, Insider Risk, eDiscovery, Copilot Studio, PIM depth | `controls/` | ⬜ P7-005 |
 | M-015 | Docker Compose never validated end-to-end (CI builds the image only) | `deploy/docker/` | ⬜ no Docker daemon in agent workspace |
 | M-016 | Setup wizard exists as a script but is not wired into the NSIS install flow | `scripts/setup_wizard.py`, `deploy/windows/install.nsi` | ⬜ P3-003 follow-up |
 
@@ -32,6 +31,8 @@ None
 | L-005 | python-jose 3.5.0 CVE PYSEC-2026-4298 | pip deps | ℹ️ Informational — no fix upstream |
 | L-007 | Remaining frontend majors: react 18→19, @vitejs/plugin-react 4→6 | `frontend/` | ⬜ P7-007 |
 | L-008 | Ruff per-file ignores added for CLI `print` (T201 in `scripts/`) and dummy credentials in `tests/` (S105/S106/S108/B017) | `pyproject.toml` | ℹ️ By design — documented decision |
+| L-009 | Duplicate insider-risk titles: CTRL-PUR-003 and CTRL-PUR-006 are both "Insider Risk Management Policy Enabled" | `controls/purview/data_protection.yaml` | ⬜ rename/replace PUR-006 with a distinct control |
+| L-010 | Collector data keys used by the new controls (e.g. `intune_security_baselines`, `mdi_sensors`, `insider_risk_policies`, `copilot_studio_agents`) are not yet emitted by every collector — controls return `not_applicable` until data exists | `unimonitor/graph/collectors/` | ⬜ collector coverage |
 
 ## Resolved This Session (2026-11-16)
 
@@ -40,6 +41,8 @@ None
 | M-017 | `ExecutiveDashboard` read `scores.security`, `severity_counts`, `trend` — none of which `/dashboard/executive` returns; page silently displayed hard-coded demo values | Mapped to `security_score`/`compliance_score`/`risk_score`, `score_trends`, `framework_coverage`, `top_risks`; demo fallbacks removed |
 | M-018 | `ComplianceDashboard` expected `{framework, score, implemented…}`; API returns `{framework_id, framework_name, coverage_pct, controls_total, controls_passed}` — framework list rendered empty | Aligned to the API contract |
 | M-019 | Risk, SOC and Audit dashboard views required by PROJECT_REQUIREMENTS had no UI (Risk/SOC had API only; Audit had no API) | Added `RiskDashboard`, `SocDashboard`, `AuditPage` + `GET /api/v1/dashboard/audit`, routes and nav |
+| M-021 | Control library depth — 100 controls across 10 areas; 7 named monitoring areas had no controls | Added 58 controls in 8 new files (Intune baselines, app inventory, Defender Office/Identity/Cloud Apps, Insider Risk, eDiscovery, Copilot Studio); library now 158 |
+| M-022 | 12 controls mapped to unregistered framework key `nist_csf`, so their NIST CSF mapping never resolved | Renamed to `nist_csf_2` in exchange, teams and sharepoint control files |
 | M-020 | 157 ruff errors + 2 mypy errors on HEAD (tests/scripts added after `1de7bcd` were never linted → CI red) | Auto-fix + format; manual fixes for unused imports/vars, `S607`, E501; per-file ignores for CLI `print` and test fixtures |
 | L-003b | Tracker files described HEAD `1de7bcd`, 105 tests, 47% coverage, "10 dependabot PRs" — all stale | Trackers reconciled to measured state (467 tests, majors merged) |
 

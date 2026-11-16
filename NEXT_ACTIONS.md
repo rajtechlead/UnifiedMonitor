@@ -19,7 +19,7 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P7-002 SOC dashboard view | ✅ Done | `frontend/src/pages/SocDashboard.tsx` |
 | P7-003 Audit dashboard view | ✅ Done | `frontend/src/pages/AuditPage.tsx` + `GET /dashboard/audit` |
 | P7-004 Executive/Compliance contract fix | ✅ Done | pages were showing demo values instead of API data |
-| P7-005 Control library depth | ⬜ Open | 100 controls; gaps: Intune baselines, app inventory, Defender Office/Identity/Cloud Apps/XDR, Insider Risk, eDiscovery, Copilot Studio, PIM |
+| P7-005 Control library depth | ✅ Done | 158 controls; added Intune baselines, app inventory, Defender Office/Identity/Cloud Apps, Insider Risk, eDiscovery, Copilot Studio |
 | P7-006 Coverage re-measure | ⬜ Open | last 62% at `79dfb98` |
 | P7-007 Frontend majors remaining | ⬜ Open | `react` 18→19, `@vitejs/plugin-react` 4→6 |
 | P7-008 Jose/ecdsa CVE decision | ⬜ Open | accept-and-record or migrate to `pyjwt` |
@@ -67,7 +67,7 @@ curl http://localhost:8000/health
 .\UniMonitor-Setup-old.exe   # rollback path
 ```
 
-### Step 3 — Control library expansion (if no Windows host is available)
+### Step 3 — Control library expansion ✅ completed 2026-11-16 (record of scope)
 
 Add control YAML for the requirement areas with no coverage today. Follow the existing schema in
 `controls/identity/mfa_controls.yaml` (id, title, description, severity, category, service,
