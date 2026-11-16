@@ -4,6 +4,9 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import ExecutiveDashboard from './pages/ExecutiveDashboard'
 import SecurityDashboard from './pages/SecurityDashboard'
 import ComplianceDashboard from './pages/ComplianceDashboard'
+import RiskDashboard from './pages/RiskDashboard'
+import SocDashboard from './pages/SocDashboard'
+import AuditPage from './pages/AuditPage'
 import FindingsPage from './pages/FindingsPage'
 import AssessmentsPage from './pages/AssessmentsPage'
 import ReportsPage from './pages/ReportsPage'
@@ -49,6 +52,9 @@ export default function App() {
             <Route path="executive" element={<RouteErrorBoundary><ExecutiveDashboard /></RouteErrorBoundary>} />
             <Route path="security" element={<RouteErrorBoundary><SecurityDashboard /></RouteErrorBoundary>} />
             <Route path="compliance" element={<RouteErrorBoundary><ComplianceDashboard /></RouteErrorBoundary>} />
+            <Route path="risk" element={<RouteErrorBoundary><RiskDashboard /></RouteErrorBoundary>} />
+            <Route path="soc" element={<RouteErrorBoundary><SocDashboard /></RouteErrorBoundary>} />
+            <Route path="audit" element={<RouteErrorBoundary><AuditPage /></RouteErrorBoundary>} />
             <Route path="findings" element={<RouteErrorBoundary><FindingsPage /></RouteErrorBoundary>} />
             <Route path="assessments" element={<RouteErrorBoundary><AssessmentsPage /></RouteErrorBoundary>} />
             <Route path="reports" element={<RouteErrorBoundary><ReportsPage /></RouteErrorBoundary>} />

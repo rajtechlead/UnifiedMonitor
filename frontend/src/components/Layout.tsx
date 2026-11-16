@@ -3,6 +3,7 @@ import { useState } from 'react'
 import {
   LayoutDashboard, Shield, CheckCircle, AlertTriangle,
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
+  BarChart3, Activity, ScrollText,
 } from 'lucide-react'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
@@ -11,6 +12,9 @@ const NAV_ITEMS = [
   { to: '/executive', icon: LayoutDashboard, label: 'Executive' },
   { to: '/security', icon: Shield, label: 'Security' },
   { to: '/compliance', icon: CheckCircle, label: 'Compliance' },
+  { to: '/risk', icon: BarChart3, label: 'Risk' },
+  { to: '/soc', icon: Activity, label: 'SOC' },
+  { to: '/audit', icon: ScrollText, label: 'Audit' },
   { to: '/findings', icon: AlertTriangle, label: 'Findings' },
   { to: '/assessments', icon: ClipboardList, label: 'Assessments' },
   { to: '/reports', icon: FileText, label: 'Reports' },

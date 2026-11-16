@@ -34,6 +34,8 @@ export const dashboardApi = {
   getSecurity: () => api.get('/dashboard/security').then((r) => r.data),
   getCompliance: () => api.get('/dashboard/compliance').then((r) => r.data),
   getRisk: () => api.get('/dashboard/risk').then((r) => r.data),
+  getSoc: () => api.get('/dashboard/soc').then((r) => r.data),
+  getAudit: () => api.get('/dashboard/audit').then((r) => r.data),
 }
 
 export const findingsApi = {

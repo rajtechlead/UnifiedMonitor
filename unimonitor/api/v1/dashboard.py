@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 import structlog
@@ -151,6 +151,22 @@ class SocViewResponse(BaseModel):
     mean_time_to_resolve_hours: float | None
     alerts_by_severity: FindingCounts
     incident_trend: list[dict]
+    generated_at: datetime
+
+
+class AuditEntry(BaseModel):
+    id: str
+    action: str
+    resource_type: str | None
+    resource_id: str | None
+    actor: str | None
+    created_at: datetime
+
+
+class AuditViewResponse(BaseModel):
+    entries: list[AuditEntry]
+    total: int
+    actions_24h: int
     generated_at: datetime
 
 
@@ -465,6 +481,40 @@ async def dashboard_soc(
         mean_time_to_resolve_hours=None,
         alerts_by_severity=finding_counts,
         incident_trend=[],
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.get("/audit", response_model=AuditViewResponse)
+async def dashboard_audit(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> AuditViewResponse:
+    """Audit view — recent audit trail entries and 24h activity."""
+    from sqlalchemy import func, select
+
+    from unimonitor.db.models.audit_log import AuditLog
+
+    rows = (await db.execute(select(AuditLog).order_by(AuditLog.created_at.desc()).limit(limit))).scalars().all()
+    total = await db.scalar(select(func.count()).select_from(AuditLog)) or 0
+    since = datetime.now(UTC) - timedelta(hours=24)
+    actions_24h = await db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= since)) or 0
+
+    return AuditViewResponse(
+        entries=[
+            AuditEntry(
+                id=r.id,
+                action=r.action,
+                resource_type=r.resource_type,
+                resource_id=r.resource_id,
+                actor=r.user_id,
+                created_at=r.created_at,
+            )
+            for r in rows
+        ],
+        total=total,
+        actions_24h=actions_24h,
         generated_at=datetime.now(UTC),
     )
 
