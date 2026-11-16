@@ -34,6 +34,8 @@ None
 | L-010 | Some new control keys still depend on the posture snapshot (Copilot Studio, LAPS policy, app blocklist, insider-risk connectors) because no Graph endpoint exposes them | `unimonitor/graph/collectors/snapshot.py` | 🟡 by design; documented in OPERATIONS |
 | M-023 | Google collectors use a pre-issued access token; there is no refresh flow, so a long run needs an external refresher | `unimonitor/graph/collectors/cloud_providers.py` | ⬜ P8-005 |
 | M-024 | AWS/GCP/Workspace controls have never run against live accounts — payload tests only | `controls/aws`, `controls/gcp`, `controls/google_workspace` | ⬜ P8-004 |
+| M-027 | Reports (PDF/DOCX/CSV) still emit one blended score; no per-provider sections or cloud breakdown | `unimonitor/reporting/` | ⬜ P8-007 |
+| M-028 | Azure-specific controls (25, `azure_security`) roll up under the Microsoft 365 provider; there is no standalone Azure dashboard | `unimonitor/grc/providers.py` | 🟡 grouping decision; split if Azure is sold separately |
 
 ## Resolved This Session (2026-11-16)
 

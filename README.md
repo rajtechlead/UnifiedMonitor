@@ -1,12 +1,13 @@
 # UniMonitor
 
-**Unified Microsoft 365 Security Monitoring, GRC & Compliance Platform**
+**Unified Multi-Cloud Security Monitoring, GRC & Compliance Platform**
 
 > Developed by [rajtechlead](https://github.com/rajtechlead) · Contact: [rajrsngroup@gmail.com](mailto:rajrsngroup@gmail.com)
 
 UniMonitor consolidates security posture management, GRC framework assessments,
-AI-powered remediation, and compliance reporting for Microsoft 365 environments
-into a single deployable platform.
+AI-powered remediation, and compliance reporting for Microsoft 365, Amazon Web
+Services, Google Cloud Platform and Google Workspace — one deployable platform
+with a per-cloud view and an aggregate view across all of them.
 
 ---
 
@@ -14,14 +15,33 @@ into a single deployable platform.
 
 | Capability | Details |
 |---|---|
-| **Security Monitoring** | Real-time posture across Entra ID, Intune, Defender, Exchange, SharePoint, Teams |
+| **Multi-Cloud Monitoring** | Real-time posture across Microsoft 365, AWS, Google Cloud and Google Workspace |
 | **GRC Assessments** | 13 frameworks: NIST CSF, ISO 27001, CIS Benchmarks, SOC 2, HIPAA, PCI-DSS, and more |
-| **67 Security Controls** | Pre-built controls across all M365 services — no manual configuration needed |
+| **180 Security Controls** | Pre-built controls mapped to each provider's native services — no manual configuration needed |
 | **AI Remediation** | Azure OpenAI GPT-4o powered remediation plans with rule-based fallback |
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
-| **Multi-tenant** | Isolate assessments per Microsoft 365 tenant (MSP-ready) |
+| **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
 | **Reporting** | PDF, DOCX, JSON, CSV compliance reports |
-| **Dashboards** | Executive, Security, Compliance, Findings, Assessments, Reports |
+| **Dashboards** | Executive, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
+
+---
+
+## Monitored Cloud Providers
+
+Each provider has its own collector set, control file under `controls/<provider>/`,
+and dashboard. The aggregate view rolls them up side by side.
+
+| Provider | Collector | Controls | Credentials |
+|---|---|---|---|
+| Microsoft 365 | Entra ID, Intune, Defender, Purview, Exchange, SharePoint, Teams, Copilot | 158 | Entra app registration (`TENANT_CLIENT_ID` / `TENANT_CLIENT_SECRET`) |
+| Amazon Web Services | `aws` (boto3) | 8 | `AWS_REGION` + standard AWS credential chain |
+| Google Cloud Platform | `gcp` (REST) | 8 | `GCP_PROJECT_ID`, `GCP_ACCESS_TOKEN` |
+| Google Workspace | `google_workspace` (Admin SDK REST) | 6 | `GOOGLE_WORKSPACE_CUSTOMER_ID`, `GOOGLE_ACCESS_TOKEN` |
+
+Provider dashboards live at `/clouds` (aggregate) and `/clouds/<provider>` in the
+web UI, backed by `GET /api/v1/dashboard/clouds` and
+`GET /api/v1/dashboard/clouds/{provider}`. A provider with no credentials returns
+no findings, so its controls report *not implemented* rather than passing.
 
 ---
 

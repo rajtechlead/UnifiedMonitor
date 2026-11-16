@@ -36,6 +36,9 @@ export const dashboardApi = {
   getRisk: () => api.get('/dashboard/risk').then((r) => r.data),
   getSoc: () => api.get('/dashboard/soc').then((r) => r.data),
   getAudit: () => api.get('/dashboard/audit').then((r) => r.data),
+  getClouds: () => api.get('/dashboard/clouds').then((r) => r.data),
+  getCloudProvider: (providerId: string) =>
+    api.get(`/dashboard/clouds/${providerId}`).then((r) => r.data),
 }
 
 export const findingsApi = {

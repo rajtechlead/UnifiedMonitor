@@ -547,3 +547,293 @@ async def dashboard_trends(
         finding_trend=finding_trend,
         generated_at=datetime.now(UTC),
     )
+
+
+# ── Multi-cloud dashboards ───────────────────────────────────
+#
+# The platform monitors several clouds; these views roll the existing control
+# library and findings up per provider, plus an aggregate across all of them.
+# Provider membership is defined in unimonitor/grc/providers.py.
+
+
+class ProviderServiceBreakdown(BaseModel):
+    service: str
+    controls_total: int
+    controls_passed: int
+    findings: int
+
+
+class ProviderControlCategory(BaseModel):
+    category: str
+    controls_total: int
+    controls_passed: int
+    coverage_pct: float
+
+
+class CloudProviderSummary(BaseModel):
+    provider_id: str
+    name: str
+    short_name: str
+    description: str
+    connected: bool
+    controls_total: int
+    controls_passed: int
+    coverage_pct: float
+    scores: ScoreSummary
+    finding_counts: FindingCounts
+    state_counts: StateCounts
+    services: list[str]
+    collectors: list[str]
+    credential_settings: list[str]
+
+
+class CloudTotals(BaseModel):
+    providers_total: int
+    providers_connected: int
+    controls_total: int
+    controls_passed: int
+    coverage_pct: float
+    findings_total: int
+    critical: int
+    high: int
+
+
+class CloudAggregateResponse(BaseModel):
+    providers: list[CloudProviderSummary]
+    totals: CloudTotals
+    overall_scores: ScoreSummary
+    generated_at: datetime
+
+
+class CloudProviderDetailResponse(BaseModel):
+    provider: CloudProviderSummary
+    services: list[ProviderServiceBreakdown]
+    categories: list[ProviderControlCategory]
+    frameworks: list[FrameworkCoverage]
+    top_findings: list[TopFinding]
+    generated_at: datetime
+
+
+def _provider_controls(provider_id: str) -> list:
+    """Control definitions owned by one provider."""
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.providers import provider_for_service
+
+    return [c for c in ControlLoader().load_all() if (p := provider_for_service(c.service)) and p.id == provider_id]
+
+
+def _count_states(findings: list) -> tuple[FindingCounts, StateCounts, float, float, float]:
+    """Return (severity counts, state counts, security, compliance, risk)."""
+    from unimonitor.grc.scoring import calculate_scores
+
+    sev = {"critical": 0, "high": 0, "medium": 0, "low": 0, "informational": 0}
+    states = {"implemented": 0, "partially_implemented": 0, "not_implemented": 0, "not_applicable": 0}
+    for f in findings:
+        if f.severity in sev:
+            sev[f.severity] += 1
+        if f.state in states:
+            states[f.state] += 1
+
+    finding_counts = FindingCounts(total=len(findings), **sev)
+    state_counts = StateCounts(**states)
+    if not findings:
+        return finding_counts, state_counts, 0.0, 0.0, 0.0
+
+    scores = calculate_scores(findings)
+    return (
+        finding_counts,
+        state_counts,
+        scores["security_score"],
+        scores["compliance_score"],
+        scores["risk_score"],
+    )
+
+
+def _summarise_provider(provider, findings: list, controls: list) -> CloudProviderSummary:
+    finding_counts, state_counts, sec, comp, risk = _count_states(findings)
+    states = {f.external_control_id: f.state for f in findings}
+    applicable = [c for c in controls if states.get(c.id) != "not_applicable"]
+    passed = sum(1 for c in applicable if states.get(c.id) == "implemented")
+    coverage = round((passed / len(applicable)) * 100, 2) if applicable else 0.0
+
+    return CloudProviderSummary(
+        provider_id=provider.id,
+        name=provider.name,
+        short_name=provider.short_name,
+        description=provider.description,
+        connected=bool(findings),
+        controls_total=len(controls),
+        controls_passed=passed,
+        coverage_pct=coverage,
+        scores=ScoreSummary(
+            security_score=sec,
+            compliance_score=comp,
+            risk_score=risk,
+            score_trend_7d=0.0,
+        ),
+        finding_counts=finding_counts,
+        state_counts=state_counts,
+        services=list(provider.services),
+        collectors=list(provider.collectors),
+        credential_settings=list(provider.credential_settings),
+    )
+
+
+def _provider_frameworks(controls: list, findings: list) -> list[FrameworkCoverage]:
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+
+    states = {f.external_control_id: f.state for f in findings}
+    out: list[FrameworkCoverage] = []
+    for fw in SUPPORTED_FRAMEWORKS:
+        keys = {fw["id"], fw["id"].replace("-", "_")}
+        mapped = [c for c in controls if keys & set(c.compliance_mapping)]
+        if not mapped:
+            continue
+        applicable = [c for c in mapped if states.get(c.id) != "not_applicable"]
+        credit = sum(1.0 if states.get(c.id) == "implemented" else 0.5 if states.get(c.id) == "partially_implemented" else 0.0 for c in applicable)
+        out.append(
+            FrameworkCoverage(
+                framework_id=fw["id"],
+                framework_name=fw["name"],
+                coverage_pct=round((credit / len(applicable)) * 100, 2) if applicable else 0.0,
+                controls_total=len(mapped),
+                controls_passed=sum(1 for c in applicable if states.get(c.id) == "implemented"),
+            )
+        )
+    return out
+
+
+async def _load_findings(db: AsyncSession, tenant_id: str | None) -> list:
+    from unimonitor.db.repositories.finding_repo import FindingRepository
+
+    rows, _ = await FindingRepository(db).list_paginated(tenant_id=tenant_id, page_size=1000)
+    return list(rows)
+
+
+def _group_by_provider(findings: list) -> dict[str, list]:
+    from unimonitor.grc.providers import provider_for_service, provider_ids
+
+    groups: dict[str, list] = {pid: [] for pid in provider_ids()}
+    for f in findings:
+        provider = provider_for_service(f.service)
+        if provider:
+            groups[provider.id].append(f)
+    return groups
+
+
+@router.get("/clouds", response_model=CloudAggregateResponse)
+async def dashboard_clouds(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+) -> CloudAggregateResponse:
+    """Aggregate multi-cloud dashboard: one row per provider plus totals."""
+    from unimonitor.grc.providers import PROVIDERS
+
+    findings = await _load_findings(db, tenant_id)
+    groups = _group_by_provider(findings)
+
+    providers = [_summarise_provider(p, groups.get(pid, []), _provider_controls(pid)) for pid, p in PROVIDERS.items()]
+
+    controls_total = sum(p.controls_total for p in providers)
+    controls_passed = sum(p.controls_passed for p in providers)
+    applicable = sum(p.controls_total - p.state_counts.not_applicable for p in providers)
+    _, _, sec, comp, risk = _count_states(findings)
+
+    return CloudAggregateResponse(
+        providers=providers,
+        totals=CloudTotals(
+            providers_total=len(providers),
+            providers_connected=sum(1 for p in providers if p.connected),
+            controls_total=controls_total,
+            controls_passed=controls_passed,
+            coverage_pct=round((controls_passed / applicable) * 100, 2) if applicable else 0.0,
+            findings_total=len(findings),
+            critical=sum(p.finding_counts.critical for p in providers),
+            high=sum(p.finding_counts.high for p in providers),
+        ),
+        overall_scores=ScoreSummary(
+            security_score=sec,
+            compliance_score=comp,
+            risk_score=risk,
+            score_trend_7d=0.0,
+        ),
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.get("/clouds/{provider_id}", response_model=CloudProviderDetailResponse)
+async def dashboard_cloud_provider(
+    provider_id: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+) -> CloudProviderDetailResponse:
+    """Single-cloud dashboard: scores, control coverage and findings for one provider."""
+    from fastapi import HTTPException
+
+    from unimonitor.grc.providers import get_provider, provider_for_service
+
+    provider = get_provider(provider_id)
+    if provider is None:
+        raise HTTPException(status_code=404, detail=f"Unknown cloud provider '{provider_id}'")
+
+    findings = []
+    for finding in await _load_findings(db, tenant_id):
+        owner = provider_for_service(finding.service)
+        if owner is not None and owner.id == provider.id:
+            findings.append(finding)
+    controls = _provider_controls(provider.id)
+    summary = _summarise_provider(provider, findings, controls)
+
+    states = {f.external_control_id: f.state for f in findings}
+    services = [
+        ProviderServiceBreakdown(
+            service=service,
+            controls_total=sum(1 for c in controls if c.service == service),
+            controls_passed=sum(1 for c in controls if c.service == service and states.get(c.id) == "implemented"),
+            findings=sum(1 for f in findings if f.service == service),
+        )
+        for service in provider.services
+    ]
+
+    categories: dict[str, list] = {}
+    for ctrl in controls:
+        categories.setdefault(ctrl.category or "general", []).append(ctrl)
+    category_rows = []
+    for name, group in sorted(categories.items()):
+        applicable = [c for c in group if states.get(c.id) != "not_applicable"]
+        passed = sum(1 for c in applicable if states.get(c.id) == "implemented")
+        category_rows.append(
+            ProviderControlCategory(
+                category=name,
+                controls_total=len(group),
+                controls_passed=passed,
+                coverage_pct=round((passed / len(applicable)) * 100, 2) if applicable else 0.0,
+            )
+        )
+
+    top = sorted(
+        (f for f in findings if f.state not in ("implemented", "not_applicable") and not f.is_suppressed),
+        key=lambda f: f.risk_score,
+        reverse=True,
+    )[:10]
+
+    return CloudProviderDetailResponse(
+        provider=summary,
+        services=services,
+        categories=category_rows,
+        frameworks=_provider_frameworks(controls, findings),
+        top_findings=[
+            TopFinding(
+                id=f.id,
+                title=f.title,
+                severity=f.severity,
+                category=f.category,
+                service=f.service,
+                first_detected_at=f.first_detected_at,
+            )
+            for f in top
+        ],
+        generated_at=datetime.now(UTC),
+    )

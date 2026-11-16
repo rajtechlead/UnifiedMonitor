@@ -38,6 +38,7 @@ class CollectorStatus(BaseModel):
     name: str
     display_name: str
     description: str
+    provider: str = "microsoft"
     last_run: datetime | None
     last_status: str | None  # "success" | "partial" | "failed" | "never"
     last_duration_seconds: float | None
@@ -125,6 +126,24 @@ COLLECTOR_DEFINITIONS = [
         "name": "secure_score",
         "display_name": "Secure Score",
         "description": "Microsoft Secure Score trends, improvement actions, comparison data",
+    },
+    {
+        "name": "aws",
+        "display_name": "Amazon Web Services",
+        "description": "IAM, S3 public access and encryption, CloudTrail, GuardDuty, AWS Config, Security Hub",
+        "provider": "aws",
+    },
+    {
+        "name": "gcp",
+        "display_name": "Google Cloud Platform",
+        "description": "Cloud IAM, service-account keys, firewall rules, audit sinks, buckets, KMS, org policy",
+        "provider": "gcp",
+    },
+    {
+        "name": "google_workspace",
+        "display_name": "Google Workspace",
+        "description": "2-step verification, super admins, admin roles, OAuth grants, Drive sharing, mobile devices",
+        "provider": "google_workspace",
     },
 ]
 
@@ -266,6 +285,7 @@ async def get_collectors(
                 name=defn["name"],
                 display_name=defn["display_name"],
                 description=defn["description"],
+                provider=defn.get("provider", "microsoft"),
                 last_run=last_run_time,
                 last_status=last_status,
                 last_duration_seconds=duration,

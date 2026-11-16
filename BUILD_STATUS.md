@@ -25,9 +25,10 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 504/504 | 48s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 518/518 | 73s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
+| Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
 | Ruff format | ✅ CLEAN | 132 files |
 | mypy | ✅ CLEAN | 87 source files |
@@ -42,8 +43,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 447 | across 23 files |
-| Integration tests | ✅ PASS | 57 | health, e2e journeys, dashboard views |
+| Unit tests | ✅ PASS | 452 | across 24 files |
+| Integration tests | ✅ PASS | 66 | health, e2e journeys, dashboard + cloud views |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
@@ -116,7 +117,7 @@ Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjw
 | Test coverage | 62% (measured at `79dfb98`) |
 | Security | 58% (two unfixable upstream CVEs, no live-tenant auth test) |
 | Deployment | 70% (Docker CI green, Linux PyInstaller green, Windows pending) |
-| Requirements coverage | 90% (13 frameworks, 6 dashboard views, 7 monitoring areas, 3 cloud providers; UI still Microsoft-only) |
+| Requirements coverage | 93% (13 frameworks, 8 dashboard views incl. multi-cloud, 7 monitoring areas, 4 provider scopes) |
 | Documentation | 90% |
 | Overall | ~75% |
 
@@ -124,8 +125,8 @@ Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjw
 
 - [x] Backend Build Passes
 - [x] Frontend Build Passes
-- [x] Unit Tests Pass (447)
-- [x] Integration Tests Pass (57)
+- [x] Unit Tests Pass (452)
+- [x] Integration Tests Pass (66)
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)

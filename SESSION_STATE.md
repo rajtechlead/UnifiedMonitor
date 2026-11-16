@@ -77,6 +77,15 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 - Added multi-cloud support (Phase 8): AWS (boto3), Google Cloud and Google Workspace (REST with an
   access token) collectors, with 8 AWS / 8 GCP / 6 Workspace controls and 12 payload-driven tests.
   Provider collectors return {} without credentials, so controls report `not_implemented`.
+- Scope is multi-cloud, not Microsoft-only: `grc/providers.py` is the provider registry
+  (Microsoft 365, AWS, GCP, Workspace) that maps control/finding `service` values to a cloud,
+  so provider roll-ups are a grouping operation rather than a parallel code path.
+- New dashboards: `GET /dashboard/clouds` (aggregate across providers) and
+  `GET /dashboard/clouds/{provider}` (scores, control states, category/framework coverage,
+  top findings), plus React pages `/clouds` and `/clouds/:providerId` and a Clouds nav entry.
+- Fixed a latent bug: `compute_framework_coverage` was imported by the dashboard and GRC APIs but
+  never existed, so framework coverage silently returned empty. It now exists, and it normalises the
+  hyphenated API framework ids (`iso27001-2022`) against the underscored control-mapping keys.
 - Fixed 157 ruff + 2 mypy errors that existed on HEAD (CI would have been red): import sorting,
   line length, unused imports/variables, `print` in CLI scripts, dummy-credential false positives.
 
@@ -140,9 +149,10 @@ same-vendor upgrades within the approved stack, not substitutions.
 
 | Component | Status | Notes |
 |---|---|---|
-| Python tests | ✅ 504/504 | 48s, 7 warnings (AsyncMock never-awaited in mocks) |
+| Python tests | ✅ 518/518 | 73s, 7 warnings (AsyncMock never-awaited in mocks) |
 | Control library | ✅ 180 controls | 21 YAML files, all framework keys resolve |
 | Multi-cloud collectors | ✅ AWS / GCP / Workspace | credential-dependent; payload tests only |
+| Multi-cloud dashboards | ✅ aggregate + per provider | provider registry drives both; React build clean |
 | Ruff check | ✅ CLEAN | 0 errors (was 157 on HEAD) |
 | Ruff format | ✅ CLEAN | 132 files formatted |
 | mypy | ✅ CLEAN | 87 source files |

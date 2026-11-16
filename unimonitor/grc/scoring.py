@@ -8,6 +8,8 @@ Risk Score      — aggregate weighted risk (0–100, inverted: 100 = no risk).
 
 from __future__ import annotations
 
+from typing import Any
+
 from unimonitor.db.models.finding import Finding, FindingSeverity, FindingState
 
 SEVERITY_WEIGHT = {
@@ -199,6 +201,64 @@ def compute_score(raw_findings: list[dict]) -> float:
     if total_weight == 0:
         return 100.0
     return round((passed_weight / total_weight) * 100, 2)
+
+
+async def compute_framework_coverage(
+    session: Any,
+    tenant_id: str | None = None,
+    framework_id: str | None = None,
+) -> dict[str, dict]:
+    """Compute coverage per compliance framework from persisted findings.
+
+    Returns ``{framework_id: {coverage_pct, controls_total, controls_passed, ...}}``
+    for every supported framework (or just *framework_id* when given). Controls
+    with no finding yet count as not implemented; ``not_applicable`` controls are
+    removed from the denominator.
+    """
+    from sqlalchemy import select
+
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.grc.control_loader import ControlLoader
+
+    stmt = select(Finding.external_control_id, Finding.state)
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
+    rows = (await session.execute(stmt)).all()
+    states: dict[str, str] = {row[0]: row[1] for row in rows}
+
+    controls = ControlLoader().load_all()
+    result: dict[str, dict] = {}
+    for fw in SUPPORTED_FRAMEWORKS:
+        if framework_id and fw["id"] != framework_id:
+            continue
+        # Framework ids are hyphenated in the API but underscored in control YAML.
+        keys = {fw["id"], fw["id"].replace("-", "_")}
+        mapped = [c for c in controls if keys & set(c.compliance_mapping)]
+        counts = {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0}
+        for ctrl in mapped:
+            state = states.get(ctrl.id, FindingState.NOT_IMPLEMENTED.value)
+            if state == FindingState.IMPLEMENTED.value:
+                counts["implemented"] += 1
+            elif state == FindingState.PARTIALLY_IMPLEMENTED.value:
+                counts["partial"] += 1
+            elif state == FindingState.NOT_APPLICABLE.value:
+                counts["not_applicable"] += 1
+            else:
+                counts["not_implemented"] += 1
+
+        applicable = len(mapped) - counts["not_applicable"]
+        coverage = round(((counts["implemented"] + counts["partial"] * 0.5) / applicable) * 100, 2) if applicable else 0.0
+        result[fw["id"]] = {
+            "coverage_pct": coverage,
+            "controls_total": len(mapped),
+            "controls_passed": counts["implemented"],
+            "controls_implemented": counts["implemented"],
+            "controls_partial": counts["partial"],
+            "controls_not_implemented": counts["not_implemented"],
+            "controls_not_applicable": counts["not_applicable"],
+        }
+    return result
 
 
 def compute_framework_score(raw_findings: list[dict]) -> dict:

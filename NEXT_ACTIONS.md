@@ -30,7 +30,8 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P8-003 Google Workspace collector + controls | ✅ Done | 6 controls; Admin SDK REST + `GOOGLE_ACCESS_TOKEN` |
 | P8-004 Live credential validation | ⬜ Open | no AWS/GCP/Workspace accounts in the agent workspace |
 | P8-005 Google token refresh | ⬜ Open | collectors take a static token; add service-account/OIDC refresh |
-| P8-006 Provider controls in the UI | ⬜ Open | dashboard views are Microsoft-centric today |
+| P8-006 Provider controls in the UI | ✅ Done | `/clouds` aggregate + `/clouds/:providerId` detail pages, Clouds nav entry |
+| P8-007 Provider segmentation in reports | ⬜ Open | PDF/DOCX exports still aggregate all providers into one score |
 | P7-006 Coverage re-measure | ⬜ Open | last 62% at `79dfb98` |
 | P7-007 Frontend majors remaining | ⬜ Open | `react` 18→19, `@vitejs/plugin-react` 4→6 |
 | P7-008 Jose/ecdsa CVE decision | ⬜ Open | accept-and-record or migrate to `pyjwt` |
