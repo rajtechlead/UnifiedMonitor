@@ -1,0 +1,228 @@
+# UniMonitor GRC Controls — Intune: Application Inventory
+
+controls:
+  - id: CTRL-APP-001
+    title: "Discovered Application Inventory Collected"
+    description: >
+      Intune must report discovered applications for managed and unmanaged devices so the
+      organisation has visibility of software actually installed across the estate.
+    severity: HIGH
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "ID.AM-02"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "2.1"
+      cis_m365_benchmark:
+        - "5.1.1"
+      soc2:
+        - "CC6.1"
+    rationale: "Uninventoried software cannot be patched, licensed or assessed for risk."
+    remediation: |
+      1. Intune > Apps > Monitor > Discovered apps
+      2. Confirm Intune data collection is enabled and devices are checking in
+      3. Enable Discovery for all managed platforms
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/monitor-apps
+    evaluate: |
+      apps = data.get("intune_detected_apps", [])
+      if apps is None:
+          return "not_applicable"
+      if not apps:
+          return "not_implemented"
+      return "implemented" if len(apps) > 0 else "not_implemented"
+
+  - id: CTRL-APP-002
+    title: "Application Inventory Coverage Across Managed Devices"
+    description: >
+      At least 90% of managed devices must report installed application inventory so gaps in
+      visibility do not hide unapproved or vulnerable software.
+    severity: MEDIUM
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "ID.AM-02"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "2.1"
+      soc2:
+        - "CC6.1"
+    rationale: "Partial inventory coverage creates blind spots where shadow IT persists."
+    remediation: |
+      1. Intune > Devices > All devices > filter by "Inventory" status
+      2. Investigate devices with no inventory report
+      3. Confirm the Intune Management Extension is healthy on those devices
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/monitor-apps
+    evaluate: |
+      coverage = data.get("intune_app_inventory_coverage_pct")
+      if coverage is None:
+          return "not_applicable"
+      if coverage >= 90:
+          return "implemented"
+      return "partially_implemented" if coverage >= 60 else "not_implemented"
+
+  - id: CTRL-APP-003
+    title: "End-of-Life and Unsupported Applications Identified"
+    description: >
+      Applications reported by the inventory that are past end-of-support must be identified
+      and tracked for removal or upgrade, since they no longer receive security fixes.
+    severity: HIGH
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "ID.RA-01"
+      nist_800_53_r5:
+        - "RA-5"
+      cis_controls_v8:
+        - "2.2"
+      cis_m365_benchmark:
+        - "5.1.1"
+      soc2:
+        - "CC7.1"
+    rationale: "End-of-life software accumulates unpatched vulnerabilities that cannot be remediated."
+    remediation: |
+      1. Intune > Apps > Monitor > Discovered apps
+      2. Filter by end-of-support flag or cross-reference with the vendor lifecycle matrix
+      3. Block or uninstall EOL applications via app protection or uninstall policy
+      4. Track removal in the vulnerability register
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/monitor-apps
+    evaluate: |
+      apps = data.get("intune_detected_apps", [])
+      if apps is None:
+          return "not_applicable"
+      eol = [
+          a for a in apps
+          if a.get("isEndOfLife") is True or str(a.get("supportStatus", "")).lower() == "end_of_life"
+      ]
+      if not eol:
+          return "implemented"
+      return "partially_implemented" if len(eol) <= 5 else "not_implemented"
+
+  - id: CTRL-APP-004
+    title: "Prohibited Applications Blocked or Removed"
+    description: >
+      Applications on the organisational blocklist must not be present on managed devices, or
+      must be flagged for uninstall through Intune.
+    severity: HIGH
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.19"
+      nist_csf_2:
+        - "PR.PS-05"
+      nist_800_53_r5:
+        - "CM-7"
+      cis_controls_v8:
+        - "2.3"
+      cis_m365_benchmark:
+        - "5.1.1"
+      zero_trust:
+        - "apps.least_privilege"
+    rationale: "Unapproved software such as shadow-IT sync clients bypasses data protection controls."
+    remediation: |
+      1. Define the prohibited application list (unapproved sync clients, remote access tools, P2P)
+      2. Intune > Apps > App protection / App control policies for Windows
+      3. Create an uninstall assignment for detected prohibited apps
+      4. Review detected apps weekly for new matches
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/apps-win32-app-management
+    evaluate: |
+      blocklist = data.get("intune_app_blocklist", [])
+      apps = data.get("intune_detected_apps", [])
+      if not blocklist or apps is None:
+          return "not_applicable"
+      blocked_names = {str(b).lower() for b in blocklist}
+      present = [
+          a for a in apps
+          if str(a.get("displayName", "")).lower() in blocked_names
+      ]
+      if not present:
+          return "implemented"
+      return "partially_implemented" if len(present) <= 3 else "not_implemented"
+
+  - id: CTRL-APP-005
+    title: "Application Inventory Reviewed Within 30 Days"
+    description: >
+      The application inventory must be reviewed on a defined cadence so newly detected software
+      is assessed and approved rather than accumulating unowned.
+    severity: MEDIUM
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "ID.AM-02"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "2.1"
+      soc2:
+        - "CC6.1"
+    rationale: "An unreviewed inventory provides visibility without governance."
+    remediation: |
+      1. Assign application review ownership (endpoint or asset management team)
+      2. Record review date after each assessment
+      3. Use this control's inventory snapshot as the review baseline
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/apps/monitor-apps
+    evaluate: |
+      reviewed = data.get("intune_app_inventory_last_reviewed_days")
+      if reviewed is None:
+          return "not_applicable"
+      if reviewed <= 30:
+          return "implemented"
+      return "partially_implemented" if reviewed <= 90 else "not_implemented"
+
+  - id: CTRL-APP-006
+    title: "Sideloaded and Non-Marketplace Applications Restricted"
+    description: >
+      Installation of applications from outside the approved store or package source must be
+      restricted through Intune app control or application installation policies.
+    severity: MEDIUM
+    category: applications
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.19"
+      nist_csf_2:
+        - "PR.PS-05"
+      nist_800_53_r5:
+        - "CM-7"
+      cis_controls_v8:
+        - "2.3"
+      zero_trust:
+        - "apps.least_privilege"
+      soc2:
+        - "CC6.1"
+    rationale: "Sideloaded apps bypass store review and commonly carry malware or data-exfiltration code."
+    remediation: |
+      1. Intune > Devices > Configuration > App Control for Business / Smart App Control
+      2. Enable managed installer or WDAC policy restricting unapproved package sources
+      3. For mobile, set the device restriction to block unknown sources
+    references:
+      - https://learn.microsoft.com/en-us/windows/security/application-security/application-control/
+    evaluate: |
+      policies = data.get("intune_app_control_policies", [])
+      if not policies:
+          return "not_implemented"
+      enforced = [
+          p for p in policies
+          if str(p.get("enforcementMode", "")).lower() in ("enforced", "enforce", "auditandenforce")
+      ]
+      return "implemented" if enforced else "partially_implemented"

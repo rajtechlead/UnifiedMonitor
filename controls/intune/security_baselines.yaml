@@ -1,0 +1,335 @@
+# UniMonitor GRC Controls — Intune: Security Baselines
+
+controls:
+  - id: CTRL-INT-011
+    title: "Microsoft Defender for Endpoint Security Baseline Assigned"
+    description: >
+      The Microsoft Defender for Endpoint security baseline in Intune must be assigned to
+      all Windows devices so Defender configuration is centrally enforced and cannot drift
+      from Microsoft's recommended hardening values.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.1.1"
+      zero_trust:
+        - "endpoints.configuration_management"
+      soc2:
+        - "CC7.1"
+    rationale: "Unassigned baselines leave Defender settings at vendor defaults that attackers can exploit."
+    remediation: |
+      1. Intune > Endpoint security > Security baselines > Microsoft Defender for Endpoint baseline
+      2. Create a profile from the latest baseline version
+      3. Assign to All Devices (or All Users + All Devices)
+      4. Monitor baseline compliance in Endpoint security > Security baselines
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines
+    evaluate: |
+      baselines = data.get("intune_security_baselines", [])
+      if not baselines:
+          return "not_applicable"
+      defender = [b for b in baselines if "defender" in str(b.get("displayName", "")).lower()]
+      if not defender:
+          return "not_implemented"
+      assigned = [b for b in defender if b.get("isAssigned") is True]
+      return "implemented" if assigned else "partially_implemented"
+
+  - id: CTRL-INT-012
+    title: "Windows Security Baseline Assigned to All Managed Devices"
+    description: >
+      A Windows security baseline profile must be assigned to every managed Windows device,
+      not only to a pilot group, so the full estate receives the Microsoft hardening set.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.1.1"
+      zero_trust:
+        - "endpoints.configuration_management"
+      soc2:
+        - "CC7.1"
+    rationale: "A baseline assigned to a subset of devices leaves the remaining estate unhardened."
+    remediation: |
+      1. Intune > Endpoint security > Security baselines > Windows Security baseline
+      2. Review the profile assignments
+      3. Replace group-scoped assignments with All Devices, or verify every device group is covered
+      4. Track per-device baseline status until 95%+ report a state
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines-configure
+    evaluate: |
+      baselines = data.get("intune_security_baselines", [])
+      managed = data.get("intune_managed_device_count", 0)
+      if not baselines or not managed:
+          return "not_applicable"
+      windows_profiles = [
+          b for b in baselines
+          if "windows" in str(b.get("displayName", "")).lower()
+          and "defender" not in str(b.get("displayName", "")).lower()
+      ]
+      if not windows_profiles:
+          return "not_implemented"
+      assigned_all = [
+          b for b in windows_profiles
+          if b.get("isAssigned") is True
+          and str(b.get("assignmentTarget", "")).lower() in ("alldevices", "all_devices", "all devices")
+      ]
+      if assigned_all:
+          return "implemented"
+      return "partially_implemented" if any(b.get("isAssigned") for b in windows_profiles) else "not_implemented"
+
+  - id: CTRL-INT-013
+    title: "Microsoft Edge Security Baseline Assigned"
+    description: >
+      The Microsoft Edge security baseline must be assigned to managed devices to enforce
+      browser hardening such as SmartScreen, blocked extensions and disabled password managers.
+    severity: MEDIUM
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.1.3"
+      zero_trust:
+        - "endpoints.configuration_management"
+    rationale: "The browser is the primary attack surface for credential theft and malicious downloads."
+    remediation: |
+      1. Intune > Endpoint security > Security baselines > Microsoft Edge baseline
+      2. Create a profile and apply the latest version
+      3. Assign to All Devices and monitor non-compliance
+    references:
+      - https://learn.microsoft.com/en-us/deployedge/microsoft-edge-security-baseline
+    evaluate: |
+      baselines = data.get("intune_security_baselines", [])
+      if not baselines:
+          return "not_applicable"
+      edge = [b for b in baselines if "edge" in str(b.get("displayName", "")).lower()]
+      if not edge:
+          return "not_implemented"
+      return "implemented" if any(b.get("isAssigned") is True for b in edge) else "partially_implemented"
+
+  - id: CTRL-INT-014
+    title: "Microsoft 365 Apps Security Baseline Assigned"
+    description: >
+      The Microsoft 365 Apps for enterprise security baseline must be assigned to managed
+      devices to harden Office macro, ActiveX and legacy authentication behaviour.
+    severity: MEDIUM
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.1.1"
+    rationale: "Office documents remain the most common malware delivery vector."
+    remediation: |
+      1. Intune > Endpoint security > Security baselines > Microsoft 365 Apps for enterprise
+      2. Create a profile from the latest baseline version
+      3. Assign to All Devices
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines
+    evaluate: |
+      baselines = data.get("intune_security_baselines", [])
+      if not baselines:
+          return "not_applicable"
+      office = [
+          b for b in baselines
+          if "microsoft 365 apps" in str(b.get("displayName", "")).lower()
+          or "office" in str(b.get("displayName", "")).lower()
+      ]
+      if not office:
+          return "not_implemented"
+      return "implemented" if any(b.get("isAssigned") is True for b in office) else "partially_implemented"
+
+  - id: CTRL-INT-015
+    title: "Security Baseline Conflict Resolution Reviewed"
+    description: >
+      Conflicting settings between security baselines, configuration profiles and Endpoint
+      Security policies must be resolved so the effective device configuration is the intended one.
+    severity: MEDIUM
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+    rationale: "Conflicts silently revert hardened values to weaker policy settings."
+    remediation: |
+      1. Intune > Devices > Configuration profiles > Monitor > Conflicts
+      2. Resolve each conflict by removing duplicate settings or narrowing assignments
+      3. Re-check after each baseline version update
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/configuration/device-profile-monitor
+    evaluate: |
+      conflicts = data.get("intune_policy_conflicts", [])
+      if conflicts is None:
+          return "not_applicable"
+      if not conflicts:
+          return "implemented"
+      return "partially_implemented" if len(conflicts) <= 5 else "not_implemented"
+
+  - id: CTRL-INT-016
+    title: "Security Baselines Kept on Latest Version"
+    description: >
+      Security baseline profiles must track the current baseline version rather than an
+      outdated one, so newly added Microsoft hardening settings are applied automatically.
+    severity: MEDIUM
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+    rationale: "Outdated baseline versions omit newly published mitigations."
+    remediation: |
+      1. Intune > Endpoint security > Security baselines
+      2. Compare each profile version with the latest published version
+      3. Create a new profile from the latest version and reassign, then retire the old profile
+    references:
+      - https://learn.microsoft.com/en-us/mem/intune/protect/security-baselines-configure
+    evaluate: |
+      baselines = data.get("intune_security_baselines", [])
+      if not baselines:
+          return "not_applicable"
+      current = [b for b in baselines if b.get("isLatestVersion") is True]
+      if len(current) == len(baselines):
+          return "implemented"
+      return "partially_implemented" if current else "not_implemented"
+
+  - id: CTRL-INT-017
+    title: "Windows LAPS Deployed for Local Administrator Passwords"
+    description: >
+      Windows Local Administrator Password Solution (LAPS) must be enabled through Intune or
+      the security baseline so local administrator passwords are unique, rotated and escrowed.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.4"
+      cis_m365_benchmark:
+        - "5.1.1"
+      zero_trust:
+        - "identity.least_privilege"
+      soc2:
+        - "CC6.1"
+    rationale: "Shared or static local admin passwords enable lateral movement across the estate."
+    remediation: |
+      1. Intune > Devices > Configuration > Windows LAPS policy (or enable via security baseline)
+      2. Set password length, complexity and rotation (30 days or less)
+      3. Enable backup directory to Entra ID or Active Directory
+      4. Assign to All Devices and verify passwords are escrowed
+    references:
+      - https://learn.microsoft.com/en-us/windows-server/identity/laps/laps-overview
+    evaluate: |
+      laps = data.get("intune_windows_laps_policies", [])
+      configs = data.get("intune_device_configurations", [])
+      if laps:
+          enabled = [p for p in laps if p.get("backupDirectory") not in (None, 0, "disabled")]
+          return "implemented" if enabled else "partially_implemented"
+      baseline_laps = [
+          c for c in configs
+          if "laps" in str(c.get("displayName", "")).lower()
+          or str(c.get("LAPS_EnableLAPS", "")).lower() == "true"
+      ]
+      if baseline_laps:
+          return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-INT-018
+    title: "Credential Guard and LSASS Protection Enabled"
+    description: >
+      Credential Guard and LSASS protection must be enabled through device configuration or
+      the Windows security baseline to prevent credential dumping tools such as Mimikatz.
+    severity: HIGH
+    category: intune
+    service: intune
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "4.1"
+      cis_m365_benchmark:
+        - "5.1.1"
+      zero_trust:
+        - "identity.credential_protection"
+      soc2:
+        - "CC6.1"
+    rationale: "Credential Guard isolates secrets so admin credential theft cannot be replayed."
+    remediation: |
+      1. Intune > Devices > Configuration > Windows Defender Credential Guard (or security baseline)
+      2. Set Credential Guard to Enabled with UEFI lock
+      3. Enable LSASS protection (RunAsPPL) via configuration profile
+      4. Assign to All Windows devices and verify posture
+    references:
+      - https://learn.microsoft.com/en-us/windows/security/identity-protection/credential-guard/
+    evaluate: |
+      configs = data.get("intune_device_configurations", [])
+      if not configs:
+          return "not_applicable"
+      cg = [
+          c for c in configs
+          if str(c.get("LSA_CredentialGuardEnabled", "")).lower() in ("1", "true", "enabled")
+          or "credential guard" in str(c.get("displayName", "")).lower()
+      ]
+      lsass = [
+          c for c in configs
+          if str(c.get("LSA_RunAsPPL", "")).lower() in ("1", "true", "enabled")
+          or "lsass" in str(c.get("displayName", "")).lower()
+      ]
+      if cg and lsass:
+          return "implemented"
+      if cg or lsass:
+          return "partially_implemented"
+      return "not_implemented"

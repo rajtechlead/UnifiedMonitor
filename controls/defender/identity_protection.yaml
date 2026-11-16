@@ -1,0 +1,248 @@
+# UniMonitor GRC Controls — Defender: Identity Protection (MDI)
+
+controls:
+  - id: CTRL-DEF-017
+    title: "Defender for Identity Sensors Deployed on Domain Controllers"
+    description: >
+      A Defender for Identity sensor must be installed on every domain controller and the sensor
+      service must report healthy, otherwise identity attacks on the domain are invisible.
+    severity: CRITICAL
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.1"
+      cis_m365_benchmark:
+        - "6.4.1"
+      zero_trust:
+        - "identity.threat_detection"
+      soc2:
+        - "CC7.2"
+    rationale: "Domain controllers are the highest-value target and the only reliable sensor location."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Identities > Sensors
+      2. Download and install the sensor on each domain controller
+      3. Use a group managed service account (gMSA) for the sensor
+      4. Verify all sensors show Healthy
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/deploy/deploy-sensor
+    evaluate: |
+      sensors = data.get("mdi_sensors", [])
+      if not sensors:
+          return "not_implemented"
+      healthy = [s for s in sensors if str(s.get("status", "")).lower() in ("healthy", "running")]
+      if len(healthy) == len(sensors):
+          return "implemented"
+      return "partially_implemented" if healthy else "not_implemented"
+
+  - id: CTRL-DEF-018
+    title: "Defender for Identity Alerts Integrated into XDR Incidents"
+    description: >
+      Defender for Identity alerts must be correlated into Microsoft Defender XDR incidents so
+      directory-based attacks are triaged alongside endpoint and email signals.
+    severity: HIGH
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.AE-02"
+      nist_800_53_r5:
+        - "IR-4"
+      cis_controls_v8:
+        - "13.1"
+      zero_trust:
+        - "identity.threat_detection"
+      soc2:
+        - "CC7.2"
+    rationale: "Isolated directory alerts miss the multi-stage pattern of a real intrusion."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Microsoft Defender XDR > Incidents
+      2. Confirm identity alerts flow into the unified incident queue
+      3. Tune alert suppression so the queue stays actionable
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/alerts-overview
+    evaluate: |
+      settings = data.get("mdi_integration", {})
+      if not settings:
+          return "not_applicable"
+      if settings.get("xdrIntegrationEnabled") is True:
+          return "implemented"
+      return "not_implemented"
+
+  - id: CTRL-DEF-019
+    title: "Defender for Identity Honeytoken Accounts Configured"
+    description: >
+      At least one honeytoken account must be configured in Defender for Identity so any
+      authentication attempt using it raises a high-confidence credential-theft alert.
+    severity: MEDIUM
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.1"
+      zero_trust:
+        - "identity.threat_detection"
+    rationale: "Honeytokens detect lateral movement with almost no false positives."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Identities > Honeytoken
+      2. Create a decoy user account with no real permissions
+      3. Confirm the account never signs in legitimately and monitor alerts
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/configure-honeytoken
+    evaluate: |
+      tokens = data.get("mdi_honeytokens", [])
+      if tokens is None:
+          return "not_applicable"
+      return "implemented" if tokens else "not_implemented"
+
+  - id: CTRL-DEF-020
+    title: "Sensitive and Honeytoken Accounts Tagged for Monitoring"
+    description: >
+      Tier-0 accounts, domain admins and executive accounts must be tagged as sensitive in
+      Defender for Identity so activity against them is prioritised and alerted.
+    severity: MEDIUM
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.15"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "5.4"
+      zero_trust:
+        - "identity.least_privilege"
+      soc2:
+        - "CC6.1"
+    rationale: "Priority tagging focuses limited analyst attention on the accounts that matter most."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Identities > Sensitive accounts
+      2. Tag domain admins, Tier-0 service accounts and executives
+      3. Review the sensitive group membership quarterly
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/manage-sensitive-honeytoken-accounts
+    evaluate: |
+      tagged = data.get("mdi_sensitive_accounts", [])
+      if tagged is None:
+          return "not_applicable"
+      return "implemented" if tagged else "not_implemented"
+
+  - id: CTRL-DEF-021
+    title: "Defender for Identity Sensor Uses Group Managed Service Account"
+    description: >
+      Defender for Identity sensors must run under a group managed service account (gMSA) or a
+      dedicated low-privilege account with a rotated password, not a shared admin credential.
+    severity: MEDIUM
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.4"
+      zero_trust:
+        - "identity.least_privilege"
+    rationale: "A domain-privileged static service password is a single point of total compromise."
+    remediation: |
+      1. Create a gMSA for the MDI sensor
+      2. Reconfigure each sensor service to use the gMSA
+      3. Remove any legacy user account previously used by the sensor
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/deploy/deploy-sensor
+    evaluate: |
+      sensors = data.get("mdi_sensors", [])
+      if not sensors:
+          return "not_applicable"
+      gmsa = [s for s in sensors if s.get("usesGmsa") is True]
+      if len(gmsa) == len(sensors):
+          return "implemented"
+      return "partially_implemented" if gmsa else "not_implemented"
+
+  - id: CTRL-DEF-022
+    title: "Identity Alerts Triage SLA Defined and Met"
+    description: >
+      A triage SLA must exist for Defender for Identity high-severity alerts (for example
+      acknowledgement within 4 hours) and current open alerts must fall inside it.
+    severity: HIGH
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.24"
+      nist_csf_2:
+        - "RS.MA-01"
+      nist_800_53_r5:
+        - "IR-4"
+      cis_controls_v8:
+        - "17.1"
+      soc2:
+        - "CC7.3"
+    rationale: "Untriaged identity alerts age into unresolved compromises."
+    remediation: |
+      1. Record the triage SLA for high and critical identity alerts
+      2. Route MDI alerts to the SOC queue with an owner
+      3. Review breaches of the SLA weekly
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/alerts-overview
+    evaluate: |
+      mttr = data.get("mdi_mean_time_to_acknowledge_hours")
+      if mttr is None:
+          return "not_applicable"
+      if mttr <= 4:
+          return "implemented"
+      return "partially_implemented" if mttr <= 24 else "not_implemented"
+
+  - id: CTRL-DEF-023
+    title: "Defender for Identity Health Alerts Resolved"
+    description: >
+      Sensor health and configuration alerts raised by Defender for Identity must be resolved so
+      coverage gaps do not silently accumulate.
+    severity: MEDIUM
+    category: defender
+    service: defender_identity
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.1"
+      soc2:
+        - "CC7.1"
+    rationale: "A sensor that is offline provides no detection and no warning."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Identities > Health issues
+      2. Resolve outstanding sensor and directory service account warnings
+      3. Monitor health issues weekly
+    references:
+      - https://learn.microsoft.com/en-us/defender-for-identity/health-alerts
+    evaluate: |
+      issues = data.get("mdi_health_issues", [])
+      if issues is None:
+          return "not_applicable"
+      if not issues:
+          return "implemented"
+      return "partially_implemented" if len(issues) <= 2 else "not_implemented"

@@ -1,0 +1,336 @@
+# UniMonitor GRC Controls — Defender: Office 365 Protection
+
+controls:
+  - id: CTRL-DEF-009
+    title: "Zero-Hour Auto Purge (ZAP) Enabled"
+    description: >
+      Zero-hour auto purge must be enabled for Exchange Online Protection and Defender for Office 365
+      so malicious messages already delivered are retroactively removed from mailboxes.
+    severity: HIGH
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-3"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.5"
+      soc2:
+        - "CC6.8"
+    rationale: "Detonation verdicts often arrive after delivery; ZAP closes that window."
+    remediation: |
+      1. Microsoft 365 Defender > Policies & rules > Threat policies > Anti-malware
+      2. Ensure Zero-hour auto purge for malware is enabled for email and Teams
+      3. Verify ZAP for phishing is enabled in the anti-phishing policy
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/zero-hour-auto-purge
+    evaluate: |
+      anti_malware = data.get("anti_malware_policies", [])
+      anti_phish = data.get("anti_phishing_policies", [])
+      if not anti_malware and not anti_phish:
+          return "not_applicable"
+      zap_malware = [p for p in anti_malware if p.get("ZapEnabled") is True]
+      zap_phish = [p for p in anti_phish if p.get("PhishZapEnabled") is True]
+      if zap_malware and zap_phish:
+          return "implemented"
+      return "partially_implemented" if zap_malware or zap_phish else "not_implemented"
+
+  - id: CTRL-DEF-010
+    title: "Safe Attachments Enabled for SharePoint, OneDrive and Teams"
+    description: >
+      Safe Attachments must cover SharePoint, OneDrive and Microsoft Teams in addition to email,
+      so files shared in collaboration workloads are detonated before users open them.
+    severity: HIGH
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+        - "A.8.23"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-3"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.6"
+      soc2:
+        - "CC6.8"
+    rationale: "File-sharing workloads bypass email filtering and are a growing malware path."
+    remediation: |
+      1. Microsoft 365 Defender > Threat policies > Safe Attachments
+      2. Edit the default policy > enable SharePoint, OneDrive and Microsoft Teams
+      3. Ensure the policy is applied to all recipients
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/safe-attachments-for-spo-odfb-teams-about
+    evaluate: |
+      policies = data.get("safe_attachments_policies", [])
+      if not policies:
+          return "not_implemented"
+      workload = [
+          p for p in policies
+          if p.get("EnableForInternalSenders") is True
+          or str(p.get("Workload", "")).lower() in ("sharepoint", "onedrive", "teams", "spo,odfb,teams")
+      ]
+      if not workload:
+          return "partially_implemented"
+      return "implemented" if any(p.get("IsApplied", True) for p in workload) else "partially_implemented"
+
+  - id: CTRL-DEF-011
+    title: "Attack Simulation Training Configured"
+    description: >
+      Attack Simulation Training must be configured with a recurring phishing simulation campaign
+      so user susceptibility is measured and training is targeted at repeat clickers.
+    severity: MEDIUM
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.7.2.2"
+      nist_csf_2:
+        - "PR.AT-01"
+      nist_800_53_r5:
+        - "AT-2"
+      cis_controls_v8:
+        - "14.1"
+      cis_m365_benchmark:
+        - "2.1.1"
+      soc2:
+        - "CC1.4"
+    rationale: "Measured phishing susceptibility is the only reliable input for targeted awareness training."
+    remediation: |
+      1. Microsoft 365 Defender > Attack simulation training
+      2. Create a simulation using a credential-phish payload
+      3. Schedule monthly or quarterly recurrences for all users
+      4. Assign training automatically to users who fall for the simulation
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/attack-simulation-training-get-started
+    evaluate: |
+      simulations = data.get("attack_simulation_trainings", [])
+      if simulations is None:
+          return "not_applicable"
+      recurring = [
+          s for s in simulations
+          if str(s.get("status", "")).lower() in ("running", "scheduled", "completed")
+      ]
+      if not recurring:
+          return "not_implemented"
+      return "implemented" if any(s.get("isRecurring") is True for s in recurring) else "partially_implemented"
+
+  - id: CTRL-DEF-012
+    title: "User-Reported Message Add-In Deployed"
+    description: >
+      The Report Message or Report Phishing add-in must be deployed to Outlook clients so users
+      can submit suspicious messages for automated triage and tenant-level tuning.
+    severity: MEDIUM
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.24"
+      nist_csf_2:
+        - "DE.AE-02"
+      nist_800_53_r5:
+        - "IR-6"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.4"
+      soc2:
+        - "CC7.3"
+    rationale: "User reports are the fastest signal for campaigns that bypass automated filters."
+    remediation: |
+      1. Microsoft 365 admin center > Settings > Integrated apps > Report Message add-in
+      2. Deploy to all users for Outlook on the web, Windows, Mac and mobile
+      3. Route reports to the user-reported messages queue in Defender
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/submissions-users-report-message-add-in-configure
+    evaluate: |
+      addins = data.get("outlook_addins", [])
+      if addins is None:
+          return "not_applicable"
+      reported = [
+          a for a in addins
+          if "report" in str(a.get("displayName", "")).lower()
+      ]
+      if not reported:
+          return "not_implemented"
+      deployed_all = [
+          a for a in reported
+          if str(a.get("assignment", "")).lower() in ("all", "everyone", "allusers")
+      ]
+      return "implemented" if deployed_all else "partially_implemented"
+
+  - id: CTRL-DEF-013
+    title: "Anti-Phishing Impersonation Protection Configured"
+    description: >
+      Anti-phishing policies must protect named executive users, domains and mailbox intelligence
+      so display-name and lookalike-domain impersonation is quarantined rather than delivered.
+    severity: HIGH
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.1"
+      soc2:
+        - "CC6.8"
+    rationale: "Business email compromise relies on impersonation that generic filters do not catch."
+    remediation: |
+      1. Microsoft 365 Defender > Threat policies > Anti-phishing
+      2. Enable user impersonation protection and add executives and finance contacts
+      3. Enable domain impersonation protection for owned and key partner domains
+      4. Enable mailbox intelligence and set the action to quarantine
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/anti-phishing-policies-about
+    evaluate: |
+      policies = data.get("anti_phishing_policies", [])
+      if not policies:
+          return "not_implemented"
+      protected = [
+          p for p in policies
+          if p.get("EnableTargetedUserProtection") is True
+          and p.get("EnableTargetedDomainsProtection") is True
+      ]
+      if protected:
+          return "implemented"
+      partial = [
+          p for p in policies
+          if p.get("EnableTargetedUserProtection") is True
+          or p.get("EnableTargetedDomainsProtection") is True
+      ]
+      return "partially_implemented" if partial else "not_implemented"
+
+  - id: CTRL-DEF-014
+    title: "Preset Security Policies Applied (Standard or Strict)"
+    description: >
+      Standard or Strict preset security policies must be applied to all users so Microsoft's
+      recommended EOP and Defender for Office 365 settings are enforced consistently.
+    severity: HIGH
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.1"
+      soc2:
+        - "CC6.8"
+    rationale: "Hand-tuned policies drift; presets keep baseline protection current."
+    remediation: |
+      1. Microsoft 365 Defender > Threat policies > Preset security policies
+      2. Enable Standard protection for all recipients (Strict for high-value users)
+      3. Confirm no custom policy silently overrides the preset settings
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/preset-security-policies
+    evaluate: |
+      presets = data.get("preset_security_policies", [])
+      if not presets:
+          return "not_implemented"
+      applied = [
+          p for p in presets
+          if p.get("isEnabled") is True
+          and str(p.get("scope", "")).lower() in ("all", "allrecipients", "all users")
+      ]
+      if applied:
+          return "implemented"
+      enabled = [p for p in presets if p.get("isEnabled") is True]
+      return "partially_implemented" if enabled else "not_implemented"
+
+  - id: CTRL-DEF-015
+    title: "Quarantine Policies and Admin Review Configured"
+    description: >
+      Quarantine policies must notify users of held messages and restrict release to administrators,
+      with admin review enabled for phishing and high-confidence malware verdicts.
+    severity: MEDIUM
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.7"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-3"
+      cis_controls_v8:
+        - "9.6"
+      cis_m365_benchmark:
+        - "2.1.3"
+      soc2:
+        - "CC7.3"
+    rationale: "Unrestricted self-release from quarantine lets users deliver their own malware."
+    remediation: |
+      1. Microsoft 365 Defender > Threat policies > Quarantine policies
+      2. Create policies that allow user request release but require admin approval
+      3. Enable quarantine notification to users
+      4. Enable admin review for phishing, malware and high-confidence phish verdicts
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/quarantine-policies
+    evaluate: |
+      policies = data.get("quarantine_policies", [])
+      if not policies:
+          return "not_implemented"
+      restricted = [
+          p for p in policies
+          if str(p.get("esnEnabled", "")).lower() == "true"
+          or p.get("notifySender") is True
+          or p.get("adminReviewRequired") is True
+      ]
+      if restricted:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-DEF-016
+    title: "Automated Investigation and Response Enabled"
+    description: >
+      Defender for Office 365 Plan 2 automated investigation and response (AIR) must be enabled
+      so alerts are triaged and remediated without analyst delay.
+    severity: MEDIUM
+    category: defender
+    service: defender_office
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "RS.MA-01"
+      nist_800_53_r5:
+        - "IR-4"
+      cis_controls_v8:
+        - "17.1"
+      cis_m365_benchmark:
+        - "2.1.7"
+      soc2:
+        - "CC7.4"
+    rationale: "Automated remediation shortens dwell time for commodity phishing campaigns."
+    remediation: |
+      1. Microsoft 365 Defender > Settings > Email & collaboration > Automated investigation and response
+      2. Enable AIR for Office 365 content
+      3. Set the remediation approval mode (full automation for commodity alerts)
+    references:
+      - https://learn.microsoft.com/en-us/defender-office-365/air-about
+    evaluate: |
+      settings = data.get("air_settings", {})
+      if not settings:
+          return "not_applicable"
+      if settings.get("isEnabled") is True:
+          return "implemented"
+      return "not_implemented"

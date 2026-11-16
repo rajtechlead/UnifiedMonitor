@@ -1,0 +1,337 @@
+# UniMonitor GRC Controls — Copilot Studio Governance
+
+controls:
+  - id: CTRL-COP-009
+    title: "Copilot Studio Agents Hosted in Dedicated Environments"
+    description: >
+      Copilot Studio agents must be created in governed Power Platform environments rather than the
+      default environment, so DLP policies, roles and ALM apply to them.
+    severity: HIGH
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.6.2"
+        - "A.9.1"
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "ID.AM-02"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "2.1"
+      soc2:
+        - "CC6.1"
+    rationale: "The default environment has no governance boundary and cannot be safely constrained."
+    remediation: |
+      1. Power Platform admin center > Environments > create a governed environment per business unit
+      2. Block agent creation in the default environment via environment security
+      3. Move existing agents into governed environments
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/requirements-licensing-subscriptions
+    evaluate: |
+      agents = data.get("copilot_studio_agents", [])
+      if not agents:
+          return "not_applicable"
+      default_env = [
+          a for a in agents
+          if str(a.get("environmentName", "")).lower() in ("default", "default environment")
+          or a.get("isDefaultEnvironment") is True
+      ]
+      if not default_env:
+          return "implemented"
+      return "partially_implemented" if len(default_env) < len(agents) else "not_implemented"
+
+  - id: CTRL-COP-010
+    title: "Copilot Studio DLP Policies Enforced"
+    description: >
+      A Power Platform data loss prevention policy must cover the Copilot Studio connector and
+      separate business from non-business connectors, blocking data mixing in agents.
+    severity: HIGH
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.7.2"
+        - "A.9.2"
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "AC-4"
+      cis_controls_v8:
+        - "3.13"
+      soc2:
+        - "CC6.7"
+    rationale: "An ungoverned agent can combine HR data with a public AI connector in one flow."
+    remediation: |
+      1. Power Platform admin center > Policies > Data policies
+      2. Add Copilot Studio and its connectors to the policy
+      3. Classify connectors as Business, Non-Business or Blocked
+      4. Apply the policy to all environments hosting agents
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/dlppolicy
+    evaluate: |
+      policies = data.get("power_platform_dlp_policies", [])
+      if not policies:
+          return "not_implemented"
+      covers = [
+          p for p in policies
+          if "copilot" in str(p.get("displayName", "")).lower()
+          or p.get("coversCopilotStudio") is True
+      ]
+      enforced = [p for p in covers if str(p.get("state", "")).lower() in ("enabled", "on", "active")]
+      if enforced:
+          return "implemented"
+      return "partially_implemented" if covers else "not_implemented"
+
+  - id: CTRL-COP-011
+    title: "Agent Connectors Restricted to Approved List"
+    description: >
+      Agents must only use connectors on the organisational allowlist; unapproved connectors
+      (personal storage, consumer AI, social) must be blocked by policy.
+    severity: HIGH
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.6.2"
+        - "A.9.2"
+      iso27001_2022:
+        - "A.8.19"
+      nist_csf_2:
+        - "PR.PS-05"
+      nist_800_53_r5:
+        - "CM-7"
+      cis_controls_v8:
+        - "2.3"
+      soc2:
+        - "CC6.6"
+    rationale: "Connectors are the data path out of the tenant; each one is an exfiltration route."
+    remediation: |
+      1. Define the approved connector list for agent builders
+      2. Mark unapproved connectors as Blocked in the DLP policy
+      3. Review agent connector usage monthly
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/security-and-governance
+    evaluate: |
+      connectors = data.get("copilot_studio_connector_usage", [])
+      approved = data.get("copilot_studio_approved_connectors", [])
+      if not connectors:
+          return "not_applicable"
+      approved_names = {str(c).lower() for c in approved}
+      unapproved = [
+          c for c in connectors
+          if str(c.get("connectorName", "")).lower() not in approved_names
+      ]
+      if not unapproved:
+          return "implemented"
+      return "partially_implemented" if len(unapproved) <= 3 else "not_implemented"
+
+  - id: CTRL-COP-012
+    title: "Agent Authentication Required (No Anonymous Access)"
+    description: >
+      Agents exposed to users or channels must require Microsoft Entra ID authentication; anonymous
+      access must be disabled so conversations cannot be conducted unauthenticated.
+    severity: CRITICAL
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.8.1"
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-01"
+      nist_800_53_r5:
+        - "IA-2"
+      cis_controls_v8:
+        - "6.3"
+      zero_trust:
+        - "identity.verify_explicitly"
+      soc2:
+        - "CC6.1"
+    rationale: "An anonymous agent leaks tenant data to anyone who finds its endpoint."
+    remediation: |
+      1. In each agent > Settings > Security > Authentication
+      2. Select "Authenticate with Microsoft" (or manual Entra ID configuration)
+      3. Set "Require users to sign in" to On
+      4. Disable anonymous access on every channel
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/configuration-authentication-azure-ad
+    evaluate: |
+      agents = data.get("copilot_studio_agents", [])
+      if not agents:
+          return "not_applicable"
+      anonymous = [
+          a for a in agents
+          if a.get("requiresAuthentication") is False
+          or str(a.get("authenticationMode", "")).lower() in ("none", "noauthentication")
+      ]
+      if not anonymous:
+          return "implemented"
+      return "partially_implemented" if len(anonymous) < len(agents) else "not_implemented"
+
+  - id: CTRL-COP-013
+    title: "Agent Sharing Restricted to Internal Users"
+    description: >
+      Agent sharing must be limited to internal users or named security groups; "anyone with the
+      link" and cross-tenant sharing must be disabled.
+    severity: HIGH
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.8.1"
+        - "A.9.1"
+      iso27001_2022:
+        - "A.5.15"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-3"
+      cis_controls_v8:
+        - "6.8"
+      soc2:
+        - "CC6.1"
+    rationale: "Link-based sharing turns an internal agent into a public data interface."
+    remediation: |
+      1. Copilot Studio > Settings > Security > Sharing
+      2. Disable "Anyone with the link" sharing
+      3. Restrict sharing to specific security groups
+      4. Review each agent's sharing list
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/admin-share-bots
+    evaluate: |
+      agents = data.get("copilot_studio_agents", [])
+      if not agents:
+          return "not_applicable"
+      open_share = [
+          a for a in agents
+          if str(a.get("sharingScope", "")).lower() in ("anyone", "anyonewithlink", "public")
+      ]
+      if not open_share:
+          return "implemented"
+      return "partially_implemented" if len(open_share) < len(agents) else "not_implemented"
+
+  - id: CTRL-COP-014
+    title: "Agent Conversation Transcripts Logged and Retained"
+    description: >
+      Conversation transcripts and analytics must be enabled and retained for the audit period so
+      agent interactions are reviewable for data leakage and misuse.
+    severity: MEDIUM
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.8.2"
+      iso27001_2022:
+        - "A.8.15"
+      nist_csf_2:
+        - "DE.AE-03"
+      nist_800_53_r5:
+        - "AU-11"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC7.2"
+      gdpr:
+        - "Art.30"
+    rationale: "Without transcripts there is no evidence of what data an agent disclosed."
+    remediation: |
+      1. Copilot Studio > Settings > Analytics and conversation transcripts
+      2. Enable transcript logging for all agents
+      3. Confirm retention meets the organisational audit requirement (365 days or more)
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/analytics-overview
+    evaluate: |
+      settings = data.get("copilot_studio_logging_settings", {})
+      if not settings:
+          return "not_implemented"
+      if settings.get("transcriptsEnabled") is True and (settings.get("retentionDays") or 0) >= 365:
+          return "implemented"
+      return "partially_implemented" if settings.get("transcriptsEnabled") is True else "not_implemented"
+
+  - id: CTRL-COP-015
+    title: "Agent Lifecycle and Inactive Agent Review"
+    description: >
+      Agents must have an owner recorded and be reviewed at least quarterly, with inactive or
+      orphaned agents disabled so stale agents cannot keep answering with old data access.
+    severity: MEDIUM
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.9.1"
+        - "A.10.1"
+      iso27001_2022:
+        - "A.5.9"
+      nist_csf_2:
+        - "ID.AM-02"
+      nist_800_53_r5:
+        - "CM-8"
+      cis_controls_v8:
+        - "2.1"
+      soc2:
+        - "CC6.1"
+    rationale: "Orphaned agents keep privileged connections long after the business need ends."
+    remediation: |
+      1. Record an owner for every published agent
+      2. Review last-activity dates quarterly and disable agents unused for 90 days
+      3. Remove agents whose owner has left the organisation
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/security-and-governance
+    evaluate: |
+      agents = data.get("copilot_studio_agents", [])
+      if not agents:
+          return "not_applicable"
+      unowned = [a for a in agents if not a.get("owner")]
+      inactive = [a for a in agents if (a.get("daysSinceLastActivity") or 0) > 90]
+      stale = {id(a) for a in unowned} | {id(a) for a in inactive}
+      if not stale:
+          return "implemented"
+      return "partially_implemented" if len(stale) <= 3 else "not_implemented"
+
+  - id: CTRL-COP-016
+    title: "Agent Knowledge Sources Use Only Governed Content"
+    description: >
+      Agents must be grounded on governed knowledge (SharePoint sites with sensitivity labels,
+      approved connectors) rather than unmanaged file shares or personal storage.
+    severity: MEDIUM
+    category: governance
+    service: copilot_studio
+    compliance_mapping:
+      iso42001:
+        - "A.7.2"
+        - "A.8.2"
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "AC-4"
+      cis_controls_v8:
+        - "3.13"
+      soc2:
+        - "CC6.7"
+    rationale: "Ungoverned grounding data bypasses label-based protection and DLP."
+    remediation: |
+      1. Inventory each agent's knowledge sources
+      2. Replace unmanaged sources with labelled SharePoint or approved connectors
+      3. Remove personal OneDrive or consumer storage sources
+    references:
+      - https://learn.microsoft.com/en-us/microsoft-copilot-studio/knowledge-copilot-studio
+    evaluate: |
+      sources = data.get("copilot_studio_knowledge_sources", [])
+      if not sources:
+          return "not_applicable"
+      ungoverned = [
+          s for s in sources
+          if str(s.get("type", "")).lower() in ("personalfiles", "onedrive", "consumer", "publicweb")
+          or s.get("isGoverned") is False
+      ]
+      if not ungoverned:
+          return "implemented"
+      return "partially_implemented" if len(ungoverned) <= 3 else "not_implemented"

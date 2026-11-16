@@ -1,0 +1,297 @@
+# UniMonitor GRC Controls — Purview: Insider Risk Management
+
+controls:
+  - id: CTRL-PUR-007
+    title: "Insider Risk Analytics and Audit Logging Enabled"
+    description: >
+      Audit logging and Insider Risk analytics must be enabled as the prerequisite for
+      risk scoring; analytics surfaces the top exfiltration risks before a policy is tuned.
+    severity: HIGH
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.15"
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.AE-04"
+      nist_800_53_r5:
+        - "AU-6"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC7.2"
+      gdpr:
+        - "Art.32"
+    rationale: "Without audit and analytics, insider activity has no baseline to deviate from."
+    remediation: |
+      1. Purview > Audit > confirm audit is on for all workloads
+      2. Purview > Insider Risk Management > Settings > Analytics
+      3. Enable analytics and run it for at least 30 days before enforcing policies
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-settings
+    evaluate: |
+      settings = data.get("insider_risk_settings", {})
+      if not settings:
+          return "not_implemented"
+      if settings.get("analyticsEnabled") is True and settings.get("auditEnabled") is not False:
+          return "implemented"
+      return "partially_implemented" if settings.get("auditEnabled") is not False else "not_implemented"
+
+  - id: CTRL-PUR-008
+    title: "Insider Risk Policy Covers All Indicator Groups"
+    description: >
+      At least one active insider risk policy must include data theft, data leak and security
+      policy violation indicators rather than a single narrow scenario.
+    severity: HIGH
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.7"
+        - "A.8.12"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "AU-6"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC7.2"
+      gdpr:
+        - "Art.33"
+    rationale: "Single-scenario policies miss the majority of insider exfiltration behaviour."
+    remediation: |
+      1. Purview > Insider Risk Management > Policies
+      2. Open each active policy and review selected indicators
+      3. Add data theft, data leak and security policy violation groups
+      4. Save and monitor for new alerts
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-policies
+    evaluate: |
+      policies = data.get("insider_risk_policies", [])
+      if not policies:
+          return "not_implemented"
+      active = [p for p in policies if str(p.get("status", "")).lower() in ("active", "enabled")]
+      if not active:
+          return "not_implemented"
+      groups = ("dataTheft", "dataLeak", "securityPolicyViolation")
+      full = [
+          p for p in active
+          if all(g in (p.get("indicators") or {}) for g in groups)
+      ]
+      if full:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-PUR-009
+    title: "Priority User Groups and Critical Assets Defined"
+    description: >
+      Insider risk policies must target priority user groups and prioritised critical assets so
+      alerts focus on the users and content with the greatest business impact.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.7"
+      nist_csf_2:
+        - "ID.RA-05"
+      nist_800_53_r5:
+        - "RA-3"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC3.2"
+      gdpr:
+        - "Art.32"
+    rationale: "Untargeted policies generate noise and delay the alerts that matter."
+    remediation: |
+      1. Purview > Insider Risk Management > Settings > Priority user groups
+      2. Add executives, finance, HR, administrators and departing employees
+      3. Define priority SharePoint sites, sensitivity labels and file types
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-settings
+    evaluate: |
+      groups = data.get("insider_risk_priority_user_groups", [])
+      assets = data.get("insider_risk_priority_assets", [])
+      if groups and assets:
+          return "implemented"
+      return "partially_implemented" if groups or assets else "not_implemented"
+
+  - id: CTRL-PUR-010
+    title: "Insider Risk Alert Triage and Case Workflow Active"
+    description: >
+      Alerts must be triaged into cases with a named owner and a resolution SLA, so confirmed
+      insider events are investigated rather than left in the queue.
+    severity: HIGH
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.24"
+        - "A.5.25"
+      nist_csf_2:
+        - "RS.MA-01"
+      nist_800_53_r5:
+        - "IR-4"
+      cis_controls_v8:
+        - "17.1"
+      soc2:
+        - "CC7.3"
+    rationale: "An untriaged insider alert is indistinguishable from no policy at all."
+    remediation: |
+      1. Assign insider risk case owners (HR, legal, security)
+      2. Define SLA for alert triage (for example 48 hours)
+      3. Review open alerts weekly and record outcomes
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-cases
+    evaluate: |
+      alerts = data.get("insider_risk_open_alerts")
+      if alerts is None:
+          return "not_applicable"
+      if alerts == 0:
+          return "implemented"
+      return "partially_implemented" if alerts <= 10 else "not_implemented"
+
+  - id: CTRL-PUR-011
+    title: "Insider Risk Anonymisation Configured"
+    description: >
+      Pseudonymisation must be configured for the appropriate audience so reviewers cannot see
+      user identities, protecting privacy and preserving impartiality in investigations.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.34"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.13"
+      gdpr:
+        - "Art.5"
+        - "Art.25"
+      soc2:
+        - "CC6.7"
+    rationale: "Insider risk data is highly sensitive personal data and must be minimised by design."
+    remediation: |
+      1. Purview > Insider Risk Management > Settings > Privacy
+      2. Enable pseudonymised names for the reviewer audience
+      3. Restrict de-anonymisation to the compliance role only
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-settings
+    evaluate: |
+      privacy = data.get("insider_risk_privacy_settings", {})
+      if not privacy:
+          return "not_implemented"
+      if privacy.get("anonymizeUsers") is True:
+          return "implemented"
+      return "partially_implemented" if privacy.get("anonymizeUsers") is False else "not_implemented"
+
+  - id: CTRL-PUR-012
+    title: "Adaptive Protection Integrated with DLP and Conditional Access"
+    description: >
+      Adaptive Protection should connect insider risk levels to Data Loss Prevention and
+      Conditional Access so elevated-risk users receive stricter controls automatically.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.12"
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-4"
+      cis_controls_v8:
+        - "3.13"
+      zero_trust:
+        - "identity.risk_based_access"
+      soc2:
+        - "CC6.7"
+    rationale: "Static controls treat every user the same; risk-adaptive controls respond to behaviour."
+    remediation: |
+      1. Purview > Insider Risk Management > Settings > Adaptive Protection
+      2. Enable the integration and confirm the insider risk level is applied
+      3. Reference the risk level in a DLP policy and a Conditional Access policy
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-adaptive-protection
+    evaluate: |
+      adaptive = data.get("insider_risk_adaptive_protection", {})
+      if not adaptive:
+          return "not_implemented"
+      if adaptive.get("enabled") is True and adaptive.get("appliedToDlp") is True:
+          return "implemented"
+      return "partially_implemented" if adaptive.get("enabled") is True else "not_implemented"
+
+  - id: CTRL-PUR-013
+    title: "HR and Legal Connectors Configured for Insider Risk"
+    description: >
+      A connector for HR data (or an equivalent manual import) must be configured so resignation
+      and termination signals can trigger policy evaluation.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.7"
+        - "A.7.4"
+      nist_csf_2:
+        - "PR.IP-09"
+      nist_800_53_r5:
+        - "PS-4"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC1.4"
+    rationale: "Departing employees are the highest-frequency insider exfiltration scenario."
+    remediation: |
+      1. Purview > Data connectors > HR connector (or import a termination CSV)
+      2. Map the termination and resignation attributes
+      3. Confirm the policy reacts to a test termination record
+    references:
+      - https://learn.microsoft.com/en-us/purview/import-hr-data
+    evaluate: |
+      connectors = data.get("insider_risk_connectors", [])
+      if connectors is None:
+          return "not_applicable"
+      hr = [c for c in connectors if str(c.get("type", "")).lower() in ("hr", "hrdata", "hris")]
+      return "implemented" if hr else "not_implemented"
+
+  - id: CTRL-PUR-014
+    title: "Insider Risk Indicators Reviewed Quarterly"
+    description: >
+      Insider risk indicator thresholds and selected indicators must be reviewed at least quarterly
+      so detections stay aligned with current business processes and false-positive volume.
+    severity: LOW
+    category: data_protection
+    service: purview_insider_risk
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.7"
+      nist_csf_2:
+        - "ID.RA-05"
+      nist_800_53_r5:
+        - "CA-7"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC4.1"
+    rationale: "Unreviewed detections drift into either noise or blind spots."
+    remediation: |
+      1. Record the date of the last indicator review
+      2. Review alert volume and false-positive rate per indicator
+      3. Adjust thresholds and document the decision
+    references:
+      - https://learn.microsoft.com/en-us/purview/insider-risk-management-settings
+    evaluate: |
+      reviewed = data.get("insider_risk_last_reviewed_days")
+      if reviewed is None:
+          return "not_applicable"
+      if reviewed <= 90:
+          return "implemented"
+      return "partially_implemented" if reviewed <= 180 else "not_implemented"

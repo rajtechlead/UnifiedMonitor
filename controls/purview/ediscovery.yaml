@@ -1,0 +1,237 @@
+# UniMonitor GRC Controls — Purview: eDiscovery
+
+controls:
+  - id: CTRL-PUR-015
+    title: "eDiscovery Role Group Membership Restricted"
+    description: >
+      Membership of eDiscovery Manager and eDiscovery Administrator role groups must be limited to
+      named legal and compliance staff, because these roles can read and export any mailbox content.
+    severity: HIGH
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.15"
+        - "A.8.2"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "5.4"
+      cis_m365_benchmark:
+        - "1.3.1"
+      soc2:
+        - "CC6.1"
+      gdpr:
+        - "Art.32"
+    rationale: "eDiscovery roles bypass mailbox permissions and are a primary data-exfiltration path."
+    remediation: |
+      1. Purview > Roles & scopes > Role groups > eDiscovery Manager
+      2. Remove non-essential members and any broad group nesting
+      3. Confirm only legal or compliance staff hold the role
+      4. Review membership quarterly
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc-permissions
+    evaluate: |
+      groups = data.get("ediscovery_role_groups", [])
+      if groups is None:
+          return "not_applicable"
+      members = []
+      for g in groups:
+          members.extend(g.get("members", []))
+      if not members:
+          return "not_implemented"
+      return "implemented" if len(members) <= 5 else "partially_implemented"
+
+  - id: CTRL-PUR-016
+    title: "eDiscovery Cases and Holds Audited"
+    description: >
+      eDiscovery case creation, hold changes and exports must be audited and the audit records
+      retained for at least one year so investigations are defensible.
+    severity: HIGH
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.15"
+        - "A.5.28"
+      nist_csf_2:
+        - "DE.AE-03"
+      nist_800_53_r5:
+        - "AU-6"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC7.3"
+      hipaa:
+        - "164.312(b)"
+      gdpr:
+        - "Art.30"
+    rationale: "An investigation whose own handling is unaudited cannot withstand legal challenge."
+    remediation: |
+      1. Purview > Audit > confirm eDiscovery activities are recorded
+      2. Verify the audit retention policy keeps records for at least 365 days
+      3. Export audit records for any closed case
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc
+    evaluate: |
+      audit = data.get("ediscovery_audit_settings", {})
+      if not audit:
+          return "not_implemented"
+      if audit.get("auditEnabled") is True and (audit.get("retentionDays") or 0) >= 365:
+          return "implemented"
+      return "partially_implemented" if audit.get("auditEnabled") is True else "not_implemented"
+
+  - id: CTRL-PUR-017
+    title: "Litigation Hold Applied to Sensitive Custodians"
+    description: >
+      Mailboxes of executives, finance and legal custodians must be placed on litigation hold or
+      have a retention policy that preserves content independently of user deletion.
+    severity: HIGH
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.28"
+        - "A.8.10"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "AU-11"
+      cis_controls_v8:
+        - "3.13"
+      soc2:
+        - "CC7.3"
+      pci_dss_v4:
+        - "10.5.1"
+    rationale: "Users who can delete their own records can destroy evidence before a hold is issued."
+    remediation: |
+      1. Purview > eDiscovery > create a case and add the custodian set
+      2. Place the custodians on hold (or use a retention policy with preservation lock)
+      3. Confirm the hold status in the case
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc-create-ediscovery-hold
+    evaluate: |
+      holds = data.get("ediscovery_holds", [])
+      if holds is None:
+          return "not_applicable"
+      active = [h for h in holds if str(h.get("status", "")).lower() in ("active", "on", "applied")]
+      if active:
+          return "implemented"
+      return "partially_implemented" if holds else "not_implemented"
+
+  - id: CTRL-PUR-018
+    title: "eDiscovery Premium Custodian Data Sources Mapped"
+    description: >
+      Custodian data sources (mailbox, OneDrive, SharePoint sites) must be mapped in each
+      eDiscovery Premium case so collection is complete and defensible.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.28"
+      nist_csf_2:
+        - "DE.AE-03"
+      nist_800_53_r5:
+        - "AU-6"
+      cis_controls_v8:
+        - "8.11"
+      soc2:
+        - "CC7.3"
+    rationale: "Incomplete data source mapping silently omits evidence."
+    remediation: |
+      1. Open the case > Data sources
+      2. Add each custodian and map mailbox, OneDrive and relevant sites
+      3. Record unmapped sources with a documented rationale
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc-data-sources
+    evaluate: |
+      cases = data.get("ediscovery_cases", [])
+      if cases is None:
+          return "not_applicable"
+      if not cases:
+          return "not_implemented"
+      mapped = [
+          c for c in cases
+          if c.get("custodianDataSourcesMapped") is True
+      ]
+      if len(mapped) == len(cases):
+          return "implemented"
+      return "partially_implemented" if mapped else "not_implemented"
+
+  - id: CTRL-PUR-019
+    title: "eDiscovery Review Sets and Export Controls Used"
+    description: >
+      Collected content must be reviewed in review sets and exports restricted to approved
+      reviewers, so bulk sensitive data does not leave the platform unreviewed.
+    severity: MEDIUM
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.28"
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "AC-4"
+      cis_controls_v8:
+        - "3.13"
+      soc2:
+        - "CC6.7"
+      gdpr:
+        - "Art.5"
+    rationale: "Unreviewed exports are both a privacy incident risk and a weak legal position."
+    remediation: |
+      1. In each case, add collected items to a review set instead of exporting directly
+      2. Apply review tags and redaction before export
+      3. Restrict the export role to named reviewers
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc-review
+    evaluate: |
+      cases = data.get("ediscovery_cases", [])
+      if not cases:
+          return "not_applicable"
+      reviewed = [
+          c for c in cases
+          if c.get("hasReviewSet") is True
+      ]
+      if reviewed:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-PUR-020
+    title: "eDiscovery Access Reviewed Quarterly"
+    description: >
+      eDiscovery role assignments and open cases must be reviewed at least quarterly, closing
+      stale cases and removing access that is no longer required.
+    severity: LOW
+    category: data_protection
+    service: purview_ediscovery
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.18"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-2"
+      cis_controls_v8:
+        - "5.3"
+      soc2:
+        - "CC6.2"
+    rationale: "Stale investigation access becomes standing access to the entire mailbox estate."
+    remediation: |
+      1. Record the last access review date
+      2. Close cases older than the retention requirement
+      3. Remove role members who no longer need investigation access
+    references:
+      - https://learn.microsoft.com/en-us/purview/edisc-permissions
+    evaluate: |
+      reviewed = data.get("ediscovery_last_access_review_days")
+      if reviewed is None:
+          return "not_applicable"
+      if reviewed <= 90:
+          return "implemented"
+      return "partially_implemented" if reviewed <= 180 else "not_implemented"
