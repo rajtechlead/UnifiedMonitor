@@ -7,7 +7,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["8.1"]
       iso27001_2022: ["A.8.3"]
-      nist_csf: ["PR.AC-3"]
+      nist_csf_2: ["PR.AC-3"]
     evaluate: |
       teams_settings = data.get("teamsAppSettings", {})
       settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}
@@ -82,7 +82,7 @@ controls:
     service: teams
     compliance_mapping:
       iso27001_2022: ["A.8.11"]
-      nist_csf: ["PR.DS-1"]
+      nist_csf_2: ["PR.DS-1"]
     evaluate: |
       teams_settings = data.get("teamsAppSettings", {})
       settings = teams_settings.get("value", teams_settings) if isinstance(teams_settings, dict) else {}

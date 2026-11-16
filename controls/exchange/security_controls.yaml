@@ -7,7 +7,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["2.1.1"]
       iso27001_2022: ["A.8.5"]
-      nist_csf: ["PR.AC-7"]
+      nist_csf_2: ["PR.AC-7"]
     evaluate: |
       org_config = data.get("exchangeOrgConfig", {})
       if isinstance(org_config, dict):
@@ -48,7 +48,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["2.1.5"]
       iso27001_2022: ["A.8.20"]
-      nist_csf: ["PR.DS-2"]
+      nist_csf_2: ["PR.DS-2"]
     evaluate: |
       dkim_configs = data.get("dkimSigningConfig", {}).get("value", [])
       if not dkim_configs:
@@ -67,7 +67,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["2.1.6"]
       iso27001_2022: ["A.8.7"]
-      nist_csf: ["DE.CM-1"]
+      nist_csf_2: ["DE.CM-1"]
     evaluate: |
       anti_phish = data.get("antiPhishPolicies", {}).get("value", [])
       if not anti_phish:
@@ -88,7 +88,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["2.1.7"]
       iso27001_2022: ["A.8.7"]
-      nist_csf: ["PR.DS-5"]
+      nist_csf_2: ["PR.DS-5"]
     evaluate: |
       safe_attachments = data.get("safeAttachmentPolicies", {}).get("value", [])
       if not safe_attachments:
@@ -139,7 +139,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["2.1.4"]
       iso27001_2022: ["A.8.12"]
-      nist_csf: ["PR.DS-5"]
+      nist_csf_2: ["PR.DS-5"]
     evaluate: |
       transport_rules = data.get("transportRules", {}).get("value", [])
       outbound_spam = data.get("outboundSpamPolicy", {}).get("value", [])
@@ -165,7 +165,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["3.2"]
       iso27001_2022: ["A.8.15"]
-      nist_csf: ["DE.AE-3"]
+      nist_csf_2: ["DE.AE-3"]
     evaluate: |
       org_config = data.get("exchangeOrgConfig", {})
       configs = org_config.get("value", [org_config]) if isinstance(org_config, dict) else []

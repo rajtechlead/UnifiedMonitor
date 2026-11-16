@@ -21,7 +21,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["7.2"]
       iso27001_2022: ["A.8.3"]
-      nist_csf: ["PR.AC-3"]
+      nist_csf_2: ["PR.AC-3"]
     evaluate: |
       sp_settings = data.get("sharePointSettings", {})
       settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
@@ -47,7 +47,7 @@ controls:
     compliance_mapping:
       cis_m365_benchmark: ["7.3"]
       iso27001_2022: ["A.8.1"]
-      nist_csf: ["PR.AC-3"]
+      nist_csf_2: ["PR.AC-3"]
     evaluate: |
       sp_settings = data.get("sharePointSettings", {})
       settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
@@ -85,7 +85,7 @@ controls:
     service: sharepoint
     compliance_mapping:
       iso27001_2022: ["A.8.11"]
-      nist_csf: ["PR.DS-1"]
+      nist_csf_2: ["PR.DS-1"]
     evaluate: |
       sites = data.get("sharePointSites", {}).get("value", [])
       if not sites:
@@ -119,7 +119,7 @@ controls:
     service: sharepoint
     compliance_mapping:
       iso27001_2022: ["A.8.3"]
-      nist_csf: ["PR.DS-5"]
+      nist_csf_2: ["PR.DS-5"]
     evaluate: |
       sp_settings = data.get("sharePointSettings", {})
       settings = sp_settings.get("value", sp_settings) if isinstance(sp_settings, dict) else {}
