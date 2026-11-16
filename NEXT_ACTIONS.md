@@ -1,0 +1,108 @@
+# NEXT_ACTIONS.md
+
+Project: UnifiedMonitor
+Repository: https://github.com/rajtechlead/UnifiedMonitor
+Last Updated: 2026-11-16 UTC
+
+## Priority Execution Queue
+
+Phase 1–4 ✅ COMPLETE
+Phase 5 — Packaging ✅ (Linux) / ⬜ (Windows)
+Phase 6 — Production Release 🟡
+Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
+
+## Phase 7 — Requirement Completion
+
+| Task | Status | Notes |
+|---|---|---|
+| P7-001 Risk dashboard view | ✅ Done | `frontend/src/pages/RiskDashboard.tsx`, heatmap + critical risks |
+| P7-002 SOC dashboard view | ✅ Done | `frontend/src/pages/SocDashboard.tsx` |
+| P7-003 Audit dashboard view | ✅ Done | `frontend/src/pages/AuditPage.tsx` + `GET /dashboard/audit` |
+| P7-004 Executive/Compliance contract fix | ✅ Done | pages were showing demo values instead of API data |
+| P7-005 Control library depth | ⬜ Open | 100 controls; gaps: Intune baselines, app inventory, Defender Office/Identity/Cloud Apps/XDR, Insider Risk, eDiscovery, Copilot Studio, PIM |
+| P7-006 Coverage re-measure | ⬜ Open | last 62% at `79dfb98` |
+| P7-007 Frontend majors remaining | ⬜ Open | `react` 18→19, `@vitejs/plugin-react` 4→6 |
+| P7-008 Jose/ecdsa CVE decision | ⬜ Open | accept-and-record or migrate to `pyjwt` |
+
+## Phase 6 — Production Release 🟡
+
+| Task | Status | Deliverable |
+|---|---|---|
+| P6-001 Installation guide | ✅ Done | `docs/INSTALLATION_GUIDE.md` |
+| P6-002 Operations guide | ✅ Done | `docs/OPERATIONS_GUIDE.md` |
+| P6-003 Troubleshooting guide | ✅ Done | `docs/TROUBLESHOOTING_GUIDE.md` |
+| P6-004 Production readiness | ✅ Done | `docs/PRODUCTION_READINESS.md` |
+| P6-005 Release Candidate | 🟡 Blocked | tag absent everywhere; needs tag-push permission |
+
+## Phase 5 — Packaging ✅ (Linux) / ⬜ (Windows)
+
+| Task | Status | Notes |
+|---|---|---|
+| P5-001 Docker build | ✅ CI green | local daemon unavailable |
+| P5-002 PyInstaller build | ✅ Linux | 222 MB bundle, validated 2026-11-13 |
+| P5-003 NSIS installer | ⬜ Windows only | `deploy/windows/install.nsi` |
+| P5-004 Fresh Windows install | ⬜ Windows only | |
+| P5-005 Upgrade validation | ⬜ Windows only | |
+| P5-006 Rollback validation | ⬜ Windows only | |
+
+## Immediate Next Steps
+
+### Step 1 — Push the release tag
+
+```bash
+git tag -a v1.0.0-rc1 -m "UniMonitor v1.0.0-rc1"
+git push origin v1.0.0-rc1
+```
+
+If 403 persists, create the release from the GitHub UI (Tags → Create release). No tag currently
+exists in the repository, so it must be created, not just pushed.
+
+### Step 2 — Windows validation block (requires Windows Server 2019+)
+
+```powershell
+.\UniMonitor-Setup.exe
+Get-Service UniMonitorSvc
+curl http://localhost:8000/health
+.\UniMonitor-Setup-new.exe   # upgrade path
+.\UniMonitor-Setup-old.exe   # rollback path
+```
+
+### Step 3 — Control library expansion (if no Windows host is available)
+
+Add control YAML for the requirement areas with no coverage today. Follow the existing schema in
+`controls/identity/mfa_controls.yaml` (id, title, description, severity, category, service,
+compliance_mapping). Areas and indicative ids:
+
+- `controls/intune/security_baselines.yaml` — CTRL-INT-xxx
+- `controls/intune/application_inventory.yaml` — CTRL-APP-xxx
+- `controls/defender/office_protection.yaml`, `identity_protection.yaml`, `cloud_apps.yaml`
+- `controls/purview/insider_risk.yaml`, `ediscovery.yaml`
+- `controls/copilot/studio_governance.yaml`
+- extend `controls/identity/privileged_access.yaml` (PIM: eligible assignments, approval flow,
+  access reviews, activation MFA)
+
+### Step 4 — Coverage re-measurement
+
+```bash
+pytest --cov=unimonitor --cov-report=term-missing
+```
+
+Update `BUILD_STATUS.md` with the measured figure; do not carry forward 62% unverified.
+
+### Step 5 — Remaining frontend majors (lowest risk first)
+
+1. `@vitejs/plugin-react` 4 → 6 (`vite.config.ts`)
+2. `react` + `react-dom` 18 → 19 (major — re-run build, lint, Playwright smoke)
+
+After each: `npm run lint`, `npm run build`, then commit. Revert + log in GAP_REGISTER on failure.
+
+## Mandatory Commit Points
+
+- Every successful dependency migration
+- Every control-library batch
+- Every tracker sync
+- At 95% context usage
+
+## Stop Condition
+
+At ~95% context: update all four trackers, commit, push, stop.

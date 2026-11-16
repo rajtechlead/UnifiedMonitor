@@ -1,0 +1,75 @@
+# GAP_REGISTER.md
+
+Project: UnifiedMonitor
+Repository: https://github.com/rajtechlead/UnifiedMonitor
+Last Updated: 2026-11-16 UTC
+
+## Critical — Active
+
+None
+
+## High — Active
+
+None
+
+## Medium — Active
+
+| ID | Description | File | Status |
+|---|---|---|---|
+| M-006 | NSIS installer not tested | `deploy/windows/` | ⬜ P5-003 — Windows environment required |
+| M-013 | Release tag not pushed; no tag exists in any clone | `.git` | 🟡 recreate + push with tag permission |
+| M-014 | Control library depth — 100 controls, 10 areas; missing Intune baselines, app inventory, Defender Office/Identity/Cloud Apps/XDR, Insider Risk, eDiscovery, Copilot Studio, PIM depth | `controls/` | ⬜ P7-005 |
+| M-015 | Docker Compose never validated end-to-end (CI builds the image only) | `deploy/docker/` | ⬜ no Docker daemon in agent workspace |
+| M-016 | Setup wizard exists as a script but is not wired into the NSIS install flow | `scripts/setup_wizard.py`, `deploy/windows/install.nsi` | ⬜ P3-003 follow-up |
+
+## Low — Active
+
+| ID | Description | File | Status |
+|---|---|---|---|
+| L-001 | PROJECT_AUDIT.md not generated | — | ⬜ deferred by owner decision |
+| L-002 | Test coverage 62% (last measured `79dfb98`), not re-measured since | `tests/` | 🟡 P7-006 |
+| L-004 | ecdsa 0.19.2 CVE PYSEC-2026-1325 | pip deps | ℹ️ Informational — no fix upstream |
+| L-005 | python-jose 3.5.0 CVE PYSEC-2026-4298 | pip deps | ℹ️ Informational — no fix upstream |
+| L-007 | Remaining frontend majors: react 18→19, @vitejs/plugin-react 4→6 | `frontend/` | ⬜ P7-007 |
+| L-008 | Ruff per-file ignores added for CLI `print` (T201 in `scripts/`) and dummy credentials in `tests/` (S105/S106/S108/B017) | `pyproject.toml` | ℹ️ By design — documented decision |
+
+## Resolved This Session (2026-11-16)
+
+| ID | Description | Resolution |
+|---|---|---|
+| M-017 | `ExecutiveDashboard` read `scores.security`, `severity_counts`, `trend` — none of which `/dashboard/executive` returns; page silently displayed hard-coded demo values | Mapped to `security_score`/`compliance_score`/`risk_score`, `score_trends`, `framework_coverage`, `top_risks`; demo fallbacks removed |
+| M-018 | `ComplianceDashboard` expected `{framework, score, implemented…}`; API returns `{framework_id, framework_name, coverage_pct, controls_total, controls_passed}` — framework list rendered empty | Aligned to the API contract |
+| M-019 | Risk, SOC and Audit dashboard views required by PROJECT_REQUIREMENTS had no UI (Risk/SOC had API only; Audit had no API) | Added `RiskDashboard`, `SocDashboard`, `AuditPage` + `GET /api/v1/dashboard/audit`, routes and nav |
+| M-020 | 157 ruff errors + 2 mypy errors on HEAD (tests/scripts added after `1de7bcd` were never linted → CI red) | Auto-fix + format; manual fixes for unused imports/vars, `S607`, E501; per-file ignores for CLI `print` and test fixtures |
+| L-003b | Tracker files described HEAD `1de7bcd`, 105 tests, 47% coverage, "10 dependabot PRs" — all stale | Trackers reconciled to measured state (467 tests, majors merged) |
+
+## Resolved Previously
+
+| ID | Description | Resolution | Commit |
+|---|---|---|---|
+| C-001 | passlib + bcrypt>=4.0 incompatibility | Replaced passlib with direct bcrypt | `afe46fc` |
+| C-002 | Duplicate /health route in main.py | Removed duplicate registration | `afe46fc` |
+| C-003 | @dataclass mutable default fields (control_loader) | Moved to module level | `afe46fc` |
+| C-004 | Missing production extra in pyproject.toml | Added azure/boto3 extras | `afe46fc` |
+| C-005 | Missing reporting/templates directory | Created | `afe46fc` |
+| C-006 | Python 3.11 used throughout | Updated to 3.12 | `afe46fc` |
+| C-007 | pip-audit referenced deleted requirements.txt | Fixed | `afe46fc` |
+| C-008 | YAML controls returned "pass"/"fail" | Normalised in control_loader | `afe46fc` |
+| H-001 | Ruff 153 lint issues | Fixed | `11f5309` |
+| H-002 | Dead directories | Removed | `afe46fc` |
+| H-003 | Duplicate root files | Removed | `afe46fc` |
+| H-004 | Deprecated ruff config layout | Moved to `[tool.ruff.lint]` | `afe46fc` |
+| H-005 | Starlette 422 deprecation | `HTTP_422_UNPROCESSABLE_CONTENT` | `0b98fc3` |
+| H-006 | 236 auto-fixable ruff issues | Applied | `0b98fc3` |
+| M-001 | Frontend not validated | ESLint 0, vite build OK, Playwright 4/4 in CI | `11f5309` |
+| M-002 | Docker build not validated | CI green | `11f5309` |
+| M-003 | GitHub Actions not confirmed green | All 8 jobs green | `11f5309` |
+| M-004 | Setup wizard not implemented | `scripts/setup_wizard.py` + CLI `setup` (installer wiring tracked as M-016) | — |
+| M-005 | PyInstaller not tested | Linux bundle 222 MB | `edbe3f3` |
+| M-007 | Security scan not run | pip-audit in CI, informational CVEs only | `11f5309` |
+| M-008 | mypy strict 297 errors | strict disabled, per-module ignores, 0 issues | `11f5309` |
+| M-009 | Playwright strict-mode violation | exact match fix | `11f5309` |
+| M-010 | Docker hatchling README.md missing | COPY line added | `49e5f14` |
+| M-011 | Missing init_db/init_cache/close_cache | Aliases added | `11f5309` |
+| M-012 | Missing CLI entry points | Added | `11f5309` |
+| L-006 | Frontend majors open (recharts, zustand, lucide, ts-eslint, date-fns) | Merged in `417ad87`; two remain (L-007) | `417ad87` |
