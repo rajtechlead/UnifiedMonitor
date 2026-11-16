@@ -22,6 +22,7 @@ def _run(coro):
 
 def _make_dispatcher(db=None):
     from unimonitor.notifications.dispatcher import NotificationDispatcher
+
     db = db or AsyncMock()
     return NotificationDispatcher(db=db, tenant_id="tenant-001"), db
 
@@ -52,6 +53,7 @@ def _db_result(value):
 # _send_to_channels
 # ---------------------------------------------------------------------------
 
+
 class TestSendToChannels:
     def test_no_channels_configured(self):
         d, _ = _make_dispatcher()
@@ -67,9 +69,7 @@ class TestSendToChannels:
 
     def test_smtp_emails_as_json_string(self):
         d, _ = _make_dispatcher()
-        settings_obj = _make_settings_obj(
-            smtp_enabled=True, smtp_to_emails='["a@b.com","c@d.com"]'
-        )
+        settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails='["a@b.com","c@d.com"]')
         with patch.object(d, "_send_smtp", new_callable=AsyncMock) as mock_smtp:
             _run(d._send_to_channels("subj", "body", settings_obj))
             mock_smtp.assert_awaited_once_with(["a@b.com", "c@d.com"], "subj", "body")
@@ -138,6 +138,7 @@ class TestSendToChannels:
 # _send_teams_webhook
 # ---------------------------------------------------------------------------
 
+
 class TestSendTeamsWebhook:
     def test_posts_correct_payload(self):
         d, _ = _make_dispatcher()
@@ -160,11 +161,10 @@ class TestSendTeamsWebhook:
 
     def test_raises_on_http_error(self):
         import httpx
+
         d, _ = _make_dispatcher()
         mock_resp = MagicMock()
-        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError(
-            "403", request=MagicMock(), response=MagicMock()
-        )
+        mock_resp.raise_for_status.side_effect = httpx.HTTPStatusError("403", request=MagicMock(), response=MagicMock())
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client.__aexit__ = AsyncMock(return_value=None)
@@ -178,6 +178,7 @@ class TestSendTeamsWebhook:
 # ---------------------------------------------------------------------------
 # _send_slack_webhook
 # ---------------------------------------------------------------------------
+
 
 class TestSendSlackWebhook:
     def test_posts_correct_payload(self):
@@ -203,6 +204,7 @@ class TestSendSlackWebhook:
 # ---------------------------------------------------------------------------
 # _send_smtp
 # ---------------------------------------------------------------------------
+
 
 class TestSendSmtp:
     def test_smtp_calls_sendmail(self):
@@ -241,6 +243,7 @@ class TestSendSmtp:
 # send_daily_digest / send_weekly_digest / send_finding_alert (public API)
 # ---------------------------------------------------------------------------
 
+
 class TestPublicAPI:
     def test_send_daily_digest(self):
         db = AsyncMock()
@@ -269,6 +272,7 @@ class TestPublicAPI:
             ]
         )
         from unimonitor.notifications.dispatcher import NotificationDispatcher
+
         d = NotificationDispatcher(db=db, tenant_id="t1")
         settings_obj = _make_settings_obj(teams_webhook_url="https://teams.example.com/x")
 
@@ -318,6 +322,7 @@ class TestPublicAPI:
         db = AsyncMock()
         db.execute = AsyncMock(return_value=_db_result([]))
         from unimonitor.notifications.dispatcher import NotificationDispatcher
+
         d = NotificationDispatcher(db=db, tenant_id="t1")
         settings_obj = _make_settings_obj(slack_webhook_url="https://hooks.slack.com/x")
 

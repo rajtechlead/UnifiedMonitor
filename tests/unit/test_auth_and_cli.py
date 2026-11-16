@@ -26,15 +26,18 @@ def _run(coro):
 # auth/jwt.py
 # ---------------------------------------------------------------------------
 
+
 class TestCreateAccessToken:
     def test_returns_string(self):
         from unimonitor.auth.jwt import create_access_token
+
         token = create_access_token("user@example.com", tenant_id="t1", role="admin")
         assert isinstance(token, str)
         assert len(token) > 20
 
     def test_round_trip_decode(self):
         from unimonitor.auth.jwt import create_access_token, decode_token
+
         token = create_access_token("alice@test.com", tenant_id="t1", role="viewer")
         payload = decode_token(token)
         assert payload["sub"] == "alice@test.com"
@@ -44,12 +47,14 @@ class TestCreateAccessToken:
 
     def test_extra_claims_included(self):
         from unimonitor.auth.jwt import create_access_token, decode_token
+
         token = create_access_token("u@t.com", tenant_id="t1", role="admin", extra={"custom": "value"})
         payload = decode_token(token)
         assert payload["custom"] == "value"
 
     def test_no_extra_works(self):
         from unimonitor.auth.jwt import create_access_token, decode_token
+
         token = create_access_token("u@t.com", tenant_id="t2", role="viewer")
         payload = decode_token(token)
         assert "custom" not in payload
@@ -58,11 +63,13 @@ class TestCreateAccessToken:
 class TestCreateRefreshToken:
     def test_returns_string(self):
         from unimonitor.auth.jwt import create_refresh_token
+
         token = create_refresh_token("user@example.com", tenant_id="t1")
         assert isinstance(token, str)
 
     def test_type_is_refresh(self):
         from unimonitor.auth.jwt import create_refresh_token, decode_token
+
         token = create_refresh_token("user@test.com", tenant_id="t1")
         payload = decode_token(token)
         assert payload["type"] == "refresh"
@@ -71,17 +78,21 @@ class TestCreateRefreshToken:
 
 class TestDecodeToken:
     def test_expired_raises_token_expired_error(self):
-        from unimonitor.exceptions import TokenExpiredError
         from jose import ExpiredSignatureError
+
         from unimonitor.auth.jwt import decode_token
+        from unimonitor.exceptions import TokenExpiredError
+
         with patch("unimonitor.auth.jwt.jwt.decode", side_effect=ExpiredSignatureError("expired")):
             with pytest.raises(TokenExpiredError):
                 decode_token("some.token.here")
 
     def test_invalid_raises_invalid_token_error(self):
-        from unimonitor.exceptions import InvalidTokenError
         from jose import JWTError
+
         from unimonitor.auth.jwt import decode_token
+        from unimonitor.exceptions import InvalidTokenError
+
         with patch("unimonitor.auth.jwt.jwt.decode", side_effect=JWTError("bad signature")):
             with pytest.raises(InvalidTokenError):
                 decode_token("bad.token")
@@ -90,6 +101,7 @@ class TestDecodeToken:
 class TestValidateAccessToken:
     def test_valid_access_token_accepted(self):
         from unimonitor.auth.jwt import create_access_token, validate_access_token
+
         token = create_access_token("u@t.com", tenant_id="t1", role="admin")
         payload = validate_access_token(token)
         assert payload["type"] == "access"
@@ -97,6 +109,7 @@ class TestValidateAccessToken:
     def test_refresh_token_rejected_as_access(self):
         from unimonitor.auth.jwt import create_refresh_token, validate_access_token
         from unimonitor.exceptions import InvalidTokenError
+
         token = create_refresh_token("u@t.com", tenant_id="t1")
         with pytest.raises(InvalidTokenError, match="not an access token"):
             validate_access_token(token)
@@ -105,6 +118,7 @@ class TestValidateAccessToken:
 class TestValidateRefreshToken:
     def test_valid_refresh_token_accepted(self):
         from unimonitor.auth.jwt import create_refresh_token, validate_refresh_token
+
         token = create_refresh_token("u@t.com", tenant_id="t1")
         payload = validate_refresh_token(token)
         assert payload["type"] == "refresh"
@@ -112,12 +126,14 @@ class TestValidateRefreshToken:
     def test_access_token_rejected_as_refresh(self):
         from unimonitor.auth.jwt import create_access_token, validate_refresh_token
         from unimonitor.exceptions import InvalidTokenError
+
         token = create_access_token("u@t.com", tenant_id="t1", role="admin")
         with pytest.raises(InvalidTokenError, match="not a refresh token"):
             validate_refresh_token(token)
 
     def test_decode_refresh_token_alias(self):
         from unimonitor.auth.jwt import create_refresh_token, decode_refresh_token
+
         token = create_refresh_token("u@t.com", tenant_id="t1")
         payload = decode_refresh_token(token)
         assert payload["type"] == "refresh"
@@ -127,9 +143,11 @@ class TestValidateRefreshToken:
 # auth/oauth.py
 # ---------------------------------------------------------------------------
 
+
 class TestGetMsalApp:
     def test_creates_confidential_app(self):
         from unimonitor.auth.oauth import get_msal_app
+
         mock_app = MagicMock()
         with patch("unimonitor.auth.oauth.msal.ConfidentialClientApplication", return_value=mock_app) as mock_cls:
             result = get_msal_app(tenant_id="t1")
@@ -138,6 +156,7 @@ class TestGetMsalApp:
 
     def test_uses_default_tenant_when_none(self):
         from unimonitor.auth.oauth import get_msal_app
+
         with patch("unimonitor.auth.oauth.msal.ConfidentialClientApplication") as mock_cls:
             get_msal_app()
         call_kwargs = mock_cls.call_args[1]
@@ -147,6 +166,7 @@ class TestGetMsalApp:
 class TestGetMsalAppForTenant:
     def test_creates_app_with_tenant_credentials(self):
         from unimonitor.auth.oauth import get_msal_app_for_tenant
+
         mock_app = MagicMock()
         with patch("unimonitor.auth.oauth.msal.ConfidentialClientApplication", return_value=mock_app) as mock_cls:
             result = get_msal_app_for_tenant("cid", "csec", "tenant-123")
@@ -159,6 +179,7 @@ class TestGetMsalAppForTenant:
 class TestAcquireTokenForClient:
     def test_returns_access_token(self):
         from unimonitor.auth.oauth import acquire_token_for_client
+
         mock_app = MagicMock()
         mock_app.acquire_token_silent.return_value = None
         mock_app.acquire_token_for_client.return_value = {"access_token": "graph_token"}
@@ -168,6 +189,7 @@ class TestAcquireTokenForClient:
 
     def test_uses_cached_token(self):
         from unimonitor.auth.oauth import acquire_token_for_client
+
         mock_app = MagicMock()
         mock_app.acquire_token_silent.return_value = {"access_token": "cached_token"}
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
@@ -178,6 +200,7 @@ class TestAcquireTokenForClient:
     def test_error_raises_authentication_error(self):
         from unimonitor.auth.oauth import acquire_token_for_client
         from unimonitor.exceptions import AuthenticationError
+
         mock_app = MagicMock()
         mock_app.acquire_token_silent.return_value = None
         mock_app.acquire_token_for_client.return_value = {"error": "invalid_client", "error_description": "Bad credentials"}
@@ -187,6 +210,7 @@ class TestAcquireTokenForClient:
 
     def test_per_tenant_credentials_use_tenant_app(self):
         from unimonitor.auth.oauth import acquire_token_for_client
+
         mock_app = MagicMock()
         mock_app.acquire_token_silent.return_value = {"access_token": "tenant_token"}
         with patch("unimonitor.auth.oauth.get_msal_app_for_tenant", return_value=mock_app) as mock_fn:
@@ -198,6 +222,7 @@ class TestAcquireTokenForClient:
 class TestGetAuthCodeUrl:
     def test_returns_url_string(self):
         from unimonitor.auth.oauth import get_auth_code_url
+
         mock_app = MagicMock()
         mock_app.get_authorization_request_url.return_value = "https://login.microsoftonline.com/auth"
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
@@ -206,6 +231,7 @@ class TestGetAuthCodeUrl:
 
     def test_build_authorize_url_alias(self):
         from unimonitor.auth.oauth import build_authorize_url
+
         mock_app = MagicMock()
         mock_app.get_authorization_request_url.return_value = "https://auth.url"
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
@@ -216,10 +242,9 @@ class TestGetAuthCodeUrl:
 class TestExchangeCodeForToken:
     def test_success_returns_token_dict(self):
         from unimonitor.auth.oauth import exchange_code_for_token
+
         mock_app = MagicMock()
-        mock_app.acquire_token_by_authorization_code.return_value = {
-            "access_token": "tok", "id_token": "id_tok"
-        }
+        mock_app.acquire_token_by_authorization_code.return_value = {"access_token": "tok", "id_token": "id_tok"}
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
             result = _run(exchange_code_for_token("auth_code"))
         assert result["access_token"] == "tok"
@@ -227,10 +252,9 @@ class TestExchangeCodeForToken:
     def test_error_response_raises(self):
         from unimonitor.auth.oauth import exchange_code_for_token
         from unimonitor.exceptions import AuthenticationError
+
         mock_app = MagicMock()
-        mock_app.acquire_token_by_authorization_code.return_value = {
-            "error": "invalid_grant", "error_description": "Code expired"
-        }
+        mock_app.acquire_token_by_authorization_code.return_value = {"error": "invalid_grant", "error_description": "Code expired"}
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
             with pytest.raises(AuthenticationError):
                 _run(exchange_code_for_token("bad_code"))
@@ -239,6 +263,7 @@ class TestExchangeCodeForToken:
 class TestGetEntraUserInfo:
     def test_returns_user_dict(self):
         from unimonitor.auth.oauth import get_entra_user_info
+
         mock_response = MagicMock()
         mock_response.json.return_value = {
             "id": "uid-123",
@@ -264,10 +289,9 @@ class TestGetEntraUserInfo:
 # cli.py
 # ---------------------------------------------------------------------------
 
+
 class TestCliStart:
     def test_start_requires_uvicorn(self):
-        from unimonitor.cli import main
-        runner = CliRunner()
         with patch("builtins.__import__", side_effect=ImportError("no uvicorn")):
             # Can't easily simulate ImportError for uvicorn inside the command
             # Just invoke with mocked uvicorn.run
@@ -275,6 +299,7 @@ class TestCliStart:
 
     def test_start_calls_uvicorn_run(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         with patch("uvicorn.run") as mock_run:
             result = runner.invoke(main, ["start", "--port", "9000"])
@@ -285,6 +310,7 @@ class TestCliStart:
 
     def test_start_reload_flag(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         with patch("uvicorn.run") as mock_run:
             runner.invoke(main, ["start", "--reload"])
@@ -297,6 +323,7 @@ class TestCliStart:
 class TestCliMigrate:
     def test_migrate_calls_alembic_upgrade(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         mock_cfg = MagicMock()
         with patch("alembic.config.Config", return_value=mock_cfg):
@@ -310,6 +337,7 @@ class TestCliMigrate:
 class TestCliSecrets:
     def test_secrets_health_command(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         mock_resolver = AsyncMock()
         mock_resolver.health_check = AsyncMock(return_value={"providers": []})
@@ -320,6 +348,7 @@ class TestCliSecrets:
 
     def test_secrets_set_command(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         mock_resolver = AsyncMock()
         meta = MagicMock()
@@ -331,6 +360,7 @@ class TestCliSecrets:
 
     def test_secrets_get_command(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         mock_resolver = AsyncMock()
         mock_resolver.get = AsyncMock(return_value="secret_value_xyz")
@@ -341,6 +371,7 @@ class TestCliSecrets:
 
     def test_secrets_rotate_command(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         mock_resolver = AsyncMock()
         meta = MagicMock()
@@ -352,6 +383,7 @@ class TestCliSecrets:
 
     def test_main_help(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["--help"])
         assert result.exit_code == 0
@@ -359,12 +391,14 @@ class TestCliSecrets:
 
     def test_secrets_group_help(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         result = runner.invoke(main, ["secrets", "--help"])
         assert result.exit_code == 0
 
     def test_smoke_test_import_error(self):
         from unimonitor.cli import main
+
         runner = CliRunner()
         with patch.dict("sys.modules", {"scripts.smoke_test": None}):
             result = runner.invoke(main, ["smoke-test"])

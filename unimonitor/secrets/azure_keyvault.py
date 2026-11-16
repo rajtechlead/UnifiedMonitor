@@ -102,6 +102,8 @@ class AzureKeyVaultProvider:
         props_list = await loop.run_in_executor(None, lambda: list(self._client.list_properties_of_secrets()))
         results = []
         for props in props_list:
+            if not props.name:
+                continue
             if prefix and not props.name.startswith(prefix):
                 continue
             results.append(

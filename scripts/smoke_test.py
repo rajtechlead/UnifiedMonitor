@@ -3,16 +3,18 @@
 UniMonitor post-install smoke test.
 Verifies the API is running and core endpoints respond correctly.
 """
+
 import asyncio
-import sys
 import os
+import sys
+
 import httpx
 
 BASE_URL = os.getenv("UNIMONITOR_URL", "http://localhost:8000")
 ADMIN_EMAIL = os.getenv("UNIMONITOR_ADMIN_EMAIL", "admin@unimonitor.local")
 ADMIN_PASSWORD = os.getenv("UNIMONITOR_ADMIN_PASSWORD", "")
 
-PASS = "\033[92m✓\033[0m"
+PASS = "\033[92m✓\033[0m"  # noqa: S105 — ANSI colour code, not a password
 FAIL = "\033[91m✗\033[0m"
 
 
@@ -32,7 +34,7 @@ async def test_health(client: httpx.AsyncClient) -> bool:
 async def test_login(client: httpx.AsyncClient) -> str | None:
     """Test /api/v1/auth/login returns a token."""
     if not ADMIN_PASSWORD:
-        print(f"  ⚠  Login: skipped (set UNIMONITOR_ADMIN_PASSWORD env var)")
+        print("  ⚠  Login: skipped (set UNIMONITOR_ADMIN_PASSWORD env var)")
         return None
     try:
         r = await client.post(
@@ -128,7 +130,6 @@ async def main() -> None:
 
 if __name__ == "__main__":
     asyncio.run(main())
-
 
 
 def run_smoke_tests() -> None:

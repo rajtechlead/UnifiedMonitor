@@ -14,6 +14,7 @@ Run via:
     python scripts/setup_wizard.py
     unimonitor setup --run-wizard
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -27,7 +28,7 @@ try:
     from rich.panel import Panel
     from rich.prompt import Confirm, Prompt
     from rich.table import Table
-    from rich import print as rprint
+
     HAS_RICH = True
 except ImportError:
     HAS_RICH = False
@@ -59,6 +60,7 @@ def _confirm(prompt: str, default: bool = True) -> bool:
 # Provider setup functions
 # ---------------------------------------------------------------------------
 
+
 async def setup_azure_key_vault() -> dict:
     """Collect and validate Azure Key Vault configuration."""
     _print("\n[bold cyan]Azure Key Vault Configuration[/bold cyan]")
@@ -73,6 +75,7 @@ async def setup_azure_key_vault() -> dict:
     _print("  Testing connectivity...", style="dim")
     try:
         from unimonitor.secrets.azure_keyvault import AzureKeyVaultProvider
+
         provider = AzureKeyVaultProvider(vault_url=vault_url)
         health = await provider.health_check()
         if not health.healthy:
@@ -103,6 +106,7 @@ async def setup_aws_secrets_manager() -> dict:
     _print("  Testing connectivity...", style="dim")
     try:
         from unimonitor.secrets.aws_secrets_manager import AWSSecretsManagerProvider
+
         provider = AWSSecretsManagerProvider(region_name=region)
         health = await provider.health_check()
         if not health.healthy:
@@ -138,6 +142,7 @@ async def setup_local_vault() -> dict:
     _print("  Initializing vault...", style="dim")
     try:
         from unimonitor.secrets.local_vault import LocalVaultProvider
+
         provider = LocalVaultProvider(
             vault_dir=vault_dir,
             key_path=key_path or None,
@@ -168,14 +173,16 @@ async def setup_local_vault() -> dict:
 # Main wizard
 # ---------------------------------------------------------------------------
 
+
 async def run_wizard() -> int:
     """Run the full setup wizard. Returns 0 on success, 1 on failure."""
     if HAS_RICH:
-        console.print(Panel.fit(
-            "[bold blue]UniMonitor Setup Wizard[/bold blue]\n"
-            "Secure • Enterprise-Ready • M365 Native",
-            border_style="blue",
-        ))
+        console.print(
+            Panel.fit(
+                "[bold blue]UniMonitor Setup Wizard[/bold blue]\nSecure • Enterprise-Ready • M365 Native",
+                border_style="blue",
+            )
+        )
     else:
         print("=" * 60)
         print("  UniMonitor Setup Wizard")
@@ -211,12 +218,14 @@ async def run_wizard() -> int:
     # ── Step 2: Secret Key ──────────────────────────────────────
     _print("\n[bold]Step 2 of 5: Application Secret Key[/bold]")
     import secrets
+
     generated_key = secrets.token_hex(32)
     secret_key_ref = _ask(
         "  Secret reference name for UNIMONITOR_SECRET_KEY (stored in vault)",
         "unimonitor/app/secret-key",
     )
     from unimonitor.secrets.resolver import get_secret_resolver, reset_resolver
+
     reset_resolver()
     resolver = await get_secret_resolver()
     await resolver.set(secret_key_ref, generated_key)
@@ -231,7 +240,7 @@ async def run_wizard() -> int:
         db_name = _ask("  Database name", "unimonitor")
         db_user = _ask("  Database user", "unimonitor")
         db_pass = _ask("  Database password")
-        db_pass_ref = "unimonitor/db/password"
+        db_pass_ref = "unimonitor/db/password"  # noqa: S105 — vault key name, not a secret
         await resolver.set(db_pass_ref, db_pass)
         db_url = f"postgresql+asyncpg://{db_user}@{db_host}:{db_port}/{db_name}"
         _print(f"  [green]✓ DB password stored as '{db_pass_ref}'[/green]")
@@ -245,7 +254,9 @@ async def run_wizard() -> int:
     if _confirm("  Run database migrations now?"):
         try:
             from alembic.config import Config
+
             from alembic import command as alembic_cmd
+
             ini = Path(__file__).resolve().parents[1] / "alembic.ini"
             if ini.exists():
                 cfg = Config(str(ini))
@@ -261,7 +272,7 @@ async def run_wizard() -> int:
     admin_email = _ask("  Admin email address")
     if admin_email:
         admin_pass = _ask("  Admin password (min 12 chars)")
-        admin_pass_ref = "unimonitor/admin/initial-password"
+        admin_pass_ref = "unimonitor/admin/initial-password"  # noqa: S105 — vault key name, not a secret
         await resolver.set(admin_pass_ref, admin_pass)
         _print(f"  [green]✓ Admin credentials stored (reference: '{admin_pass_ref}')[/green]")
 

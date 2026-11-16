@@ -6,14 +6,15 @@ import asyncio
 import os
 from logging.config import fileConfig
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import unimonitor.db.models  # noqa: F401 — registers all models
+from alembic import context
+
 # Import all models to register them with Base.metadata
 from unimonitor.db.base import Base  # noqa: F401
-import unimonitor.db.models  # noqa: F401 — registers all models
 
 config = context.config
 

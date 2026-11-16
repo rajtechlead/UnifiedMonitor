@@ -24,9 +24,11 @@ def _run(coro):
 # GraphResponse dataclass
 # ---------------------------------------------------------------------------
 
+
 class TestGraphResponse:
     def test_defaults(self):
         from unimonitor.graph.client import GraphResponse
+
         r = GraphResponse(data={"key": "val"}, success=True)
         assert r.success is True
         assert r.cached is False
@@ -35,12 +37,14 @@ class TestGraphResponse:
 
     def test_cached_flag(self):
         from unimonitor.graph.client import GraphResponse
+
         r = GraphResponse(data=[], success=True, cached=True, endpoint="/users")
         assert r.cached is True
         assert r.endpoint == "/users"
 
     def test_error_response(self):
         from unimonitor.graph.client import GraphResponse
+
         r = GraphResponse(data=None, success=False, error_code="403", error_message="Forbidden")
         assert r.success is False
         assert r.error_code == "403"
@@ -50,18 +54,23 @@ class TestGraphResponse:
 # RateLimiter
 # ---------------------------------------------------------------------------
 
+
 class TestRateLimiter:
     def test_acquire_does_not_raise(self):
         from unimonitor.graph.client import RateLimiter
+
         limiter = RateLimiter(rate=100.0)
         _run(limiter.acquire())
 
     def test_tokens_decrease_after_acquire(self):
         from unimonitor.graph.client import RateLimiter
+
         limiter = RateLimiter(rate=5.0)
+
         # Drain most tokens without sleeping by patching asyncio.sleep
         async def _no_sleep():
             await limiter.acquire()
+
         _run(_no_sleep())
         # After one acquire, tokens should be less than the initial rate
         # (they also replenish slightly; just check it ran without error)
@@ -69,10 +78,13 @@ class TestRateLimiter:
     def test_high_rate_many_acquires(self):
         """High rate limiter allows rapid sequential acquires."""
         from unimonitor.graph.client import RateLimiter
+
         limiter = RateLimiter(rate=1000.0)
+
         async def _many():
             for _ in range(5):
                 await limiter.acquire()
+
         _run(_many())
 
 
@@ -80,15 +92,18 @@ class TestRateLimiter:
 # GraphClient — construction and context manager
 # ---------------------------------------------------------------------------
 
+
 class TestGraphClientInit:
     def test_constructs_with_tenant(self):
         from unimonitor.graph.client import GraphClient
+
         gc = GraphClient(tenant_id="tenant-1")
         assert gc.tenant_id == "tenant-1"
         assert gc._http_client is None
 
     def test_constructs_with_credentials(self):
         from unimonitor.graph.client import GraphClient
+
         gc = GraphClient(tenant_id="t1", client_id="cid", client_secret="csec")
         assert gc.client_id == "cid"
         assert gc.client_secret == "csec"
@@ -107,6 +122,7 @@ class TestGraphClientInit:
 # ---------------------------------------------------------------------------
 # GraphClient._ensure_token
 # ---------------------------------------------------------------------------
+
 
 class TestEnsureToken:
     def test_acquires_token_on_first_call(self):
@@ -154,14 +170,16 @@ class TestEnsureToken:
 # GraphClient.get — cache hit path
 # ---------------------------------------------------------------------------
 
+
 class TestGraphClientGet:
     def _make_client_with_mocked_http(self, status_code=200, json_data=None):
         """Return a configured GraphClient with mocked HTTP."""
         from unimonitor.graph.client import GraphClient
+
         gc = GraphClient(tenant_id="t1", cache_ttl=0)
         mock_resp = MagicMock()
         mock_resp.status_code = status_code
-        mock_resp.is_success = (status_code < 400)
+        mock_resp.is_success = status_code < 400
         mock_resp.json.return_value = json_data or {"value": [{"id": "u1"}]}
         mock_resp.headers = {}
         mock_resp.text = ""
@@ -172,7 +190,7 @@ class TestGraphClientGet:
         return gc
 
     def test_returns_cached_response(self):
-        from unimonitor.graph.client import GraphClient, GraphResponse
+        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = GraphClient(tenant_id="t1")
@@ -185,7 +203,6 @@ class TestGraphClientGet:
         _run(_test())
 
     def test_cache_miss_hits_http(self):
-        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = self._make_client_with_mocked_http(json_data={"value": [{"id": "u2"}]})
@@ -201,7 +218,6 @@ class TestGraphClientGet:
         _run(_test())
 
     def test_no_cache_skips_cache_get(self):
-        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = self._make_client_with_mocked_http()
@@ -217,7 +233,6 @@ class TestGraphClientGet:
 
     def test_403_raises_permission_error(self):
         from unimonitor.exceptions import GraphPermissionError
-        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = self._make_client_with_mocked_http(status_code=403)
@@ -233,7 +248,6 @@ class TestGraphClientGet:
 
     def test_401_clears_token_and_raises(self):
         from unimonitor.exceptions import AuthenticationError
-        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = self._make_client_with_mocked_http(status_code=401)
@@ -248,7 +262,6 @@ class TestGraphClientGet:
 
     def test_500_raises_graph_api_error(self):
         from unimonitor.exceptions import GraphAPIError
-        from unimonitor.graph.client import GraphClient
 
         async def _test():
             gc = self._make_client_with_mocked_http(status_code=500)
@@ -263,6 +276,7 @@ class TestGraphClientGet:
 
     def test_timeout_raises_graph_timeout_error(self):
         import httpx
+
         from unimonitor.exceptions import GraphTimeoutError
         from unimonitor.graph.client import GraphClient
 
@@ -281,6 +295,7 @@ class TestGraphClientGet:
 
     def test_http_error_raises_graph_api_error(self):
         import httpx
+
         from unimonitor.exceptions import GraphAPIError
         from unimonitor.graph.client import GraphClient
 
@@ -301,6 +316,7 @@ class TestGraphClientGet:
 # ---------------------------------------------------------------------------
 # GraphClient.get_all_pages
 # ---------------------------------------------------------------------------
+
 
 class TestGetAllPages:
     def test_single_page(self):
@@ -353,6 +369,7 @@ class TestGetAllPages:
 # ---------------------------------------------------------------------------
 # GraphClient.batch_get
 # ---------------------------------------------------------------------------
+
 
 class TestBatchGet:
     def test_batch_returns_list(self):

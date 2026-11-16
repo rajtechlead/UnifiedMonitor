@@ -7,13 +7,12 @@ so no real DB, Redis, or Graph API is needed.
 
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_session_factory(session: AsyncMock) -> MagicMock:
     """Return a mock that acts as async_session_factory (async context manager)."""
@@ -37,6 +36,7 @@ def _db_result(value):
 # _run_async helper
 # ---------------------------------------------------------------------------
 
+
 class TestRunAsyncHelper:
     def test_run_async_returns_value(self):
         from unimonitor.worker.tasks.assessment import _run_async
@@ -47,9 +47,9 @@ class TestRunAsyncHelper:
         assert _run_async(_coro()) == 42
 
     def test_run_async_propagates_exception(self):
-        from unimonitor.worker.tasks.assessment import _run_async
-
         import pytest
+
+        from unimonitor.worker.tasks.assessment import _run_async
 
         async def _coro():
             raise ValueError("test error")
@@ -61,6 +61,7 @@ class TestRunAsyncHelper:
 # ---------------------------------------------------------------------------
 # assessment tasks
 # ---------------------------------------------------------------------------
+
 
 class TestCleanupOldRuns:
     def test_cleanup_returns_deleted_count(self):
@@ -112,8 +113,7 @@ class TestRunAssessmentTask:
         # For bind=True tasks: patch.object works on retry but not on request (Celery property).
         # request.id defaults to None in direct calls which is fine.
         with patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)):
-            with patch.object(run_assessment_task, "retry",
-                              side_effect=run_assessment_task.MaxRetriesExceededError("max")):
+            with patch.object(run_assessment_task, "retry", side_effect=run_assessment_task.MaxRetriesExceededError("max")):
                 result = run_assessment_task.run(
                     run_id="run-001",
                     tenant_id="tenant-001",
@@ -134,8 +134,7 @@ class TestRunAssessmentTask:
         mock_session.commit = AsyncMock()
 
         with patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)):
-            with patch.object(run_assessment_task, "retry",
-                              side_effect=run_assessment_task.MaxRetriesExceededError("max")):
+            with patch.object(run_assessment_task, "retry", side_effect=run_assessment_task.MaxRetriesExceededError("max")):
                 with patch("unimonitor.worker.tasks.assessment.logger") as mock_logger:
                     run_assessment_task.run(
                         run_id="run-002",
@@ -189,9 +188,9 @@ class TestRunScheduledAssessments:
 
 class TestRunSingleCollectorTask:
     def test_tenant_not_found_raises(self):
-        from unimonitor.worker.tasks.assessment import run_single_collector_task
-
         import pytest
+
+        from unimonitor.worker.tasks.assessment import run_single_collector_task
 
         mock_session = AsyncMock()
         mock_session.execute.return_value = _db_result(None)
@@ -231,6 +230,7 @@ class TestRunSingleCollectorTask:
 # ---------------------------------------------------------------------------
 # notification tasks
 # ---------------------------------------------------------------------------
+
 
 class TestSendDailyDigests:
     def test_no_settings_returns_zero(self):
@@ -404,6 +404,7 @@ class TestDispatchFindingAlert:
 # reporting tasks
 # ---------------------------------------------------------------------------
 
+
 class TestGenerateReportTask:
     def test_report_not_found_returns_error(self):
         from unimonitor.worker.tasks.reporting import generate_report_task
@@ -414,8 +415,7 @@ class TestGenerateReportTask:
 
         # patch retry to raise MaxRetriesExceededError; skip request (Celery property, no deleter)
         with patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)):
-            with patch.object(generate_report_task, "retry",
-                              side_effect=generate_report_task.MaxRetriesExceededError("max")):
+            with patch.object(generate_report_task, "retry", side_effect=generate_report_task.MaxRetriesExceededError("max")):
                 result = generate_report_task.run(
                     report_id="report-001",
                     tenant_id="tenant-001",

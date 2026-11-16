@@ -154,10 +154,12 @@ unimonitor secrets rotate unimonitor/smtp/password "newpassword"
 ```python
 from unimonitor.secrets import get_secret_resolver
 
+
 async def get_smtp_password() -> str:
     resolver = await get_secret_resolver()
     # Direct name lookup
     return await resolver.get("unimonitor/smtp/password")
+
 
 async def get_tenant_secret(ref: str) -> str:
     """ref stored in DB: 'azure_key_vault://unimonitor/tenants/abc/secret'"""

@@ -129,6 +129,11 @@ target-version = "py312"
 select = ["E", "F", "I", "N", "W", "UP", "S", "B", "A", "C4", "T20"]
 ignore = ["S101", "B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# CLI scripts print to stdout by design; tests use dummy credentials/temp paths.
+"scripts/**" = ["T201"]
+"tests/**" = ["S105", "S106", "S108", "B017"]
+
 [tool.mypy]
 python_version = "3.12"
 ignore_missing_imports = true

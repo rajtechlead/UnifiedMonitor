@@ -4,10 +4,6 @@ Unit tests for unimonitor.core.security — encryption utilities.
 
 from __future__ import annotations
 
-import os
-
-import pytest
-
 
 class TestEncryptDecrypt:
     def test_encrypt_returns_different_string(self):
@@ -57,9 +53,9 @@ class TestGenerateApiKey:
         assert len(key_long) > len(key_short)
 
     def test_key_is_url_safe(self):
-        from unimonitor.core.security import generate_api_key
-
         import re
+
+        from unimonitor.core.security import generate_api_key
 
         key = generate_api_key()
         # base64url: letters, digits, hyphens, underscores only

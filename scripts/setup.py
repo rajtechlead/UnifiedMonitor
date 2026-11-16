@@ -3,11 +3,12 @@
 UniMonitor post-install setup script.
 Runs DB migrations, creates default admin user, seeds baseline config.
 """
+
 import asyncio
 import os
-import sys
 import secrets
 import string
+import sys
 
 # Ensure app is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,10 +17,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 async def run_migrations() -> None:
     """Run Alembic migrations."""
     import subprocess
+
     print("[setup] Running database migrations…")
     result = subprocess.run(
-        ["alembic", "upgrade", "head"],
-        capture_output=True, text=True,
+        ["alembic", "upgrade", "head"],  # noqa: S607 — alembic resolved from PATH by design
+        capture_output=True,
+        text=True,
         cwd=os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     )
     if result.returncode != 0:
@@ -35,14 +38,16 @@ def generate_password(length: int = 20) -> str:
 
 async def create_default_admin() -> None:
     """Create default admin user and tenant if none exist."""
-    from unimonitor.db.session import AsyncSessionLocal
-    from unimonitor.db.models.user import User
-    from unimonitor.db.models.tenant import Tenant
-    from sqlalchemy import select
     import bcrypt as _bcrypt
+    from sqlalchemy import select
+
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.db.models.user import User
+    from unimonitor.db.session import AsyncSessionLocal
 
     class _PwdContext:
         """Thin bcrypt wrapper matching passlib's hash/verify interface."""
+
         @staticmethod
         def hash(password: str) -> str:
             return _bcrypt.hashpw(password.encode("utf-8")[:72], _bcrypt.gensalt()).decode("utf-8")
@@ -85,10 +90,10 @@ async def create_default_admin() -> None:
             )
             db.add(admin)
             await db.commit()
-            print(f"[setup] ✓ Admin user created:")
-            print(f"         Email:    admin@unimonitor.local")
+            print("[setup] ✓ Admin user created:")
+            print("         Email:    admin@unimonitor.local")
             print(f"         Password: {password}")
-            print(f"         IMPORTANT: Change this password immediately after login!")
+            print("         IMPORTANT: Change this password immediately after login!")
         else:
             await db.commit()
             print(f"[setup] Admin user already exists: {admin.email}")
@@ -96,10 +101,11 @@ async def create_default_admin() -> None:
 
 async def seed_notification_settings() -> None:
     """Create default notification settings for the default tenant."""
-    from unimonitor.db.session import AsyncSessionLocal
+    from sqlalchemy import select
+
     from unimonitor.db.models.notification_setting import NotificationSetting
     from unimonitor.db.models.tenant import Tenant
-    from sqlalchemy import select
+    from unimonitor.db.session import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Tenant).limit(1))
@@ -107,9 +113,7 @@ async def seed_notification_settings() -> None:
         if not tenant:
             return
 
-        result = await db.execute(
-            select(NotificationSetting).where(NotificationSetting.tenant_id == tenant.id)
-        )
+        result = await db.execute(select(NotificationSetting).where(NotificationSetting.tenant_id == tenant.id))
         existing = result.scalar_one_or_none()
         if not existing:
             ns = NotificationSetting(
@@ -152,6 +156,7 @@ async def main() -> None:
     except Exception as e:
         print(f"[setup] FAILED: {e}")
         import traceback
+
         traceback.print_exc()
         sys.exit(1)
 

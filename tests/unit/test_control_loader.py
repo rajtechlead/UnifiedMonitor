@@ -12,14 +12,15 @@ import textwrap
 from pathlib import Path
 from unittest.mock import patch
 
-
 # ---------------------------------------------------------------------------
 # ControlDefinition.run_evaluate
 # ---------------------------------------------------------------------------
 
+
 class TestControlDefinitionRunEvaluate:
     def _make_ctrl(self, code: str, ctrl_id="C1"):
         from unimonitor.grc.control_loader import ControlDefinition
+
         return ControlDefinition(
             id=ctrl_id,
             title="Test",
@@ -81,9 +82,11 @@ class TestControlDefinitionRunEvaluate:
 # _parse_list_format
 # ---------------------------------------------------------------------------
 
+
 class TestParseListFormat:
     def test_basic_parse(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         ctrl = {
             "id": "CTRL-001",
             "title": "MFA Enforcement",
@@ -100,11 +103,13 @@ class TestParseListFormat:
 
     def test_missing_id_returns_none(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         result = _parse_list_format({"title": "No ID"})
         assert result is None
 
     def test_bare_code_wrapped_in_function(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         ctrl = {
             "id": "CTRL-002",
             "evaluate": "return 'implemented'",
@@ -116,6 +121,7 @@ class TestParseListFormat:
 
     def test_no_evaluate_defaults_to_not_implemented(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         ctrl = {"id": "CTRL-003", "title": "No eval"}
         defn = _parse_list_format(ctrl)
         assert defn is not None
@@ -123,12 +129,14 @@ class TestParseListFormat:
 
     def test_severity_uppercase(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         ctrl = {"id": "C4", "severity": "medium"}
         defn = _parse_list_format(ctrl)
         assert defn.severity == "MEDIUM"
 
     def test_defaults_for_missing_fields(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         defn = _parse_list_format({"id": "C5"})
         assert defn.category == ""
         assert defn.service == ""
@@ -136,6 +144,7 @@ class TestParseListFormat:
 
     def test_compliance_mapping_preserved(self):
         from unimonitor.grc.control_loader import _parse_list_format
+
         ctrl = {
             "id": "C6",
             "compliance_mapping": {"iso_27001": ["A.9.1"]},
@@ -148,9 +157,11 @@ class TestParseListFormat:
 # _parse_legacy_format
 # ---------------------------------------------------------------------------
 
+
 class TestParseLegacyFormat:
     def test_basic_legacy_parse(self):
         from unimonitor.grc.control_loader import _parse_legacy_format
+
         raw = {
             "control_id": "ENT-001",
             "metadata": {"name": "Legacy Control", "severity": "HIGH"},
@@ -164,19 +175,17 @@ class TestParseLegacyFormat:
 
     def test_missing_control_id_returns_none(self):
         from unimonitor.grc.control_loader import _parse_legacy_format
+
         raw = {"metadata": {}, "check": {}}
         result = _parse_legacy_format(raw, Path("/controls/x/x.yaml"))
         assert result is None
 
     def test_condition_generates_evaluate_code(self):
         from unimonitor.grc.control_loader import _parse_legacy_format
+
         raw = {
             "control_id": "ENT-002",
-            "check": {
-                "evaluation": {
-                    "condition": "data.get('mfa_enabled')"
-                }
-            },
+            "check": {"evaluation": {"condition": "data.get('mfa_enabled')"}},
         }
         defn = _parse_legacy_format(raw, Path("/controls/x/x.yaml"))
         assert defn is not None
@@ -187,12 +196,14 @@ class TestParseLegacyFormat:
 
     def test_no_condition_defaults_to_not_implemented(self):
         from unimonitor.grc.control_loader import _parse_legacy_format
+
         raw = {"control_id": "ENT-003", "check": {"evaluation": {}}}
         defn = _parse_legacy_format(raw, Path("/x.yaml"))
         assert "not_implemented" in defn._evaluate_code
 
     def test_service_derived_from_parent_dir(self):
         from unimonitor.grc.control_loader import _parse_legacy_format
+
         raw = {"control_id": "INT-001"}
         defn = _parse_legacy_format(raw, Path("/controls/intune/INT-001.yaml"))
         assert defn.service == "intune"
@@ -202,6 +213,7 @@ class TestParseLegacyFormat:
 # ControlLoader with temporary directory
 # ---------------------------------------------------------------------------
 
+
 class TestControlLoader:
     def _write_yaml(self, directory: Path, filename: str, content: str) -> Path:
         (directory / filename).write_text(textwrap.dedent(content))
@@ -209,9 +221,13 @@ class TestControlLoader:
 
     def test_load_all_from_list_format(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            self._write_yaml(d, "ctrls.yaml", """\
+            self._write_yaml(
+                d,
+                "ctrls.yaml",
+                """\
                 controls:
                   - id: TEST-001
                     title: "Test Control"
@@ -221,7 +237,8 @@ class TestControlLoader:
                     evaluate: |
                       def evaluate(data):
                           return 'implemented'
-                """)
+                """,
+            )
             loader = ControlLoader(controls_dir=str(d))
             definitions = loader.load_all()
         assert len(definitions) == 1
@@ -229,15 +246,20 @@ class TestControlLoader:
 
     def test_load_all_from_legacy_format(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            self._write_yaml(d, "legacy.yaml", """\
+            self._write_yaml(
+                d,
+                "legacy.yaml",
+                """\
                 control_id: ENT-999
                 metadata:
                   name: Legacy
                   severity: MEDIUM
                 check: {}
-                """)
+                """,
+            )
             loader = ControlLoader(controls_dir=str(d))
             definitions = loader.load_all()
         assert len(definitions) == 1
@@ -245,12 +267,14 @@ class TestControlLoader:
 
     def test_missing_directory_returns_empty(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         loader = ControlLoader(controls_dir="/nonexistent/path/controls")
         result = loader.load_all()
         assert result == []
 
     def test_invalid_yaml_skipped(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
             (d / "bad.yaml").write_text("{{ invalid: yaml: content ]]")
@@ -260,29 +284,39 @@ class TestControlLoader:
 
     def test_multiple_controls_in_one_file(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            self._write_yaml(d, "multi.yaml", """\
+            self._write_yaml(
+                d,
+                "multi.yaml",
+                """\
                 controls:
                   - id: C1
                     title: First
                   - id: C2
                     title: Second
-                """)
+                """,
+            )
             loader = ControlLoader(controls_dir=str(d))
             defs = loader.load_all()
         assert len(defs) == 2
 
     def test_control_missing_id_skipped(self):
         from unimonitor.grc.control_loader import ControlLoader
+
         with tempfile.TemporaryDirectory() as tmpdir:
             d = Path(tmpdir)
-            self._write_yaml(d, "noid.yaml", """\
+            self._write_yaml(
+                d,
+                "noid.yaml",
+                """\
                 controls:
                   - title: No ID here
                   - id: C1
                     title: Good one
-                """)
+                """,
+            )
             loader = ControlLoader(controls_dir=str(d))
             defs = loader.load_all()
         assert len(defs) == 1
@@ -293,15 +327,18 @@ class TestControlLoader:
 # load_all_controls (module-level function, reads from CONTROLS_DIR)
 # ---------------------------------------------------------------------------
 
+
 class TestLoadAllControls:
     def test_returns_list(self):
         from unimonitor.grc.control_loader import load_all_controls
+
         # May return 0 or more controls depending on controls/ directory
         result = load_all_controls()
         assert isinstance(result, list)
 
     def test_missing_controls_dir_returns_empty(self):
         from unimonitor.grc.control_loader import load_all_controls
+
         with patch("unimonitor.grc.control_loader.CONTROLS_DIR", Path("/nonexistent")):
             result = load_all_controls()
         assert result == []
@@ -311,12 +348,14 @@ class TestLoadAllControls:
 # load_controls_for_frameworks
 # ---------------------------------------------------------------------------
 
+
 class TestLoadControlsForFrameworks:
     def _make_control(self, ctrl_id, frameworks):
         return {"id": ctrl_id, "frameworks": frameworks}
 
     def test_no_framework_ids_returns_all(self):
         from unimonitor.grc.control_loader import load_controls_for_frameworks
+
         controls = [
             self._make_control("C1", ["iso27001_2022"]),
             self._make_control("C2", ["soc2"]),
@@ -327,6 +366,7 @@ class TestLoadControlsForFrameworks:
 
     def test_filters_to_matching_framework(self):
         from unimonitor.grc.control_loader import load_controls_for_frameworks
+
         controls = [
             self._make_control("C1", ["iso27001_2022"]),
             self._make_control("C2", ["soc2"]),
@@ -341,6 +381,7 @@ class TestLoadControlsForFrameworks:
 
     def test_all_framework_includes_everything(self):
         from unimonitor.grc.control_loader import load_controls_for_frameworks
+
         controls = [
             self._make_control("C1", ["iso27001_2022"]),
             self._make_control("C2", ["soc2"]),
@@ -352,6 +393,7 @@ class TestLoadControlsForFrameworks:
     def test_no_match_returns_all(self):
         """When no controls match, all controls are returned as universal fallback."""
         from unimonitor.grc.control_loader import load_controls_for_frameworks
+
         controls = [
             self._make_control("C1", ["iso27001_2022"]),
         ]
@@ -364,6 +406,7 @@ class TestLoadControlsForFrameworks:
 # ---------------------------------------------------------------------------
 # _normalise
 # ---------------------------------------------------------------------------
+
 
 class TestNormalise:
     def _make_raw(self, ctrl_id="IDN-001", fw_key="iso_27001"):
@@ -383,51 +426,61 @@ class TestNormalise:
 
     def test_id_preserved(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw("APP-001"), Path("/controls/apps/f.yaml"))
         assert result["id"] == "APP-001"
 
     def test_name_from_metadata(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/x/f.yaml"))
         assert result["name"] == "Test"
 
     def test_service_from_parent_dir(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/devices/f.yaml"))
         assert result["service"] == "devices"
 
     def test_category_mapped_from_prefix(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw("IDN-001"), Path("/controls/x/f.yaml"))
         assert result["category"] == "Identity"
 
     def test_frameworks_mapped_from_compliance_keys(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(fw_key="iso_27001"), Path("/controls/x/f.yaml"))
         assert "iso27001_2022" in result["frameworks"]
 
     def test_remediation_summary(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/x/f.yaml"))
         assert result["remediation_summary"] == "Enable MFA"
 
     def test_remediation_steps_extracted(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/x/f.yaml"))
         assert result["remediation_steps"] == ["Go to settings"]
 
     def test_data_keys_from_data_requirements(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/x/f.yaml"))
         assert "v1.0_users" in result["data_keys"]
 
     def test_tags_from_metadata(self):
         from unimonitor.grc.control_loader import _normalise
+
         result = _normalise(self._make_raw(), Path("/controls/x/f.yaml"))
         assert "mfa" in result["tags"]
 
     def test_unknown_fw_key_not_added(self):
         from unimonitor.grc.control_loader import _normalise
+
         raw = self._make_raw(fw_key="unknown_fw_xyz")
         result = _normalise(raw, Path("/controls/x/f.yaml"))
         assert result["frameworks"] == []

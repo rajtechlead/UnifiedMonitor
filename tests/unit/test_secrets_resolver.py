@@ -25,8 +25,10 @@ def _run(coro):
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_provider(provider_type_str="local_vault"):
     from unimonitor.secrets.provider import ProviderType
+
     provider = MagicMock()
     provider.provider_type = ProviderType(provider_type_str)
     provider.get_secret = AsyncMock(return_value="secret_value")
@@ -38,6 +40,7 @@ def _make_provider(provider_type_str="local_vault"):
 
 def _make_resolver(primary=None, fallback=None, cache_ttl=300, failover_enabled=True):
     from unimonitor.secrets.resolver import SecretResolver
+
     if primary is None:
         primary = _make_provider("local_vault")
     return SecretResolver(
@@ -51,6 +54,7 @@ def _make_resolver(primary=None, fallback=None, cache_ttl=300, failover_enabled=
 # ---------------------------------------------------------------------------
 # SecretResolver.get
 # ---------------------------------------------------------------------------
+
 
 class TestSecretResolverGet:
     def test_returns_value_from_primary(self):
@@ -117,6 +121,7 @@ class TestSecretResolverGet:
 # SecretResolver.set / rotate / delete
 # ---------------------------------------------------------------------------
 
+
 class TestSecretResolverWrite:
     def test_set_calls_primary(self):
         primary = _make_provider("local_vault")
@@ -168,6 +173,7 @@ class TestSecretResolverWrite:
 # SecretResolver.resolve_ref
 # ---------------------------------------------------------------------------
 
+
 class TestResolveRef:
     def test_plain_name_calls_get(self):
         primary = _make_provider("local_vault")
@@ -184,7 +190,6 @@ class TestResolveRef:
         assert result == "local_val"
 
     def test_matching_scheme_routes_to_fallback(self):
-        from unimonitor.secrets.provider import ProviderType
         primary = _make_provider("local_vault")
         fallback = _make_provider("aws_secrets_manager")
         fallback.get_secret = AsyncMock(return_value="aws_val")
@@ -204,6 +209,7 @@ class TestResolveRef:
 # ---------------------------------------------------------------------------
 # SecretResolver.health_check and cache_stats
 # ---------------------------------------------------------------------------
+
 
 class TestHealthAndStats:
     def test_cache_stats_returns_dict(self):
@@ -226,25 +232,31 @@ class TestHealthAndStats:
 # get_secret_resolver singleton
 # ---------------------------------------------------------------------------
 
+
 class TestGetSecretResolver:
     def setup_method(self):
         from unimonitor.secrets.resolver import reset_resolver
+
         reset_resolver()
 
     def teardown_method(self):
         from unimonitor.secrets.resolver import reset_resolver
+
         reset_resolver()
 
     def test_returns_local_vault_by_default(self):
         from unimonitor.secrets.resolver import get_secret_resolver
+
         with patch.dict("os.environ", {"SECRETS_PROVIDER": "local_vault"}, clear=False):
             resolver = _run(get_secret_resolver())
         assert resolver is not None
         from unimonitor.secrets.provider import ProviderType
+
         assert resolver._primary.provider_type == ProviderType.LOCAL_VAULT
 
     def test_singleton_returns_same_instance(self):
         from unimonitor.secrets.resolver import get_secret_resolver
+
         with patch.dict("os.environ", {"SECRETS_PROVIDER": "local_vault"}, clear=False):
             r1 = _run(get_secret_resolver())
             r2 = _run(get_secret_resolver())
@@ -252,6 +264,7 @@ class TestGetSecretResolver:
 
     def test_reset_resolver_clears_singleton(self):
         from unimonitor.secrets.resolver import get_secret_resolver, reset_resolver
+
         with patch.dict("os.environ", {"SECRETS_PROVIDER": "local_vault"}, clear=False):
             r1 = _run(get_secret_resolver())
         reset_resolver()
@@ -261,13 +274,16 @@ class TestGetSecretResolver:
 
     def test_builds_aws_provider(self):
         from unimonitor.secrets.resolver import get_secret_resolver
+
         with patch.dict("os.environ", {"SECRETS_PROVIDER": "aws_secrets_manager", "AWS_REGION": "us-west-2"}, clear=False):
             resolver = _run(get_secret_resolver())
         from unimonitor.secrets.provider import ProviderType
+
         assert resolver._primary.provider_type == ProviderType.AWS_SECRETS_MANAGER
 
     def test_failover_disabled_no_fallback(self):
         from unimonitor.secrets.resolver import get_secret_resolver
+
         with patch.dict("os.environ", {"SECRETS_PROVIDER": "local_vault", "SECRETS_FAILOVER_ENABLED": "false"}, clear=False):
             resolver = _run(get_secret_resolver())
         assert resolver._fallback is None
@@ -277,36 +293,43 @@ class TestGetSecretResolver:
 # _build_provider
 # ---------------------------------------------------------------------------
 
+
 class TestBuildProvider:
     def test_builds_local_vault(self):
         from unimonitor.secrets.resolver import _build_provider
+
         provider = _build_provider("local_vault")
         from unimonitor.secrets.provider import ProviderType
+
         assert provider.provider_type == ProviderType.LOCAL_VAULT
 
     def test_builds_aws(self):
         from unimonitor.secrets.resolver import _build_provider
+
         with patch.dict("os.environ", {"AWS_REGION": "eu-west-1"}, clear=False):
             provider = _build_provider("aws_secrets_manager")
         from unimonitor.secrets.provider import ProviderType
+
         assert provider.provider_type == ProviderType.AWS_SECRETS_MANAGER
 
     def test_builds_azure(self):
-        from unimonitor.secrets.resolver import _build_provider
         # Azure SDK not installed; patch AzureKeyVaultProvider at import point
         mock_provider = MagicMock()
         from unimonitor.secrets.provider import ProviderType
+
         mock_provider.provider_type = ProviderType.AZURE_KEY_VAULT
         with patch("unimonitor.secrets.resolver.AzureKeyVaultProvider", return_value=mock_provider, create=True):
             with patch.dict("os.environ", {"AZURE_KEY_VAULT_URL": "https://vault.azure.net"}, clear=False):
                 # Patch the import inside _build_provider
                 import unimonitor.secrets.resolver as resolver_mod
+
                 with patch.object(resolver_mod, "_build_provider", wraps=lambda name: mock_provider if name == "azure_key_vault" else None):
                     provider = resolver_mod._build_provider("azure_key_vault")
         assert provider.provider_type == ProviderType.AZURE_KEY_VAULT
 
     def test_azure_missing_url_raises(self):
         from unimonitor.secrets.resolver import _build_provider
+
         env = {k: v for k, v in __import__("os").environ.items() if k != "AZURE_KEY_VAULT_URL"}
         with patch.dict("os.environ", env, clear=True):
             with pytest.raises(ValueError, match="AZURE_KEY_VAULT_URL"):

@@ -5,15 +5,14 @@ Covers: login (success/failure/inactive), /me, refresh, logout.
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
-import pytest_asyncio
-
 
 # ---------------------------------------------------------------------------
 # /login  (POST)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_login_success(client, admin_user):
@@ -74,6 +73,7 @@ async def test_login_inactive_user(client, admin_user, db_session):
 # /me  (GET)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_get_me_authenticated(client, auth_headers, admin_user):
     r = await client.get("/api/v1/auth/me", headers=auth_headers)
@@ -99,6 +99,7 @@ async def test_get_me_bad_token(client):
 # ---------------------------------------------------------------------------
 # /refresh  (POST)
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_refresh_success(client, admin_user):
@@ -150,6 +151,7 @@ async def test_refresh_access_token_rejected(client, admin_user):
 # /logout  (POST)
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.asyncio
 async def test_logout_success(client, auth_headers):
     r = await client.post("/api/v1/auth/logout", headers=auth_headers)
@@ -165,6 +167,7 @@ async def test_logout_unauthenticated(client):
 # ---------------------------------------------------------------------------
 # /login (Entra redirect) and /callback
 # ---------------------------------------------------------------------------
+
 
 @pytest.mark.asyncio
 async def test_entra_login_redirects(client):

@@ -22,6 +22,7 @@ def _run(coro):
 
 def _make_engine(db=None):
     from unimonitor.grc.engine import AssessmentEngine
+
     db = db or AsyncMock()
     db.commit = AsyncMock()
     db.flush = AsyncMock()
@@ -70,12 +71,14 @@ def _make_run(run_id="run-001"):
 # _evaluate_control — the core logic unit
 # ---------------------------------------------------------------------------
 
+
 class TestEvaluateControl:
     def test_implemented_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="implemented", severity="HIGH")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.IMPLEMENTED.value
         assert finding.risk_score == 0  # implemented → no risk
 
@@ -84,13 +87,15 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="pass")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.IMPLEMENTED.value
 
     def test_not_implemented_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_implemented", severity="CRITICAL")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
-        from unimonitor.db.models.finding import FindingState, FindingSeverity
+        from unimonitor.db.models.finding import FindingSeverity, FindingState
+
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
         assert finding.severity == FindingSeverity.CRITICAL.value
         assert finding.risk_score == 10  # critical full risk
@@ -100,6 +105,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="fail")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
 
     def test_partially_implemented_state(self):
@@ -107,6 +113,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="partially_implemented", severity="HIGH")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.PARTIALLY_IMPLEMENTED.value
         assert finding.risk_score == 4  # HIGH=8 // 2
 
@@ -115,6 +122,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="warning")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.PARTIALLY_IMPLEMENTED.value
 
     def test_not_applicable_state(self):
@@ -122,6 +130,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="not_applicable")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.NOT_APPLICABLE.value
         assert finding.risk_score == 0
 
@@ -130,6 +139,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="something_weird")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
 
     def test_evaluate_exception_produces_not_implemented(self):
@@ -138,6 +148,7 @@ class TestEvaluateControl:
         ctrl.run_evaluate.side_effect = RuntimeError("boom")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingState
+
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
         # Evidence should capture the error
         assert finding.evidence is not None and len(finding.evidence) > 0
@@ -148,6 +159,7 @@ class TestEvaluateControl:
         ctrl = _make_control_def(result="not_implemented", severity="MEDIUM")
         finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
         from unimonitor.db.models.finding import FindingSeverity
+
         assert finding.severity == FindingSeverity.MEDIUM.value
         assert finding.risk_score == 5
 
@@ -179,6 +191,7 @@ class TestEvaluateControl:
 # run() — full assessment orchestration
 # ---------------------------------------------------------------------------
 
+
 class TestAssessmentEngineRun:
     def _mock_loader(self, controls):
         loader = MagicMock()
@@ -200,16 +213,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 85.0,
-                "compliance_score": 90.0,
-                "risk_score": 2.5,
-                "critical_count": 0,
-                "high_count": 0,
-                "medium_count": 0,
-                "low_count": 0,
-                "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 85.0,
+                    "compliance_score": 90.0,
+                    "risk_score": 2.5,
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             result = _run(engine.run(run, frameworks=["iso_27001"]))
 
@@ -228,10 +244,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 100.0, "compliance_score": 100.0, "risk_score": 0.0,
-                "critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0, "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 100.0,
+                    "compliance_score": 100.0,
+                    "risk_score": 0.0,
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             _run(engine.run(run, frameworks=["iso_27001"]))
 
@@ -249,10 +274,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 70.0, "compliance_score": 70.0, "risk_score": 3.0,
-                "critical_count": 0, "high_count": 1, "medium_count": 0, "low_count": 0, "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 70.0,
+                    "compliance_score": 70.0,
+                    "risk_score": 3.0,
+                    "critical_count": 0,
+                    "high_count": 1,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             _run(engine.run(run, frameworks=[]))
 
@@ -273,10 +307,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 100.0, "compliance_score": 100.0, "risk_score": 0.0,
-                "critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0, "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 100.0,
+                    "compliance_score": 100.0,
+                    "risk_score": 0.0,
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             _run(engine.run(run, frameworks=[], progress_callback=progress))
 
@@ -296,10 +339,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 50.0, "compliance_score": 50.0, "risk_score": 5.0,
-                "critical_count": 0, "high_count": 1, "medium_count": 0, "low_count": 0, "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 50.0,
+                    "compliance_score": 50.0,
+                    "risk_score": 5.0,
+                    "critical_count": 0,
+                    "high_count": 1,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             result = _run(engine.run(run, frameworks=[]))
 
@@ -335,10 +387,19 @@ class TestAssessmentEngineRun:
         with (
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
-            patch("unimonitor.grc.engine.calculate_scores", return_value={
-                "security_score": 100.0, "compliance_score": 100.0, "risk_score": 0.0,
-                "critical_count": 0, "high_count": 0, "medium_count": 0, "low_count": 0, "informational_count": 0,
-            }),
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 100.0,
+                    "compliance_score": 100.0,
+                    "risk_score": 0.0,
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
         ):
             _run(engine.run(run, frameworks=["nonexistent_fw"]))
 

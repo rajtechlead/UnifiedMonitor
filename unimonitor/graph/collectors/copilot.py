@@ -1,6 +1,9 @@
 """Microsoft 365 Copilot collector."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+
 from unimonitor.core.logging import get_logger
 from unimonitor.graph.client import GraphClient
 

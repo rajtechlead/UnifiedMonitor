@@ -1,6 +1,9 @@
 """Microsoft Teams security collector."""
+
 from __future__ import annotations
+
 from dataclasses import dataclass, field
+
 from unimonitor.core.logging import get_logger
 from unimonitor.graph.client import GraphClient
 
@@ -24,7 +27,9 @@ class TeamsCollector:
     async def collect(self) -> TeamsData:
         data = TeamsData()
         try:
-            teams = await self.client.get_all_pages("/teams", params={"$select": "id,displayName,isArchived,guestSettings", "$top": "100"}, max_pages=10)
+            teams = await self.client.get_all_pages(
+                "/teams", params={"$select": "id,displayName,isArchived,guestSettings", "$top": "100"}, max_pages=10
+            )
             data.teams = teams
         except Exception as e:
             data.errors["teams"] = str(e)

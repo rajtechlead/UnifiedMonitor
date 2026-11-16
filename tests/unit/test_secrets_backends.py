@@ -17,10 +17,10 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _run(coro):
     """Run a coroutine in a fresh event loop."""
@@ -82,10 +82,12 @@ _ClientAuthenticationError = _azure_exc.ClientAuthenticationError
 # AWSSecretsManagerProvider
 # ---------------------------------------------------------------------------
 
+
 class TestAWSSecretsManagerProvider:
     def _make_provider(self, client_mock):
         """Create a provider with a mocked boto3 client."""
         from unimonitor.secrets.aws_secrets_manager import AWSSecretsManagerProvider
+
         with patch("boto3.client", return_value=client_mock):
             return AWSSecretsManagerProvider(region_name="us-east-1")
 
@@ -98,6 +100,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_get_secret_binary(self):
         import base64
+
         client = MagicMock()
         client.get_secret_value.return_value = {
             "SecretBinary": base64.b64encode(b"binary-secret"),
@@ -108,6 +111,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_get_secret_not_found_raises_key_error(self):
         from botocore.exceptions import ClientError
+
         client = MagicMock()
         client.get_secret_value.side_effect = ClientError(
             {"Error": {"Code": "ResourceNotFoundException", "Message": "not found"}},
@@ -119,6 +123,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_get_secret_invalid_request_raises_key_error(self):
         from botocore.exceptions import ClientError
+
         client = MagicMock()
         client.get_secret_value.side_effect = ClientError(
             {"Error": {"Code": "InvalidRequestException", "Message": "invalid"}},
@@ -138,6 +143,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_set_secret_create_new(self):
         from botocore.exceptions import ClientError
+
         client = MagicMock()
         client.put_secret_value.side_effect = ClientError(
             {"Error": {"Code": "ResourceNotFoundException", "Message": "not found"}},
@@ -158,6 +164,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_delete_secret_already_gone(self):
         from botocore.exceptions import ClientError
+
         client = MagicMock()
         client.delete_secret.side_effect = ClientError(
             {"Error": {"Code": "ResourceNotFoundException", "Message": "not found"}},
@@ -201,6 +208,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_health_check_no_credentials(self):
         from botocore.exceptions import NoCredentialsError
+
         client = MagicMock()
         client.list_secrets.side_effect = NoCredentialsError()
         provider = self._make_provider(client)
@@ -210,6 +218,7 @@ class TestAWSSecretsManagerProvider:
 
     def test_health_check_endpoint_error(self):
         from botocore.exceptions import EndpointConnectionError
+
         client = MagicMock()
         client.list_secrets.side_effect = EndpointConnectionError(endpoint_url="http://localhost")
         provider = self._make_provider(client)
@@ -235,14 +244,17 @@ class TestAWSSecretsManagerProvider:
 # AzureKeyVaultProvider
 # ---------------------------------------------------------------------------
 
+
 class TestAzureKeyVaultProvider:
     def _make_provider(self):
         """Create a provider with stubbed Azure SDK (no real credentials)."""
         from unimonitor.secrets.azure_keyvault import AzureKeyVaultProvider
+
         provider = AzureKeyVaultProvider.__new__(AzureKeyVaultProvider)
         provider._vault_url = "https://test.vault.azure.net/"
         provider._client = MagicMock()
         from unimonitor.secrets.provider import ProviderType
+
         provider.provider_type = ProviderType.AZURE_KEY_VAULT
         return provider
 
@@ -292,16 +304,36 @@ class TestAzureKeyVaultProvider:
 
     def test_list_secrets_no_prefix(self):
         provider = self._make_provider()
-        p1 = MagicMock(); p1.name = "secret-a"; p1.version = "v1"; p1.created_on = None; p1.expires_on = None; p1.tags = {}
-        p2 = MagicMock(); p2.name = "secret-b"; p2.version = "v2"; p2.created_on = None; p2.expires_on = None; p2.tags = {}
+        p1 = MagicMock()
+        p1.name = "secret-a"
+        p1.version = "v1"
+        p1.created_on = None
+        p1.expires_on = None
+        p1.tags = {}
+        p2 = MagicMock()
+        p2.name = "secret-b"
+        p2.version = "v2"
+        p2.created_on = None
+        p2.expires_on = None
+        p2.tags = {}
         provider._client.list_properties_of_secrets.return_value = [p1, p2]
         results = _run(provider.list_secrets())
         assert len(results) == 2
 
     def test_list_secrets_with_prefix(self):
         provider = self._make_provider()
-        p1 = MagicMock(); p1.name = "app/secret-a"; p1.version = "v1"; p1.created_on = None; p1.expires_on = None; p1.tags = {}
-        p2 = MagicMock(); p2.name = "other/secret-b"; p2.version = "v2"; p2.created_on = None; p2.expires_on = None; p2.tags = {}
+        p1 = MagicMock()
+        p1.name = "app/secret-a"
+        p1.version = "v1"
+        p1.created_on = None
+        p1.expires_on = None
+        p1.tags = {}
+        p2 = MagicMock()
+        p2.name = "other/secret-b"
+        p2.version = "v2"
+        p2.created_on = None
+        p2.expires_on = None
+        p2.tags = {}
         provider._client.list_properties_of_secrets.return_value = [p1, p2]
         results = _run(provider.list_secrets(prefix="app/"))
         assert len(results) == 1
@@ -340,20 +372,25 @@ class TestAzureKeyVaultProvider:
 # RotationManager
 # ---------------------------------------------------------------------------
 
+
 class TestRotationManager:
     def _make_provider(self):
         from unimonitor.secrets.provider import ProviderType, SecretMetadata
+
         p = MagicMock()
         p.provider_type = ProviderType.LOCAL_VAULT
-        p.rotate_secret = AsyncMock(return_value=SecretMetadata(
-            name="test-secret",
-            provider=ProviderType.LOCAL_VAULT,
-        ))
+        p.rotate_secret = AsyncMock(
+            return_value=SecretMetadata(
+                name="test-secret",
+                provider=ProviderType.LOCAL_VAULT,
+            )
+        )
         p.list_secrets = AsyncMock(return_value=[])
         return p
 
     def test_rotate_no_hooks(self):
         from unimonitor.secrets.rotation import RotationManager
+
         provider = self._make_provider()
         mgr = RotationManager(provider)
         meta = _run(mgr.rotate("test-secret", "new-value"))
@@ -362,6 +399,7 @@ class TestRotationManager:
 
     def test_rotate_with_pre_and_post_hooks(self):
         from unimonitor.secrets.rotation import RotationManager
+
         provider = self._make_provider()
         mgr = RotationManager(provider)
 
@@ -384,13 +422,15 @@ class TestRotationManager:
 
         past = (datetime.now(UTC) - timedelta(days=100)).isoformat()
         provider = MagicMock()
-        provider.list_secrets = AsyncMock(return_value=[
-            SecretMetadata(
-                name="test-secret",
-                provider=ProviderType.LOCAL_VAULT,
-                tags={"rotate_after_days": "90", "last_rotated_at": past},
-            )
-        ])
+        provider.list_secrets = AsyncMock(
+            return_value=[
+                SecretMetadata(
+                    name="test-secret",
+                    provider=ProviderType.LOCAL_VAULT,
+                    tags={"rotate_after_days": "90", "last_rotated_at": past},
+                )
+            ]
+        )
         mgr = RotationManager(provider)
         result = _run(mgr.check_rotation_due("test-secret"))
         assert result is True
@@ -401,13 +441,15 @@ class TestRotationManager:
 
         recent = (datetime.now(UTC) - timedelta(days=10)).isoformat()
         provider = MagicMock()
-        provider.list_secrets = AsyncMock(return_value=[
-            SecretMetadata(
-                name="test-secret",
-                provider=ProviderType.LOCAL_VAULT,
-                tags={"rotate_after_days": "90", "last_rotated_at": recent},
-            )
-        ])
+        provider.list_secrets = AsyncMock(
+            return_value=[
+                SecretMetadata(
+                    name="test-secret",
+                    provider=ProviderType.LOCAL_VAULT,
+                    tags={"rotate_after_days": "90", "last_rotated_at": recent},
+                )
+            ]
+        )
         mgr = RotationManager(provider)
         result = _run(mgr.check_rotation_due("test-secret"))
         assert result is False
@@ -417,9 +459,7 @@ class TestRotationManager:
         from unimonitor.secrets.rotation import RotationManager
 
         provider = MagicMock()
-        provider.list_secrets = AsyncMock(return_value=[
-            SecretMetadata(name="test-secret", provider=ProviderType.LOCAL_VAULT, tags={})
-        ])
+        provider.list_secrets = AsyncMock(return_value=[SecretMetadata(name="test-secret", provider=ProviderType.LOCAL_VAULT, tags={})])
         mgr = RotationManager(provider)
         result = _run(mgr.check_rotation_due("test-secret"))
         assert result is False
@@ -440,18 +480,20 @@ class TestRotationManager:
         past = (datetime.now(UTC) - timedelta(days=100)).isoformat()
         recent = (datetime.now(UTC) - timedelta(days=10)).isoformat()
         provider = MagicMock()
-        provider.list_secrets = AsyncMock(return_value=[
-            SecretMetadata(
-                name="overdue-secret",
-                provider=ProviderType.LOCAL_VAULT,
-                tags={"rotate_after_days": "90", "last_rotated_at": past},
-            ),
-            SecretMetadata(
-                name="fresh-secret",
-                provider=ProviderType.LOCAL_VAULT,
-                tags={"rotate_after_days": "90", "last_rotated_at": recent},
-            ),
-        ])
+        provider.list_secrets = AsyncMock(
+            return_value=[
+                SecretMetadata(
+                    name="overdue-secret",
+                    provider=ProviderType.LOCAL_VAULT,
+                    tags={"rotate_after_days": "90", "last_rotated_at": past},
+                ),
+                SecretMetadata(
+                    name="fresh-secret",
+                    provider=ProviderType.LOCAL_VAULT,
+                    tags={"rotate_after_days": "90", "last_rotated_at": recent},
+                ),
+            ]
+        )
         mgr = RotationManager(provider)
         due = _run(mgr.list_rotation_due())
         assert "overdue-secret" in due
@@ -459,6 +501,7 @@ class TestRotationManager:
 
     def test_list_rotation_due_empty(self):
         from unimonitor.secrets.rotation import RotationManager
+
         provider = self._make_provider()
         provider.list_secrets = AsyncMock(return_value=[])
         mgr = RotationManager(provider)
@@ -467,6 +510,7 @@ class TestRotationManager:
 
     def test_list_rotation_due_provider_error(self):
         from unimonitor.secrets.rotation import RotationManager
+
         provider = MagicMock()
         provider.list_secrets = AsyncMock(side_effect=RuntimeError("failed"))
         mgr = RotationManager(provider)
