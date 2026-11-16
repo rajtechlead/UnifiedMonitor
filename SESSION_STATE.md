@@ -99,6 +99,17 @@ None.
 6. `PROJECT_AUDIT.md` (L-001, deferred by owner decision).
 7. Test coverage re-measurement (last measurement 62% at `79dfb98`).
 
+## Tooling
+
+`graphify` 0.9.111 is installed and the code knowledge graph is committed under `graphify-out/`
+(2938 nodes, 6129 edges, 177 communities, AST-only, markdown excluded via `.graphifyignore`).
+Query it with `graphify explain "X"`, `graphify path "A" "B"` or `graphify query` before grepping.
+The graph is refreshed by `graphify update .`; `.gitattributes` union-merges `graph.json`.
+The pre-commit refresh hook is deliberately *not* installed in this workspace: `.git` is a linked
+worktree sharing `/workspace/repo.git`, and modifying shared Git hooks would affect other
+worktrees. Install the hook per clone (see the setup-graphify skill) when the repo is checked out
+as a normal main tree.
+
 ## Active Technology Baseline
 
 Python 3.12.x (enforced), FastAPI + SQLAlchemy + Alembic + Pydantic, PostgreSQL primary /
