@@ -31,8 +31,9 @@ None
 | L-005 | python-jose 3.5.0 CVE PYSEC-2026-4298 | pip deps | ℹ️ Informational — no fix upstream |
 | L-007 | Remaining frontend majors: react 18→19, @vitejs/plugin-react 4→6 | `frontend/` | ⬜ P7-007 |
 | L-008 | Ruff per-file ignores added for CLI `print` (T201 in `scripts/`) and dummy credentials in `tests/` (S105/S106/S108/B017) | `pyproject.toml` | ℹ️ By design — documented decision |
-| L-009 | Duplicate insider-risk titles: CTRL-PUR-003 and CTRL-PUR-006 are both "Insider Risk Management Policy Enabled" | `controls/purview/data_protection.yaml` | ⬜ rename/replace PUR-006 with a distinct control |
-| L-010 | Collector data keys used by the new controls (e.g. `intune_security_baselines`, `mdi_sensors`, `insider_risk_policies`, `copilot_studio_agents`) are not yet emitted by every collector — controls return `not_applicable` until data exists | `unimonitor/graph/collectors/` | ⬜ collector coverage |
+| L-010 | Some new control keys still depend on the posture snapshot (Copilot Studio, LAPS policy, app blocklist, insider-risk connectors) because no Graph endpoint exposes them | `unimonitor/graph/collectors/snapshot.py` | 🟡 by design; documented in OPERATIONS |
+| M-023 | Google collectors use a pre-issued access token; there is no refresh flow, so a long run needs an external refresher | `unimonitor/graph/collectors/cloud_providers.py` | ⬜ P8-005 |
+| M-024 | AWS/GCP/Workspace controls have never run against live accounts — payload tests only | `controls/aws`, `controls/gcp`, `controls/google_workspace` | ⬜ P8-004 |
 
 ## Resolved This Session (2026-11-16)
 
@@ -41,6 +42,8 @@ None
 | M-017 | `ExecutiveDashboard` read `scores.security`, `severity_counts`, `trend` — none of which `/dashboard/executive` returns; page silently displayed hard-coded demo values | Mapped to `security_score`/`compliance_score`/`risk_score`, `score_trends`, `framework_coverage`, `top_risks`; demo fallbacks removed |
 | M-018 | `ComplianceDashboard` expected `{framework, score, implemented…}`; API returns `{framework_id, framework_name, coverage_pct, controls_total, controls_passed}` — framework list rendered empty | Aligned to the API contract |
 | M-019 | Risk, SOC and Audit dashboard views required by PROJECT_REQUIREMENTS had no UI (Risk/SOC had API only; Audit had no API) | Added `RiskDashboard`, `SocDashboard`, `AuditPage` + `GET /api/v1/dashboard/audit`, routes and nav |
+| M-025 | L-009 duplicate insider-risk title | CTRL-PUR-006 replaced with a departing-employee scenario control |
+| M-026 | 58 new controls had no collector producing their data keys | Added `extended.py` + snapshot ingestion; 19 payload tests prove collector → control |
 | M-021 | Control library depth — 100 controls across 10 areas; 7 named monitoring areas had no controls | Added 58 controls in 8 new files (Intune baselines, app inventory, Defender Office/Identity/Cloud Apps, Insider Risk, eDiscovery, Copilot Studio); library now 158 |
 | M-022 | 12 controls mapped to unregistered framework key `nist_csf`, so their NIST CSF mapping never resolved | Renamed to `nist_csf_2` in exchange, teams and sharepoint control files |
 | M-020 | 157 ruff errors + 2 mypy errors on HEAD (tests/scripts added after `1de7bcd` were never linted → CI red) | Auto-fix + format; manual fixes for unused imports/vars, `S607`, E501; per-file ignores for CLI `print` and test fixtures |

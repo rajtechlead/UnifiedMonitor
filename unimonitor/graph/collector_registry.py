@@ -38,6 +38,9 @@ class CollectorRegistry:
         "copilot",
         "azure_security",
         "secure_score",
+        "aws",
+        "gcp",
+        "google_workspace",
     ]
 
     def __init__(
@@ -89,6 +92,9 @@ class CollectorRegistry:
             "copilot": _collect_copilot,
             "azure_security": _collect_azure_security,
             "secure_score": _collect_secure_score,
+            "aws": _collect_aws,
+            "gcp": _collect_gcp,
+            "google_workspace": _collect_google_workspace,
         }
         fn = collector_map.get(name)
         if fn is None:
@@ -287,6 +293,27 @@ async def _collect_azure_security(gc: GraphClient) -> dict[str, Any]:
             data.update(r)
 
     return data
+
+
+async def _collect_aws(gc: GraphClient) -> dict[str, Any]:
+    """Collect AWS posture (boto3 default credential chain)."""
+    from unimonitor.graph.collectors.cloud_providers import collect_aws
+
+    return await collect_aws()
+
+
+async def _collect_gcp(gc: GraphClient) -> dict[str, Any]:
+    """Collect Google Cloud posture (REST, access token from settings)."""
+    from unimonitor.graph.collectors.cloud_providers import collect_gcp
+
+    return await collect_gcp()
+
+
+async def _collect_google_workspace(gc: GraphClient) -> dict[str, Any]:
+    """Collect Google Workspace posture (Admin SDK REST)."""
+    from unimonitor.graph.collectors.cloud_providers import collect_google_workspace
+
+    return await collect_google_workspace()
 
 
 async def _collect_secure_score(gc: GraphClient) -> dict[str, Any]:

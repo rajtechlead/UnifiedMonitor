@@ -19,7 +19,18 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P7-002 SOC dashboard view | ✅ Done | `frontend/src/pages/SocDashboard.tsx` |
 | P7-003 Audit dashboard view | ✅ Done | `frontend/src/pages/AuditPage.tsx` + `GET /dashboard/audit` |
 | P7-004 Executive/Compliance contract fix | ✅ Done | pages were showing demo values instead of API data |
-| P7-005 Control library depth | ✅ Done | 158 controls; added Intune baselines, app inventory, Defender Office/Identity/Cloud Apps, Insider Risk, eDiscovery, Copilot Studio |
+| P7-005 Control library depth | ✅ Done | 158 controls added; extended collectors now feed them (snapshot path for non-Graph areas) |
+
+## Phase 8 — Multi-Cloud (AWS, Google Cloud, Google Workspace)
+
+| Task | Status | Notes |
+|---|---|---|
+| P8-001 AWS collector + controls | ✅ Done | 8 controls; boto3 default credential chain |
+| P8-002 GCP collector + controls | ✅ Done | 8 controls; REST + `GCP_ACCESS_TOKEN` |
+| P8-003 Google Workspace collector + controls | ✅ Done | 6 controls; Admin SDK REST + `GOOGLE_ACCESS_TOKEN` |
+| P8-004 Live credential validation | ⬜ Open | no AWS/GCP/Workspace accounts in the agent workspace |
+| P8-005 Google token refresh | ⬜ Open | collectors take a static token; add service-account/OIDC refresh |
+| P8-006 Provider controls in the UI | ⬜ Open | dashboard views are Microsoft-centric today |
 | P7-006 Coverage re-measure | ⬜ Open | last 62% at `79dfb98` |
 | P7-007 Frontend majors remaining | ⬜ Open | `react` 18→19, `@vitejs/plugin-react` 4→6 |
 | P7-008 Jose/ecdsa CVE decision | ⬜ Open | accept-and-record or migrate to `pyjwt` |

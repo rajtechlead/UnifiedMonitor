@@ -1,0 +1,264 @@
+# UniMonitor GRC Controls — Amazon Web Services
+
+controls:
+  - id: CTRL-AWS-001
+    title: "Root Account MFA Enabled"
+    description: >
+      The AWS root user must have multi-factor authentication enabled. Root has
+      unrestricted access and cannot be constrained by IAM policy.
+    severity: CRITICAL
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-03"
+      nist_800_53_r5:
+        - "IA-2(1)"
+      cis_controls_v8:
+        - "6.3"
+      soc2:
+        - "CC6.1"
+      pci_dss_v4:
+        - "8.4.2"
+    evaluate: |
+      enabled = data.get("aws_root_mfa_enabled")
+      if enabled is None:
+          return "not_applicable"
+      return "implemented" if enabled else "not_implemented"
+
+  - id: CTRL-AWS-002
+    title: "IAM Password Policy Enforces Complexity"
+    description: >
+      The account password policy must require at least 14 characters, upper and lower
+      case, numbers, symbols, and a reuse prevention of 24 or more.
+    severity: HIGH
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-01"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.2"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      policy = data.get("aws_iam_password_policy")
+      if not policy:
+          return "not_implemented"
+      checks = [
+          (policy.get("MinimumPasswordLength") or 0) >= 14,
+          policy.get("RequireUppercaseCharacters") is True,
+          policy.get("RequireLowercaseCharacters") is True,
+          policy.get("RequireSymbols") is True,
+          policy.get("RequireNumbers") is True,
+          (policy.get("PasswordReusePrevention") or 0) >= 24,
+      ]
+      passed = sum(1 for c in checks if c)
+      if passed == len(checks):
+          return "implemented"
+      return "partially_implemented" if passed >= 4 else "not_implemented"
+
+  - id: CTRL-AWS-003
+    title: "IAM Access Keys Rotated Within 90 Days"
+    description: >
+      Long-lived IAM access keys must be rotated at least every 90 days, or replaced with
+      short-lived role credentials, to limit the impact of a leaked key.
+    severity: HIGH
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.4"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      from datetime import UTC, datetime
+
+      keys = data.get("aws_access_keys")
+      if keys is None:
+          return "not_applicable"
+      active = [k for k in keys if str(k.get("Status", "")).lower() == "active"]
+      if not active:
+          return "implemented"
+      stale = 0
+      for key in active:
+          raw = str(key.get("CreateDate", ""))
+          try:
+              created = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+              if created.tzinfo is None:
+                  created = created.replace(tzinfo=UTC)
+              if (datetime.now(UTC) - created).days > 90:
+                  stale += 1
+          except ValueError:
+              stale += 1
+      if stale == 0:
+          return "implemented"
+      return "partially_implemented" if stale < len(active) else "not_implemented"
+
+  - id: CTRL-AWS-004
+    title: "S3 Buckets Block Public Access and Encrypt at Rest"
+    description: >
+      Every S3 bucket must block all four public access settings and have default
+      server-side encryption enabled.
+    severity: CRITICAL
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.3"
+      soc2:
+        - "CC6.7"
+      pci_dss_v4:
+        - "3.5.1"
+      hipaa:
+        - "164.312(a)(2)(iv)"
+    evaluate: |
+      buckets = data.get("aws_s3_buckets")
+      if buckets is None:
+          return "not_applicable"
+      if not buckets:
+          return "implemented"
+      flags = (
+          "BlockPublicAcls",
+          "IgnorePublicAcls",
+          "BlockPublicPolicy",
+          "RestrictPublicBuckets",
+      )
+      failures = []
+      for bucket in buckets:
+          block = bucket.get("PublicAccessBlock") or {}
+          public_ok = all(block.get(f) is True for f in flags)
+          encrypted = bool(bucket.get("Encryption"))
+          if not (public_ok and encrypted):
+              failures.append(bucket.get("Name", "unknown"))
+      if not failures:
+          return "implemented"
+      return "partially_implemented" if len(failures) < len(buckets) else "not_implemented"
+
+  - id: CTRL-AWS-005
+    title: "CloudTrail Multi-Region Logging Enabled"
+    description: >
+      A multi-region CloudTrail trail must be logging so API activity across all regions is
+      captured for detection and audit.
+    severity: HIGH
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.15"
+      nist_csf_2:
+        - "DE.CM-03"
+      nist_800_53_r5:
+        - "AU-2"
+      cis_controls_v8:
+        - "8.5"
+      soc2:
+        - "CC7.2"
+      pci_dss_v4:
+        - "10.2.1"
+    evaluate: |
+      trails = data.get("aws_cloudtrail_trails")
+      if trails is None:
+          return "not_applicable"
+      active = [
+          t for t in trails
+          if t.get("IsMultiRegionTrail") is True and t.get("IsLogging") is True
+      ]
+      if active:
+          return "implemented"
+      return "partially_implemented" if trails else "not_implemented"
+
+  - id: CTRL-AWS-006
+    title: "GuardDuty Threat Detection Enabled"
+    description: >
+      Amazon GuardDuty must have at least one enabled detector so account, network and
+      data-access threats are detected continuously.
+    severity: HIGH
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "SI-4"
+      cis_controls_v8:
+        - "13.1"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      detectors = data.get("aws_guardduty_detectors")
+      if detectors is None:
+          return "not_applicable"
+      enabled = [d for d in detectors if str(d.get("Status", "")).upper() == "ENABLED"]
+      return "implemented" if enabled else "not_implemented"
+
+  - id: CTRL-AWS-007
+    title: "AWS Config Recording Enabled"
+    description: >
+      At least one AWS Config recorder must be recording so resource configuration changes
+      are captured and can be evaluated against compliance rules.
+    severity: MEDIUM
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "CM-2"
+      nist_800_53_r5:
+        - "CM-2"
+      cis_controls_v8:
+        - "4.1"
+      soc2:
+        - "CC7.1"
+    evaluate: |
+      recorders = data.get("aws_config_recorders")
+      if recorders is None:
+          return "not_applicable"
+      recording = [r for r in recorders if r.get("recording") is True]
+      return "implemented" if recording else "not_implemented"
+
+  - id: CTRL-AWS-008
+    title: "Security Hub Aggregation Enabled"
+    description: >
+      AWS Security Hub must be enabled so findings from GuardDuty, Config and partner
+      products are aggregated into one prioritised queue.
+    severity: MEDIUM
+    category: cloud_security
+    service: aws
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.AE-02"
+      nist_800_53_r5:
+        - "RA-5"
+      cis_controls_v8:
+        - "7.1"
+      soc2:
+        - "CC7.1"
+    evaluate: |
+      enabled = data.get("aws_securityhub_enabled")
+      if enabled is None:
+          return "not_applicable"
+      return "implemented" if enabled else "not_implemented"

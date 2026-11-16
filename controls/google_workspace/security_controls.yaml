@@ -1,0 +1,184 @@
+# UniMonitor GRC Controls — Google Workspace
+
+controls:
+  - id: CTRL-GWS-001
+    title: "Two-Step Verification Enforced for All Users"
+    description: >
+      Two-step verification must be enforced org-wide, not merely available, so every
+      account is protected against credential-only compromise.
+    severity: CRITICAL
+    category: identity
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-03"
+      nist_800_53_r5:
+        - "IA-2(1)"
+      cis_controls_v8:
+        - "6.3"
+      soc2:
+        - "CC6.1"
+      pci_dss_v4:
+        - "8.4.2"
+    evaluate: |
+      state = data.get("gws_two_step_enforcement")
+      if not state:
+          return "not_applicable"
+      if state.get("enforced") is True:
+          return "implemented"
+      return "partially_implemented" if (state.get("enrollmentPct") or 0) >= 50 else "not_implemented"
+
+  - id: CTRL-GWS-002
+    title: "Super Admin Count Limited to Four"
+    description: >
+      No more than four users may hold the super admin role; additional administrators
+      should use delegated roles.
+    severity: HIGH
+    category: identity
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "5.4"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      admins = data.get("gws_super_admins")
+      if admins is None:
+          return "not_applicable"
+      count = len(admins)
+      if count == 0:
+          return "not_implemented"
+      if count <= 4:
+          return "implemented"
+      return "partially_implemented" if count <= 8 else "not_implemented"
+
+  - id: CTRL-GWS-003
+    title: "Custom Admin Roles Follow Least Privilege"
+    description: >
+      Custom admin roles must not bundle excessive privileges; every role should carry a
+      small, purpose-specific privilege set.
+    severity: MEDIUM
+    category: identity
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.2"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "5.4"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      roles = data.get("gws_admin_roles")
+      if roles is None:
+          return "not_applicable"
+      excessive = [r for r in roles if (r.get("assignedCount") or 0) > 20]
+      if not excessive:
+          return "implemented"
+      return "partially_implemented" if len(excessive) < len(roles) else "not_implemented"
+
+  - id: CTRL-GWS-004
+    title: "Third-Party OAuth Tokens Reviewed"
+    description: >
+      OAuth tokens granted to third-party apps must be reviewed, and any token with
+      full mail or drive scope revoked unless explicitly approved.
+    severity: HIGH
+    category: identity
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.15"
+        - "A.8.19"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "6.8"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      tokens = data.get("gws_oauth_tokens")
+      if tokens is None:
+          return "not_applicable"
+      high_risk = []
+      for token in tokens:
+          scopes = " ".join(str(s) for s in token.get("scopes", []))
+          if "https://mail.google.com/" in scopes or "https://www.googleapis.com/auth/drive" in scopes:
+              high_risk.append(token.get("displayText") or token.get("clientId", "unknown"))
+      if not high_risk:
+          return "implemented"
+      return "partially_implemented" if len(high_risk) <= 3 else "not_implemented"
+
+  - id: CTRL-GWS-005
+    title: "External File Sharing Restricted"
+    description: >
+      External sharing must be disabled or restricted to allowed domains, and "anyone with
+      the link" access must be off.
+    severity: HIGH
+    category: data_protection
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "AC-4"
+      cis_controls_v8:
+        - "3.3"
+      soc2:
+        - "CC6.7"
+      gdpr:
+        - "Art.32"
+    evaluate: |
+      settings = data.get("gws_drive_sharing_settings")
+      if not settings:
+          return "not_applicable"
+      if settings.get("allowAnyone") is True or settings.get("allowExternalSharing") is True:
+          return "not_implemented"
+      return "implemented"
+
+  - id: CTRL-GWS-006
+    title: "Mobile Device Access Restricted to Approved Devices"
+    description: >
+      Every mobile device accessing Workspace must be approved; blocked or pending devices
+      indicate unmanaged access to corporate data.
+    severity: MEDIUM
+    category: devices
+    service: google_workspace
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.1"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-19"
+      cis_controls_v8:
+        - "4.1"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      devices = data.get("gws_mobile_devices")
+      if devices is None:
+          return "not_applicable"
+      if not devices:
+          return "implemented"
+      unapproved = [
+          d for d in devices
+          if str(d.get("status", "")).upper() not in ("APPROVED", "CORPORATE")
+      ]
+      if not unapproved:
+          return "implemented"
+      return "partially_implemented" if len(unapproved) < len(devices) else "not_implemented"

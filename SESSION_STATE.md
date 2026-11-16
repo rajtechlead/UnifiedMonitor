@@ -68,6 +68,15 @@ frontend dependency migrations already merged. Trackers have now been reconciled
   severities, registered framework keys, required-area coverage and evaluator safety.
 - Fixed 12 pre-existing controls that mapped to the unregistered key `nist_csf` instead of
   `nist_csf_2`, so their NIST CSF mapping never resolved.
+- Made the 58 new controls actually evaluate: `graph/collectors/extended.py` normalises Graph
+  payloads into the keys they read (Intune baselines/app inventory, Defender for Office/Identity/
+  Cloud Apps from Secure Score, eDiscovery cases and role groups, OAuth consent grants), and
+  `graph/collectors/snapshot.py` merges a posture snapshot (`UNIMONITOR_POSTURE_SNAPSHOT`) for areas
+  with no Graph endpoint. 19 tests drive sample payloads through collector → control.
+- Closed L-009: CTRL-PUR-006 is now a distinct departing-employee scenario control.
+- Added multi-cloud support (Phase 8): AWS (boto3), Google Cloud and Google Workspace (REST with an
+  access token) collectors, with 8 AWS / 8 GCP / 6 Workspace controls and 12 payload-driven tests.
+  Provider collectors return {} without credentials, so controls report `not_implemented`.
 - Fixed 157 ruff + 2 mypy errors that existed on HEAD (CI would have been red): import sorting,
   line length, unused imports/variables, `print` in CLI scripts, dummy-credential false positives.
 
@@ -131,8 +140,9 @@ same-vendor upgrades within the approved stack, not substitutions.
 
 | Component | Status | Notes |
 |---|---|---|
-| Python tests | ✅ 473/473 | 47s, 7 warnings (AsyncMock never-awaited in mocks) |
-| Control library | ✅ 158 controls | 18 YAML files, all framework keys resolve |
+| Python tests | ✅ 504/504 | 48s, 7 warnings (AsyncMock never-awaited in mocks) |
+| Control library | ✅ 180 controls | 21 YAML files, all framework keys resolve |
+| Multi-cloud collectors | ✅ AWS / GCP / Workspace | credential-dependent; payload tests only |
 | Ruff check | ✅ CLEAN | 0 errors (was 157 on HEAD) |
 | Ruff format | ✅ CLEAN | 132 files formatted |
 | mypy | ✅ CLEAN | 87 source files |

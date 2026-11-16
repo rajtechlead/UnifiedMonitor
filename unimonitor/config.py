@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     DATABASE_MAX_OVERFLOW: int = 10
     DATABASE_ECHO: bool = False
 
+    # ── Multi-cloud providers (AWS / GCP / Google Workspace) ─────
+    GCP_PROJECT_ID: str = ""
+    GCP_ACCESS_TOKEN: str = ""
+    GOOGLE_WORKSPACE_CUSTOMER_ID: str = "my_customer"
+    GOOGLE_ACCESS_TOKEN: str = ""
+
     # ── Redis ─────────────────────────────────────────────────
     REDIS_URL: str = "redis://localhost:6379/0"
     REDIS_CACHE_TTL: int = 3600

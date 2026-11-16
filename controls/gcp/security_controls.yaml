@@ -1,0 +1,262 @@
+# UniMonitor GRC Controls — Google Cloud Platform
+
+controls:
+  - id: CTRL-GCP-001
+    title: "No Primitive Owner or Editor Roles on Project IAM"
+    description: >
+      Project IAM bindings must not use the primitive Owner or Editor roles for broad
+      audiences; equivalent predefined roles should be granted instead.
+    severity: CRITICAL
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.5.15"
+        - "A.8.2"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      cis_controls_v8:
+        - "6.8"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      bindings = data.get("gcp_project_iam_bindings")
+      if bindings is None:
+          return "not_applicable"
+      primitive = {"roles/owner", "roles/editor"}
+      offenders = [b for b in bindings if b.get("role") in primitive]
+      public = [
+          b for b in bindings
+          if any(m in ("allUsers", "allAuthenticatedUsers") for m in b.get("members", []))
+      ]
+      if public:
+          return "not_implemented"
+      if not offenders:
+          return "implemented"
+      return "partially_implemented"
+
+  - id: CTRL-GCP-002
+    title: "User-Managed Service Account Keys Avoided"
+    description: >
+      Service accounts must use workload identity or short-lived credentials; user-managed
+      keys are long-lived secrets and must be eliminated or tightly limited.
+    severity: HIGH
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.5"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "IA-5"
+      cis_controls_v8:
+        - "5.4"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      keys = data.get("gcp_service_account_keys")
+      if keys is None:
+          return "not_applicable"
+      if not keys:
+          return "implemented"
+      return "partially_implemented" if len(keys) <= 2 else "not_implemented"
+
+  - id: CTRL-GCP-003
+    title: "No Firewall Rule Exposes Management Ports to the Internet"
+    description: >
+      No ingress firewall rule may allow 0.0.0.0/0 to SSH (22) or RDP (3389).
+    severity: CRITICAL
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.IR-01"
+      nist_800_53_r5:
+        - "SC-7"
+      cis_controls_v8:
+        - "12.2"
+      soc2:
+        - "CC6.6"
+      pci_dss_v4:
+        - "1.4.1"
+    evaluate: |
+      rules = data.get("gcp_firewall_rules")
+      if rules is None:
+          return "not_applicable"
+      management = {"22", "3389"}
+      exposed = []
+      for rule in rules:
+          if str(rule.get("direction", "INGRESS")).upper() != "INGRESS":
+              continue
+          if "0.0.0.0/0" not in (rule.get("sourceRanges") or []):
+              continue
+          ports = set()
+          for allowed in rule.get("allowed") or []:
+              ports.update(str(p) for p in allowed.get("ports", []))
+          if ports & management:
+              exposed.append(rule.get("name", "unknown"))
+      return "implemented" if not exposed else "not_implemented"
+
+  - id: CTRL-GCP-004
+    title: "Audit Log Sink Exported to Central Destination"
+    description: >
+      At least one log sink must export audit logs to a central, tamper-resistant
+      destination for retention and correlation.
+    severity: HIGH
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.15"
+      nist_csf_2:
+        - "DE.CM-03"
+      nist_800_53_r5:
+        - "AU-9"
+      cis_controls_v8:
+        - "8.5"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      sinks = data.get("gcp_audit_log_sinks")
+      if sinks is None:
+          return "not_applicable"
+      exporting = [s for s in sinks if s.get("destination")]
+      return "implemented" if exporting else "not_implemented"
+
+  - id: CTRL-GCP-005
+    title: "Cloud Storage Buckets Use Uniform Access and CMEK"
+    description: >
+      Buckets must enable uniform bucket-level access and apply customer-managed
+      encryption keys so access is centrally governed and data is encrypted at rest.
+    severity: HIGH
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.12"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-28"
+      cis_controls_v8:
+        - "3.3"
+      soc2:
+        - "CC6.7"
+    evaluate: |
+      buckets = data.get("gcp_storage_buckets")
+      if buckets is None:
+          return "not_applicable"
+      if not buckets:
+          return "implemented"
+      compliant = 0
+      for bucket in buckets:
+        iam = bucket.get("iamConfiguration") or {}
+        uniform = (iam.get("uniformBucketLevelAccess") or {}).get("enabled") is True
+        encrypted = bool(bucket.get("encryption"))
+        if uniform and encrypted:
+            compliant += 1
+      if compliant == len(buckets):
+          return "implemented"
+      return "partially_implemented" if compliant else "not_implemented"
+
+  - id: CTRL-GCP-006
+    title: "KMS Key Rotation Within 90 Days"
+    description: >
+      Every KMS key must have a rotation period of 90 days or less.
+    severity: MEDIUM
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.24"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-12"
+      cis_controls_v8:
+        - "3.6"
+      soc2:
+        - "CC6.7"
+    evaluate: |
+      keys = data.get("gcp_kms_keys")
+      if keys is None:
+          return "not_applicable"
+      if not keys:
+          return "implemented"
+      compliant = 0
+      for key in keys:
+          raw = str(key.get("rotationPeriod", ""))
+          try:
+              seconds = int(raw.rstrip("s")) if raw.endswith("s") else 0
+          except ValueError:
+              seconds = 0
+          if 0 < seconds <= 7776000:
+              compliant += 1
+      if compliant == len(keys):
+          return "implemented"
+      return "partially_implemented" if compliant else "not_implemented"
+
+  - id: CTRL-GCP-007
+    title: "Organisation Policy Constraints Enforced"
+    description: >
+      Organisation policy constraints must be applied to the project to prevent
+      configuration drift such as public buckets or unrestricted service accounts.
+    severity: MEDIUM
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.9"
+      nist_csf_2:
+        - "PR.PS-01"
+      nist_800_53_r5:
+        - "CM-6"
+      cis_controls_v8:
+        - "4.1"
+      soc2:
+        - "CC7.1"
+    evaluate: |
+      policies = data.get("gcp_org_policies")
+      if policies is None:
+          return "not_applicable"
+      return "implemented" if policies else "not_implemented"
+
+  - id: CTRL-GCP-008
+    title: "VPC Flow Logs Enabled on Subnetworks"
+    description: >
+      VPC flow logs must be enabled on every subnetwork so network traffic is available
+      for detection and investigation.
+    severity: MEDIUM
+    category: cloud_security
+    service: gcp
+    compliance_mapping:
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "AU-12"
+      cis_controls_v8:
+        - "13.1"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      subnetworks = data.get("gcp_subnetworks")
+      if subnetworks is None:
+          return "not_applicable"
+      if not subnetworks:
+          return "implemented"
+      enabled = 0
+      for item in subnetworks:
+          subnets = item.get("subnetworks", []) if isinstance(item, dict) else []
+          for subnet in subnets:
+              if subnet.get("enableFlowLogs") is True:
+                  enabled += 1
+              else:
+                  return "partially_implemented" if enabled else "not_implemented"
+      return "implemented" if enabled else "not_implemented"
