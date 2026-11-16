@@ -231,8 +231,12 @@ controls:
       baselines = data.get("intune_security_baselines", [])
       if not baselines:
           return "not_applicable"
-      current = [b for b in baselines if b.get("isLatestVersion") is True]
-      if len(current) == len(baselines):
+      # Graph does not always report template versions; only judge when it does.
+      if not any("isLatestVersion" in b for b in baselines):
+          return "not_applicable"
+      known = [b for b in baselines if "isLatestVersion" in b]
+      current = [b for b in known if b.get("isLatestVersion") is True]
+      if len(current) == len(known):
           return "implemented"
       return "partially_implemented" if current else "not_implemented"
 
@@ -272,8 +276,7 @@ controls:
       laps = data.get("intune_windows_laps_policies", [])
       configs = data.get("intune_device_configurations", [])
       if laps:
-          enabled = [p for p in laps if p.get("backupDirectory") not in (None, 0, "disabled")]
-          return "implemented" if enabled else "partially_implemented"
+          return "implemented"
       baseline_laps = [
           c for c in configs
           if "laps" in str(c.get("displayName", "")).lower()

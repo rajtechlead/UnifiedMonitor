@@ -224,11 +224,11 @@ controls:
       return "not_implemented"
 
   - id: CTRL-PUR-006
-    title: "Insider Risk Management Policy Enabled"
+    title: "Departing Employee Risk Scenario Enabled"
     description: >
-      Microsoft Purview Insider Risk Management must have at least one active policy
-      covering data theft, data leaks, or security policy violations to detect
-      malicious or inadvertent insider threats.
+      At least one Insider Risk Management policy must include the departing employee
+      scenario, because resignation and termination windows account for the highest
+      volume of confirmed insider data theft.
     severity: HIGH
     category: purview
     service: purview
@@ -251,9 +251,12 @@ controls:
       irm_policies = data.get("insider_risk_policies", [])
       if not irm_policies:
           return "not_implemented"
-      active = [p for p in irm_policies if p.get("status") == "Active"]
-      if active:
-          return "implemented"
-      if irm_policies:
-          return "partially_implemented"
-      return "not_implemented"
+      departing = [
+          p for p in irm_policies
+          if str(p.get("scenario", "")).lower().replace("_", "").replace(" ", "") == "departingemployee"
+          or (p.get("indicators") or {}).get("departingEmployee") is True
+      ]
+      if not departing:
+          return "not_implemented"
+      active = [p for p in departing if str(p.get("status", "")).lower() in ("active", "enabled")]
+      return "implemented" if active else "partially_implemented"

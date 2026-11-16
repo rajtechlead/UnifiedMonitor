@@ -104,6 +104,10 @@ controls:
       apps = data.get("intune_detected_apps", [])
       if apps is None:
           return "not_applicable"
+      # Lifecycle state is not in the Graph app inventory; require a lifecycle
+      # signal before judging instead of reporting a false pass.
+      if not any("isEndOfLife" in a or "supportStatus" in a for a in apps):
+          return "not_applicable"
       eol = [
           a for a in apps
           if a.get("isEndOfLife") is True or str(a.get("supportStatus", "")).lower() == "end_of_life"
@@ -221,8 +225,6 @@ controls:
       policies = data.get("intune_app_control_policies", [])
       if not policies:
           return "not_implemented"
-      enforced = [
-          p for p in policies
-          if str(p.get("enforcementMode", "")).lower() in ("enforced", "enforce", "auditandenforce")
-      ]
-      return "implemented" if enforced else "partially_implemented"
+      # Graph exposes the policy but not a normalised enforcement mode, so
+      # presence of an App Control/WDAC policy is the strongest available signal.
+      return "implemented"

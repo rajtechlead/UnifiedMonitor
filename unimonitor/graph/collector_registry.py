@@ -10,6 +10,16 @@ from typing import Any
 
 from unimonitor.core.logging import get_logger
 from unimonitor.graph.client import GraphClient
+from unimonitor.graph.collectors.extended import (
+    collect_cloud_apps,
+    collect_copilot_studio,
+    collect_defender_identity,
+    collect_defender_office,
+    collect_ediscovery,
+    collect_insider_risk,
+    collect_intune_extended,
+)
+from unimonitor.graph.collectors.snapshot import load_snapshot, merge_snapshot
 
 logger = get_logger(__name__)
 
@@ -63,7 +73,8 @@ class CollectorRegistry:
                 elif isinstance(result, dict):
                     all_data.update(result)
 
-        return all_data
+        # Snapshot fills keys with no Graph endpoint; live data always wins.
+        return merge_snapshot(all_data, load_snapshot())
 
     async def _run_collector(self, name: str, gc: GraphClient) -> dict[str, Any]:
         """Dispatch to the appropriate collector module."""
@@ -146,6 +157,7 @@ async def _collect_intune(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
+    data.update(await collect_intune_extended(gc))
     return data
 
 
@@ -168,6 +180,9 @@ async def _collect_defender(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
+    data.update(await collect_defender_office(gc))
+    data.update(await collect_defender_identity(gc))
+    data.update(await collect_cloud_apps(gc))
     return data
 
 
@@ -187,6 +202,8 @@ async def _collect_purview(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
+    data.update(await collect_insider_risk(gc))
+    data.update(await collect_ediscovery(gc))
     return data
 
 
@@ -252,6 +269,7 @@ async def _collect_copilot(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
+    data.update(await collect_copilot_studio(gc))
     return data
 
 

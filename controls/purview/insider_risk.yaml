@@ -256,7 +256,7 @@ controls:
     references:
       - https://learn.microsoft.com/en-us/purview/import-hr-data
     evaluate: |
-      connectors = data.get("insider_risk_connectors", [])
+      connectors = data.get("insider_risk_connectors")
       if connectors is None:
           return "not_applicable"
       hr = [c for c in connectors if str(c.get("type", "")).lower() in ("hr", "hrdata", "hris")]

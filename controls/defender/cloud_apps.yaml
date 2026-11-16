@@ -223,7 +223,7 @@ controls:
     references:
       - https://learn.microsoft.com/en-us/defender-cloud-apps/governance-shadow-it
     evaluate: |
-      apps = data.get("discovered_cloud_apps", [])
+      apps = data.get("discovered_cloud_apps")
       if apps is None:
           return "not_applicable"
       untagged = [a for a in apps if not a.get("sanctioned")]

@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     UNIMONITOR_ALLOWED_HOSTS: list[str] = ["*"]
     UNIMONITOR_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
     API_V1_PREFIX: str = "/api/v1"
+    # Optional JSON file supplying posture keys Graph cannot expose (see collectors/snapshot.py)
+    UNIMONITOR_POSTURE_SNAPSHOT: str = ""
 
     # ── Database ─────────────────────────────────────────────
     DATABASE_URL: str = "sqlite+aiosqlite:///./unimonitor.db"
