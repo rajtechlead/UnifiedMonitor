@@ -2,13 +2,44 @@
 
 from __future__ import annotations
 
+import os
+import secrets
 from functools import lru_cache
+from pathlib import Path
 from typing import Literal
 
-from pydantic import field_validator, model_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 _DEFAULT_SECRET_KEY = "change-me-in-production"  # noqa: S105
+
+
+def _load_or_create_secret_key() -> str:
+    """Return the install's JWT signing key, generating and persisting one if absent.
+
+    A fresh install used to start with an empty key and then reject itself, or worse,
+    sign tokens with a public placeholder. Generating the key on first use keeps a
+    single-node install working with no manual step; set UNIMONITOR_SECRET_KEY to
+    share one key across several nodes.
+    """
+    data_dir = Path(os.environ.get("UNIMONITOR_DATA_DIR") or (Path.home() / ".unimonitor"))
+    key_path = data_dir / "secret.key"
+    try:
+        if key_path.exists():
+            existing = key_path.read_text(encoding="utf-8").strip()
+            if existing:
+                return existing
+        data_dir.mkdir(parents=True, exist_ok=True)
+        generated = secrets.token_hex(32)
+        key_path.write_text(generated, encoding="utf-8")
+        try:
+            key_path.chmod(0o600)
+        except OSError:  # noqa: S110 — Windows ACLs already restrict the directory
+            pass
+        return generated
+    except OSError:
+        # Read-only filesystem: still start, but tokens will not survive a restart.
+        return secrets.token_hex(32)
 
 
 class Settings(BaseSettings):
@@ -128,16 +159,13 @@ class Settings(BaseSettings):
             return json.loads(v)
         return v
 
-    @model_validator(mode="after")
-    def reject_default_secret_key_in_production(self) -> Settings:
-        """Refuse to start in production with the default SECRET_KEY."""
-        if self.UNIMONITOR_ENV == "production" and self.UNIMONITOR_SECRET_KEY == _DEFAULT_SECRET_KEY:
-            raise ValueError(
-                "UNIMONITOR_SECRET_KEY must be changed from the default value before "
-                "running in production. Generate a key with: "
-                'python -c "import secrets; print(secrets.token_hex(32))"'
-            )
-        return self
+    @field_validator("UNIMONITOR_SECRET_KEY", mode="after")
+    @classmethod
+    def ensure_secret_key(cls, value: str) -> str:
+        """Replace an empty or placeholder key with this install's persisted key."""
+        if not value or value == _DEFAULT_SECRET_KEY:
+            return _load_or_create_secret_key()
+        return value
 
     @property
     def is_sqlite(self) -> bool:

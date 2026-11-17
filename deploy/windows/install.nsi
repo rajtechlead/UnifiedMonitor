@@ -53,11 +53,13 @@ BrandingText   "${APPNAME} ${APPVERSION} — ${PUBLISHER}"
 !define MUI_WELCOMEPAGE_TITLE  "Welcome to ${APPNAME} Setup"
 !define MUI_WELCOMEPAGE_TEXT   "This wizard will install ${APPNAME} ${APPVERSION} on your computer.$\r$\n$\r$\nUniMonitor provides unified security monitoring across Microsoft 365, AWS, Google Cloud and Google Workspace, with GRC framework assessments and per-cloud compliance reporting.$\r$\n$\r$\nClick Next to continue."
 !define MUI_FINISHPAGE_RUN
-!define MUI_FINISHPAGE_RUN_TEXT   "Open UniMonitor in browser (http://localhost:${SERVICE_PORT})"
+!define MUI_FINISHPAGE_RUN_TEXT   "Open the UniMonitor setup wizard (choose your platforms)"
 !define MUI_FINISHPAGE_RUN_FUNCTION FinishPageAction
 !define MUI_FINISHPAGE_SHOWREADME
 !define MUI_FINISHPAGE_SHOWREADME_TEXT  "Show installation guide"
 !define MUI_FINISHPAGE_SHOWREADME_FUNCTION ShowReadme
+
+Var ServiceInstalled
 
 ; ── Pages ──────────────────────────────────────────────────────────────────────
 !insertmacro MUI_PAGE_WELCOME
@@ -116,18 +118,19 @@ SectionGroup "Core" SecCore
     ; Shortcuts and the service use absolute paths, so PATH is left untouched
     ; (avoids depending on the third-party EnVar NSIS plugin).
 
-    ; Write a default .env if it doesn't exist
+    ; Write a default .env if it doesn't exist.
+    ; The JWT signing key is generated and persisted on first start (in
+    ; UNIMONITOR_DATA_DIR), so there is nothing here for the user to fill in.
     ${IfNot} ${FileExists} "$INSTDIR\.env"
       FileOpen  $0 "$INSTDIR\.env" w
-      FileWrite $0 "# UniMonitor configuration$\r$\n"
-      FileWrite $0 "# Edit these values before starting UniMonitor$\r$\n"
+      FileWrite $0 "# UniMonitor configuration (written by the installer)$\r$\n"
+      FileWrite $0 "# Platform credentials are collected by the setup wizard in the browser.$\r$\n"
       FileWrite $0 "$\r$\n"
       FileWrite $0 "UNIMONITOR_ENV=production$\r$\n"
+      FileWrite $0 "UNIMONITOR_DATA_DIR=C:\ProgramData\UniMonitor$\r$\n"
       FileWrite $0 "DATABASE_URL=sqlite+aiosqlite:///C:/ProgramData/UniMonitor/unimonitor.db$\r$\n"
       FileWrite $0 "REDIS_URL=redis://localhost:6379/0$\r$\n"
-      FileWrite $0 "SECRETS_PROVIDER=local$\r$\n"
-      FileWrite $0 "UNIMONITOR_SECRET_KEY=$\r$\n"
-      FileWrite $0 "# Generate a secret key: UniMonitor.exe genkey$\r$\n"
+      FileWrite $0 "SECRETS_PROVIDER=local_vault$\r$\n"
       FileClose $0
     ${EndIf}
 
@@ -148,7 +151,8 @@ Section "Windows Service (auto-start)" SecService
   ${If} ${FileExists} "$INSTDIR\nssm.exe"
     ExecWait '"$INSTDIR\nssm.exe" install "${SERVICE_NAME}" "$INSTDIR\UniMonitor.exe" "start --host 0.0.0.0 --port ${SERVICE_PORT}"'
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppDirectory "$INSTDIR"'
-    ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppEnvironmentExtra "UNIMONITOR_ENV=production"'
+    ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppEnvironmentExtra "UNIMONITOR_ENV=production" "UNIMONITOR_DATA_DIR=C:\ProgramData\UniMonitor"'
+    StrCpy $ServiceInstalled "1"
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" Description "${DESCRIPTION}"'
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" Start SERVICE_AUTO_START'
     ExecWait '"$INSTDIR\nssm.exe" start "${SERVICE_NAME}"'
@@ -166,6 +170,8 @@ Section "Start Menu Shortcuts" SecShortcuts
     "$INSTDIR\UniMonitor.exe" "start" "$INSTDIR\UniMonitor.exe" 0
   CreateShortcut "$SMPROGRAMS\${APPNAME}\Open in Browser.lnk" \
     "http://localhost:${SERVICE_PORT}" "" "" 0
+  CreateShortcut "$SMPROGRAMS\${APPNAME}\Setup Wizard.lnk" \
+    "http://localhost:${SERVICE_PORT}/setup" "" "" 0
   CreateShortcut "$SMPROGRAMS\${APPNAME}\Uninstall.lnk" \
     "$INSTDIR\Uninstall.exe" "" "$INSTDIR\Uninstall.exe" 0
   CreateShortcut "$DESKTOP\${APPNAME}.lnk" \
@@ -184,8 +190,14 @@ LangString DESC_SecShortcuts ${LANG_ENGLISH} "Add Start Menu and Desktop shortcu
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; ── Finish page actions ────────────────────────────────────────────────────────
+; Open the wizard that asks which platforms to connect. A minimal install has no
+; service, so start the app once first or the browser lands on nothing.
 Function FinishPageAction
-  ExecShell "open" "http://localhost:${SERVICE_PORT}"
+  ${If} $ServiceInstalled != "1"
+    Exec '"$INSTDIR\UniMonitor.exe" start'
+    Sleep 5000
+  ${EndIf}
+  ExecShell "open" "http://localhost:${SERVICE_PORT}/setup"
 FunctionEnd
 
 Function ShowReadme

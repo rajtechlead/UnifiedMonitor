@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-16 UTC
+Last Updated: 2026-11-17 UTC
 
 ## Current Release Status
 
@@ -20,14 +20,16 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Vite | 5.4.21 |
 | PyInstaller | 6.22.3 (last Linux validation 2026-11-13) |
 
-## Backend Validation (measured 2026-11-16)
+## Backend Validation (measured 2026-11-17)
 
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 565/565 | 57s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 590/590 | 63s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
+| First-run onboarding | ✅ 23 tests | setup window closes after the first admin; connect/list/delete; mocked Graph app registration |
+| Bundled UI | ✅ verify_bundled_ui.py | shell, hashed asset, `/setup` deep link, API precedence, 401/404 |
 | Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
 | CISO dashboard | ✅ API + UI | `/dashboard/ciso` and `/ciso` page; cloud exposure, top risks, framework gaps, trend |
 | Report exports | ✅ PDF + DOCX | per-cloud sections in every report type; aggregate summary retained |

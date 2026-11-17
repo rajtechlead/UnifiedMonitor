@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
-import { Save, Bell, Mail, MessageSquare, Shield } from 'lucide-react'
+import { Save, Bell, Mail, MessageSquare, Shield, Plug, Plus, Trash2 } from 'lucide-react'
+import PlatformConnector, { type Connection, type Platform } from '../components/PlatformConnector'
 
 type NotificationSettings = {
   smtp_enabled: boolean
@@ -93,6 +94,95 @@ function FormField({ label, type = 'text', value, onChange, placeholder }: {
   )
 }
 
+/**
+ * Platforms connected during setup, plus a way to add another one later — the
+ * "start with Microsoft 365, add AWS next quarter" path.
+ */
+function PlatformConnections() {
+  const [connections, setConnections] = useState<Connection[]>([])
+  const [platforms, setPlatforms] = useState<Platform[]>([])
+  const [adding, setAdding] = useState<string | null>(null)
+  const [error, setError] = useState('')
+
+  const load = () => {
+    api.get('/onboarding/status').then((r) => {
+      setConnections(r.data.connections)
+      setPlatforms(r.data.platforms)
+    }).catch(() => setError('Could not load platform connections.'))
+  }
+
+  useEffect(() => { load() }, [])
+
+  const remove = async (provider: string) => {
+    try {
+      await api.delete(`/onboarding/connections/${provider}`)
+      load()
+    } catch { setError('Could not remove that connection.') }
+  }
+
+  const connectedIds = connections.map((c) => c.provider)
+  const available = platforms.filter((p) => !connectedIds.includes(p.id))
+  const addingPlatform = available.find((p) => p.id === adding)
+
+  return (
+    <Section icon={Plug} title="Platform connections">
+      {connections.length === 0 && (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No platforms connected yet.</p>
+      )}
+      {connections.map((c) => (
+        <div key={c.id} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '10px 0', borderBottom: '1px solid var(--color-border)',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{c.display_name || c.provider}</div>
+            <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              {c.provider} · {c.account || 'configured'}
+            </div>
+          </div>
+          <button
+            onClick={() => remove(c.provider)}
+            title={`Disconnect ${c.provider}`}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--color-text-muted)' }}
+          >
+            <Trash2 size={15} />
+          </button>
+        </div>
+      ))}
+
+      {available.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+            Connect another platform
+          </label>
+          <select
+            value={adding || ''}
+            onChange={(e) => setAdding(e.target.value || null)}
+            style={{
+              padding: '9px 12px', fontSize: 13, borderRadius: 7, width: '100%', maxWidth: 320,
+              border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
+              color: 'var(--color-text)', cursor: 'pointer',
+            }}
+          >
+            <option value="">Choose a platform…</option>
+            {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+          {addingPlatform && (
+            <div style={{ marginTop: 14 }}>
+              <PlatformConnector
+                platform={addingPlatform}
+                connected={undefined}
+                onConnected={() => { setAdding(null); load() }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+      {error && <p style={{ fontSize: 13, color: 'var(--color-high)', marginTop: 10 }}>{error}</p>}
+    </Section>
+  )
+}
+
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
 
@@ -144,6 +234,8 @@ export default function SettingsPage() {
           Configure notifications, tenant, and system preferences
         </p>
       </div>
+
+      <PlatformConnections />
 
       {/* Tenant info */}
       {tenantData && (

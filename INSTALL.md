@@ -297,25 +297,33 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 UniMonitor reads security data from Microsoft 365 via the Graph API. You need a registered application in Entra ID.
 
-### Step 1 — Create an App Registration
+### Step 1 — Run the setup wizard
+
+Open <http://localhost:8000/setup> (the Windows installer opens it for you). The wizard:
+
+1. creates the administrator account and the database,
+2. asks **which platforms to monitor** — Microsoft 365, AWS, Google Cloud and/or Google Workspace; at least one is required,
+3. connects the platforms you picked.
+
+For Microsoft 365, sign in as a Global Administrator and UniMonitor creates the Entra app
+registration, adds the read-only Graph permissions below, grants admin consent and stores the
+client secret in the encrypted secret vault. AWS, Google Cloud and Google Workspace ask only for
+the credentials that cannot be created for you, and each one is validated against the live API
+before it is saved.
+
+Platforms can be added or removed later from **Settings → Platform connections**, so a business
+that starts with Microsoft 365 alone can connect AWS or Google Cloud when it needs them.
+
+### Step 2 (alternative) — Register the app by hand
+
+Only needed when the wizard's automated registration is blocked by tenant policy.
 
 1. Sign in to [Entra admin centre](https://entra.microsoft.com) as a Global Administrator
 2. Go to **Identity → Applications → App registrations** → **New registration**
-3. Name: `UniMonitor`
-4. Supported account type: **Accounts in this organisational directory only**
-5. Click **Register**
-6. Note the **Application (client) ID** and **Directory (tenant) ID**
-
-### Step 2 — Create a Client Secret
-
-1. Go to **Certificates & secrets** → **New client secret**
-2. Description: `UniMonitor production`
-3. Expiry: 24 months (or per your policy)
-4. Copy the **Value** immediately — you won't see it again
-
-### Step 3 — Grant API Permissions
-
-Go to **API permissions** → **Add a permission** → **Microsoft Graph** → **Application permissions**:
+3. Name: `UniMonitor`, account type **Accounts in this organisational directory only**, then **Register**
+4. **Certificates & secrets → New client secret**; copy the value immediately
+5. **API permissions → Add a permission → Microsoft Graph → Application permissions**, select the
+   read-only roles below, then **Grant admin consent**
 
 | Permission | Reason |
 |------------|--------|
@@ -323,27 +331,19 @@ Go to **API permissions** → **Add a permission** → **Microsoft Graph** → *
 | `DeviceManagementManagedDevices.Read.All` | Intune device compliance |
 | `Directory.Read.All` | Entra ID users, groups, roles |
 | `Policy.Read.All` | Conditional Access, auth policies |
-| `SecurityEvents.Read.All` | Defender alerts |
+| `SecurityEvents.Read.All` | Defender alerts and Secure Score |
 | `InformationProtectionPolicy.Read.All` | Purview labels |
 | `Sites.Read.All` | SharePoint settings |
-| `Exchange.ManageAsApp` | Exchange Online settings |
 | `Teams.ReadBasic.All` | Teams settings |
 | `AuditLog.Read.All` | Sign-in & audit logs |
 | `Reports.Read.All` | Usage and security reports |
+| `User.Read.All` | User profile and authentication methods |
 
-Click **Grant admin consent** for your tenant.
+`Exchange.ManageAsApp` is an Exchange Online role, not a Graph permission: assign it in the
+Exchange admin center only if you collect Exchange settings.
 
-### Step 4 — Add the Tenant to UniMonitor
-
-```powershell
-unimonitor tenant add \
-  --name "My Company" \
-  --tenant-id <Directory-tenant-ID> \
-  --client-id <Application-client-ID> \
-  --client-secret <Client-secret-value>
-```
-
-Or use the **Tenants** page in the web UI.
+Then choose **Microsoft 365 → enter credentials manually** in the setup wizard — it validates the
+credentials before saving, so a typo surfaces immediately.
 
 ---
 

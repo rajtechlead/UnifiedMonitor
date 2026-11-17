@@ -2,6 +2,7 @@
 
 from unimonitor.db.models.assessment import Assessment, AssessmentRun
 from unimonitor.db.models.audit_log import AuditLog
+from unimonitor.db.models.cloud_connection import CloudConnection
 from unimonitor.db.models.control import Control, ControlMapping, Framework
 from unimonitor.db.models.finding import Finding, FindingEvidence, FindingHistory
 from unimonitor.db.models.notification_setting import NotificationSetting
@@ -29,4 +30,5 @@ __all__ = [
     "AuditLog",
     "NotificationSetting",
     "Report",
+    "CloudConnection",
 ]

@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-16 UTC
+Last Updated: 2026-11-17 UTC
 
 ## Priority Execution Queue
 
@@ -21,6 +21,17 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P7-004 Executive/Compliance contract fix | ✅ Done | pages were showing demo values instead of API data |
 | P7-005 Control library depth | ✅ Done | 158 controls added; extended collectors now feed them (snapshot path for non-Graph areas) |
 
+## Phase 9 — First-Run Onboarding
+
+| Task | Status | Notes |
+|---|---|---|
+| P9-001 Setup wizard (platform selection, min 1) | ✅ Done | `/setup` + `/api/v1/onboarding`, launched by the installer |
+| P9-002 Microsoft 365 app registration automation | ✅ Done | device-code sign-in → Graph creates app, roles, consent, secret |
+| P9-003 Connect more platforms later | ✅ Done | Settings → Platform connections, same connector component |
+| P9-004 AWS/GCP/Workspace credential validation | ✅ Done | validated against the live API before saving |
+| P9-005 Automated M365 consent against a real tenant | ⬜ Open | needs a live Global Administrator; the Graph calls are covered by mocked tests only |
+| P9-006 Multi-tenant (MSP) client onboarding | ⬜ Open | one connection set per install today |
+
 ## Phase 8 — Multi-Cloud (AWS, Google Cloud, Google Workspace)
 
 | Task | Status | Notes |
@@ -29,7 +40,7 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P8-002 GCP collector + controls | ✅ Done | 8 controls; REST + `GCP_ACCESS_TOKEN` |
 | P8-003 Google Workspace collector + controls | ✅ Done | 6 controls; Admin SDK REST + `GOOGLE_ACCESS_TOKEN` |
 | P8-004 Live credential validation | ⬜ Open | no AWS/GCP/Workspace accounts in the agent workspace |
-| P8-005 Google token refresh | ⬜ Open | collectors take a static token; add service-account/OIDC refresh |
+| P8-005 Google token refresh | ✅ Done | setup stores the service-account key; `onboarding/google_auth.py` mints tokens on demand (Workspace uses domain-wide delegation) |
 | P8-006 Provider controls in the UI | ✅ Done | `/clouds` aggregate + `/clouds/:providerId` detail pages, Clouds nav entry |
 | P8-007 Provider segmentation in reports | ✅ Done | aggregate summary retained + colour-coded per-cloud sections in PDF and DOCX |
 | P8-008 MSI package variant | ⬜ Open | NSIS `.exe` ships today; an MSI (WiX) is optional if group policy deployment needs it |

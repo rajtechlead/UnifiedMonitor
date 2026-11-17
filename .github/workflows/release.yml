@@ -90,8 +90,7 @@ jobs:
           python -m pip install --upgrade pip
           # 6.15+ is required for Python 3.12/3.13/3.14; 6.10.0 does not exist for these runtimes
           pip install "pyinstaller>=6.16.0,<7"
-          # Install only the packages needed to build (no optional providers)
-          pip install -e "." --no-deps
+          # production extra: boto3 is required by the AWS collector at runtime
           pip install -e ".[all-secrets]"
 
       # ── Build frontend (embed into the installer) ──────────────────────────
@@ -325,8 +324,9 @@ jobs:
             git clone https://github.com/${{ github.repository }}
             cd UniMonitor
             pip install -e .
-            unimonitor setup --run-wizard
+            unimonitor setup
             unimonitor start
+            # then open http://localhost:8000/setup and pick your platforms
             ```
 
             ---

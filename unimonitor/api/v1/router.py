@@ -12,6 +12,7 @@ from unimonitor.api.v1.findings import router as findings_router
 from unimonitor.api.v1.grc import router as grc_router
 from unimonitor.api.v1.monitoring import router as monitoring_router
 from unimonitor.api.v1.notifications import router as notifications_router
+from unimonitor.api.v1.onboarding import router as onboarding_router
 from unimonitor.api.v1.reports import router as reports_router
 from unimonitor.api.v1.tenants import router as tenants_router
 
@@ -27,3 +28,6 @@ api_v1_router.include_router(reports_router, prefix="/reports", tags=["Reports"]
 api_v1_router.include_router(grc_router, prefix="/grc", tags=["GRC"])
 api_v1_router.include_router(monitoring_router, prefix="/monitoring", tags=["Monitoring"])
 api_v1_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+api_v1_router.include_router(onboarding_router, prefix="/onboarding", tags=["Setup"])
+
+__all__ = ["api_v1_router"]

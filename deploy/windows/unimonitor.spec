@@ -80,6 +80,13 @@ hiddenimports = [
     "unimonitor.auth.dependencies",
     "unimonitor.graph.client",
     "unimonitor.grc.providers",
+    "unimonitor.onboarding",
+    "unimonitor.onboarding.m365",
+    "unimonitor.onboarding.clouds",
+    "unimonitor.onboarding.google_auth",
+    "unimonitor.api.v1.onboarding",
+    "boto3",
+    "botocore",
     "unimonitor.secrets.provider",
     "unimonitor.secrets.resolver",
     # DOCX reporting (python-docx imports its parts lazily)

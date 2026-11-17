@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { api } from './hooks/useApi'
+import SetupPage from './pages/SetupPage'
 import Layout from './components/Layout'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import ExecutiveDashboard from './pages/ExecutiveDashboard'
@@ -24,6 +27,27 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Sends a fresh install to /setup: with no administrator and no platform connected
+ * the dashboard has nothing to show. Once setup is complete the check stops running.
+ */
+function SetupGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation()
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    if (needsSetup === false) return
+    let cancelled = false
+    api.get('/onboarding/status')
+      .then((res) => { if (!cancelled) setNeedsSetup(Boolean(res.data.needs_admin)) })
+      .catch(() => { if (!cancelled) setNeedsSetup(false) })
+    return () => { cancelled = true }
+  }, [location.pathname, needsSetup])
+
+  if (needsSetup && location.pathname !== '/setup') return <Navigate to="/setup" replace />
+  return <>{children}</>
+}
+
+/**
  * RouteErrorBoundary resets the error boundary on every navigation.
  * Wrap each page-level route so a crash in one page doesn't lock the whole app.
  */
@@ -41,8 +65,10 @@ export default function App() {
     // Top-level boundary catches errors in Layout, auth checks, etc.
     <ErrorBoundary>
       <BrowserRouter>
+        <SetupGate>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
+          <Route path="/setup" element={<SetupPage />} />
           <Route
             path="/"
             element={
@@ -68,6 +94,7 @@ export default function App() {
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </SetupGate>
       </BrowserRouter>
     </ErrorBoundary>
   )

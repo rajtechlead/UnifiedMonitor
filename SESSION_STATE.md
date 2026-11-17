@@ -2,9 +2,40 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-16 UTC
+Last Updated: 2026-11-17 UTC
 
-## Current Session Commits
+## Current Session Commits (2026-11-17)
+
+- `feat: first-run setup wizard that asks which platforms to monitor`
+- `fix(ci): put makensis on PATH after installing NSIS`
+
+### Session 2026-11-17 — first-run onboarding
+
+The Windows installer finished without asking anything: it wrote a `.env` with an empty
+`UNIMONITOR_SECRET_KEY`, an unusable `SECRETS_PROVIDER=local`, and then opened a dashboard with
+no data. Setup is now a wizard the installer launches:
+
+- `GET/POST /api/v1/onboarding/*` — status, first admin, platform connection, list, delete. The
+  unauthenticated window closes when the first administrator is created; afterwards an admin
+  token is required for every change.
+- `SetupPage` + `PlatformConnector` (React) — administrator, platform multi-select (at least one
+  of Microsoft 365 / AWS / GCP / Google Workspace), then a per-platform connection step. The same
+  connector is embedded in Settings → Platform connections so platforms can be added later.
+- Microsoft 365 is automated: device-code sign-in as a Global Administrator, then Graph creates
+  the app registration with the read-only app roles in `unimonitor/onboarding/permissions.py`,
+  grants admin consent per role and mints a client secret. Manual credentials remain available
+  when tenant policy blocks the automated path, and are validated before saving.
+- AWS / GCP / Workspace credentials are validated against the live API at connect time; secrets go
+  to the configured secret provider and the database keeps only references
+  (`cloud_connections`). GCP and Workspace tokens are now minted from the stored service-account
+  key instead of a static `*_ACCESS_TOKEN`.
+- `UNIMONITOR_SECRET_KEY` is generated once and persisted in `UNIMONITOR_DATA_DIR/secret.key`, so a
+  fresh install starts without a manual key step.
+- `scripts/setup_wizard.py` and `scripts/setup.py` deleted: they duplicated this flow and were not
+  bundled into the frozen executable.
+- Windows workflows install `.[production]` so boto3 is present in the frozen bundle.
+
+Prior session commits:
 
 - `fix: align dashboard views with API contracts and add Risk, SOC, Audit views`
 - `fix: resolve ruff/mypy failures introduced since 1de7bcd`

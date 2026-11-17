@@ -39,7 +39,8 @@ jobs:
           python -m pip install --upgrade pip
           # 6.15+ is required for Python 3.12/3.13/3.14
           pip install "pyinstaller>=6.16.0,<7"
-          pip install -e "."
+          # production extra: the AWS/GCP collectors need boto3 at runtime
+          pip install -e ".[production]"
 
       # ── Frontend (embedded into the bundle) ───────────────────────────────
       - name: Set up Node.js ${{ env.NODE_VER }}

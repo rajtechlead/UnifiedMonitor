@@ -136,7 +136,18 @@ async def collect_aws(session: Any = None) -> dict[str, Any]:
 
     if session is None:
         try:
-            session = boto3.Session(region_name=get_settings().AWS_REGION)
+            from unimonitor.onboarding.service import aws_credentials_for
+
+            stored = await aws_credentials_for()
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Stored AWS credentials unavailable", error=str(exc))
+            stored = None
+        try:
+            # Credentials from the setup wizard win; otherwise boto3's default chain.
+            if stored and stored.get("aws_access_key_id"):
+                session = boto3.Session(**stored)
+            else:
+                session = boto3.Session(region_name=get_settings().AWS_REGION)
         except Exception as exc:  # noqa: BLE001
             logger.warning("AWS session creation failed", error=str(exc))
             return {}
@@ -149,6 +160,17 @@ async def collect_aws(session: Any = None) -> dict[str, Any]:
 
 
 # ── Google Cloud ───────────────────────────────────────────────────────────
+
+
+async def _google_token_from_store(provider: str) -> str:
+    """Mint a Google token from the connection saved during setup."""
+    try:
+        from unimonitor.onboarding.service import google_token_for
+
+        return await google_token_for(provider)
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("Stored Google credentials unavailable", provider=provider, error=str(exc))
+        return ""
 
 
 async def _rest(client: httpx.AsyncClient, url: str, token: str, params: dict | None = None) -> dict:
@@ -172,6 +194,8 @@ async def collect_gcp(
     settings = get_settings()
     token = token if token is not None else settings.GCP_ACCESS_TOKEN
     project_id = project_id or settings.GCP_PROJECT_ID
+    if not token:
+        token = await _google_token_from_store("gcp")
     if not token or not project_id:
         return {}
 
@@ -267,6 +291,8 @@ async def collect_google_workspace(
     settings = get_settings()
     token = token if token is not None else settings.GOOGLE_ACCESS_TOKEN
     customer = customer or settings.GOOGLE_WORKSPACE_CUSTOMER_ID or "my_customer"
+    if not token:
+        token = await _google_token_from_store("google_workspace")
     if not token:
         return {}
 

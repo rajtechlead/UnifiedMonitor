@@ -48,23 +48,19 @@ def start(host: str, port: int, workers: int, reload: bool) -> None:
 
 
 @main.command()
-@click.option("--run-wizard", is_flag=True, default=False, help="Run the interactive setup wizard")
-def setup(run_wizard: bool) -> None:
-    """Run database migrations and optionally the full setup wizard."""
-    if run_wizard:
-        try:
-            from scripts.setup_wizard import main as wizard_main
+def setup() -> None:
+    """Create the database, then finish setup in the browser.
 
-            wizard_main()
-        except ImportError:
-            click.echo("Setup wizard not found. Run migrations only.", err=True)
-        return
-
+    Platform connection is a web wizard at /setup: it creates the administrator, asks
+    which platforms to monitor, and registers the credentials for each one.
+    """
     import asyncio
 
-    from scripts.setup import run_setup
+    from unimonitor.db.base import init_db
 
-    asyncio.run(run_setup())
+    asyncio.run(init_db())
+    click.echo("Database ready.")
+    click.echo("Start UniMonitor, then open http://localhost:8000/setup to choose your platforms.")
 
 
 @main.command()

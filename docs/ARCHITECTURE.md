@@ -164,7 +164,7 @@ UniMonitor/
 │   ├── docker/              # Docker Compose
 │   └── kubernetes/          # K8s manifests + External Secrets
 ├── installer/               # Windows MSI (NSIS + PyInstaller)
-├── scripts/                 # setup.py, setup_wizard.py, smoke_test.py
+├── scripts/                 # smoke_test.py, verify_bundled_ui.py, make_icon.py
 ├── tests/                   # pytest suite
 └── docs/                    # Architecture, deployment, security docs
 ```

@@ -111,10 +111,21 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("UniMonitor starting", version=APP_VERSION, env=settings.UNIMONITOR_ENV)
 
     # Initialise database
-    from unimonitor.db.base import init_db
+    from unimonitor.db.base import async_session_factory, init_db
 
     await init_db()
     logger.info("Database initialised")
+
+    # Platforms connected during setup live in the database; the collectors still read
+    # settings, so apply them here. A broken connection must not stop the app booting —
+    # the setup page is how the user fixes it.
+    from unimonitor.onboarding.service import hydrate_runtime_config
+
+    try:
+        async with async_session_factory() as session:
+            await hydrate_runtime_config(session)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Could not hydrate platform connections", error=str(exc))
 
     # Initialise Redis cache
     from unimonitor.core.cache import init_cache

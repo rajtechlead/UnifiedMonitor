@@ -19,7 +19,7 @@ None
 | M-006 | NSIS installer not tested | `deploy/windows/` | ⬜ P5-003 — Windows environment required |
 | M-013 | Release tag not pushed; no tag exists in any clone | `.git` | 🟡 recreate + push with tag permission |
 | M-015 | Docker Compose never validated end-to-end (CI builds the image only) | `deploy/docker/` | ⬜ no Docker daemon in agent workspace |
-| M-016 | Setup wizard exists as a script but is not wired into the NSIS install flow | `scripts/setup_wizard.py`, `deploy/windows/install.nsi` | ⬜ P3-003 follow-up |
+| M-034 | Google Cloud / Workspace credentials stored by setup are minted into tokens on demand; a service-account key whose domain-wide delegation scopes are wrong fails at collection, not at connect | `unimonitor/onboarding/google_auth.py` | 🟡 connect-time validation covers reads only |
 
 ## Low — Active
 
@@ -36,6 +36,15 @@ None
 | M-024 | AWS/GCP/Workspace controls have never run against live accounts — payload tests only | `controls/aws`, `controls/gcp`, `controls/google_workspace` | ⬜ P8-004 |
 | M-029 | Windows installer: PyInstaller freeze and the packaged `--help` smoke test are verified on a `windows-latest` runner, and the NSIS step's PATH bug is fixed, but a green installer build and a real fresh install/upgrade have not been observed | `deploy/windows/` | 🟡 needs a green NSIS run |
 | M-028 | Azure-specific controls (25, `azure_security`) roll up under the Microsoft 365 provider; there is no standalone Azure dashboard | `unimonitor/grc/providers.py` | 🟡 grouping decision; split if Azure is sold separately |
+
+## Resolved This Session (2026-11-17)
+
+| ID | Description | Resolution |
+|---|---|---|
+| M-035 | The Windows installer never asked which platform to monitor or set anything up: it wrote a `.env` with an empty secret key and a `SECRETS_PROVIDER=local` value the resolver does not accept, and the finished install opened a dashboard with no data | First-run web wizard at `/setup` (opened by the installer): creates the admin and database, requires at least one platform, connects it, and is re-openable from Settings → Platform connections |
+| M-016 | Setup was a console script not wired into the installer | `scripts/setup_wizard.py` and `scripts/setup.py` removed; `unimonitor setup` creates the database and points at the web wizard, which the installer launches |
+| M-004 | Setup wizard not implemented | Implemented as `/api/v1/onboarding` + `SetupPage`/`PlatformConnector`; Microsoft 365 app registration, permissions and admin consent are automated through Graph |
+| M-036 | An empty `UNIMONITOR_SECRET_KEY` signed tokens with a placeholder (or refused to start in production) | The key is generated once and persisted in `UNIMONITOR_DATA_DIR/secret.key`; setting the variable still overrides it for multi-node installs |
 
 ## Resolved This Session (2026-11-16)
 

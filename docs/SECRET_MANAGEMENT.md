@@ -111,23 +111,17 @@ On first run, a master key is generated and stored at `VAULT_KEY_PATH`
 
 ## Setup Wizard
 
-The interactive wizard configures your chosen provider and validates it before
-writing any configuration:
+`unimonitor setup` creates the database, then the web wizard at
+<http://localhost:8000/setup> finishes the install:
 
-```bash
-unimonitor setup --run-wizard
-# or
-python scripts/setup_wizard.py
-```
+1. Creates the first administrator (which closes the unauthenticated setup window)
+2. Asks which platforms to monitor — Microsoft 365, AWS, Google Cloud, Google Workspace; at least one
+3. Connects each one: Microsoft 365 registers its Entra app automatically after a Global
+   Administrator device sign-in, the other platforms validate the credentials they are given
+4. Stores every secret through the configured provider (`SECRETS_PROVIDER`) and keeps only the
+   reference in the database
 
-The wizard:
-1. Prompts for provider type and connection details
-2. Tests connectivity and authentication
-3. Performs a read/write round-trip
-4. Stores the application secret key in the vault
-5. Runs database migrations
-6. Creates the admin account
-7. Outputs a readiness report
+Platforms can be added or removed later from **Settings → Platform connections**.
 
 ---
 
