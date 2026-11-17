@@ -7,6 +7,7 @@ import ComplianceDashboard from './pages/ComplianceDashboard'
 import RiskDashboard from './pages/RiskDashboard'
 import SocDashboard from './pages/SocDashboard'
 import CloudDashboard from './pages/CloudDashboard'
+import CisoDashboard from './pages/CisoDashboard'
 import CloudProviderPage from './pages/CloudProviderPage'
 import AuditPage from './pages/AuditPage'
 import FindingsPage from './pages/FindingsPage'
@@ -52,6 +53,7 @@ export default function App() {
           >
             <Route index element={<Navigate to="/executive" replace />} />
             <Route path="executive" element={<RouteErrorBoundary><ExecutiveDashboard /></RouteErrorBoundary>} />
+            <Route path="ciso" element={<RouteErrorBoundary><CisoDashboard /></RouteErrorBoundary>} />
             <Route path="clouds" element={<RouteErrorBoundary><CloudDashboard /></RouteErrorBoundary>} />
             <Route path="clouds/:providerId" element={<RouteErrorBoundary><CloudProviderPage /></RouteErrorBoundary>} />
             <Route path="security" element={<RouteErrorBoundary><SecurityDashboard /></RouteErrorBoundary>} />

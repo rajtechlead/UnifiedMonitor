@@ -21,7 +21,7 @@ router = APIRouter()
 # ── Schemas ──────────────────────────────────────────────────
 
 ReportType = Literal["executive", "audit", "compliance", "board", "operational"]
-ReportFormat = Literal["pdf", "excel", "csv", "json"]
+ReportFormat = Literal["pdf", "docx", "excel", "csv", "json"]
 
 
 class ReportGenerateRequest(BaseModel):
@@ -317,11 +317,12 @@ async def download_report(
 
     # Locate file
     report_dir = Path(settings.REPORT_STORAGE_PATH)
-    for ext in ("pdf", "xlsx", "csv", "json"):
+    for ext in ("pdf", "docx", "xlsx", "csv", "json"):
         file_path = report_dir / f"{report_id}.{ext}"
         if file_path.exists():
             media_types = {
                 "pdf": "application/pdf",
+                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 "csv": "text/csv",
                 "json": "application/json",
@@ -347,7 +348,7 @@ async def delete_report(
 
     # Remove file
     report_dir = Path(settings.REPORT_STORAGE_PATH)
-    for ext in ("pdf", "xlsx", "csv", "json"):
+    for ext in ("pdf", "docx", "xlsx", "csv", "json"):
         file_path = report_dir / f"{report_id}.{ext}"
         if file_path.exists():
             file_path.unlink()

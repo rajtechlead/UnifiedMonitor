@@ -183,3 +183,131 @@ class TestExcelGenerator:
         path = gen.generate()
         wb = openpyxl.load_workbook(path)
         assert len(wb.sheetnames) >= 2
+
+
+# ── Multi-cloud sections ──────────────────────────────────────────────────────
+
+MULTI_CLOUD_FINDINGS = [
+    {
+        "id": "f-ent",
+        "external_control_id": "CTRL-ENT-001",
+        "title": "MFA not enabled",
+        "description": "mfa",
+        "severity": "CRITICAL",
+        "state": "not_implemented",
+        "category": "identity",
+        "service": "entra_id",
+    },
+    {
+        "id": "f-aws",
+        "external_control_id": "CTRL-AWS-001",
+        "title": "Root MFA enabled",
+        "description": "root",
+        "severity": "HIGH",
+        "state": "implemented",
+        "category": "cloud_security",
+        "service": "aws",
+    },
+    {
+        "id": "f-gcp",
+        "external_control_id": "CTRL-GCP-003",
+        "title": "Firewall open to internet",
+        "description": "fw",
+        "severity": "HIGH",
+        "state": "partially_implemented",
+        "category": "cloud_security",
+        "service": "gcp",
+    },
+]
+
+
+def _generator(cls, tmp_path: Path):
+    return cls(
+        run=SAMPLE_RUN,
+        findings=MULTI_CLOUD_FINDINGS,
+        output_dir=str(tmp_path),
+        tenant_id="test-tenant",
+    )
+
+
+class TestProviderBreakdown:
+    def test_groups_findings_by_cloud(self, tmp_path: Path):
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+        rows = _generator(PdfReportGenerator, tmp_path)._provider_breakdown()
+        assert [r["id"] for r in rows] == ["microsoft", "aws", "gcp"]
+
+        microsoft = rows[0]
+        assert microsoft["total"] == 1
+        assert microsoft["severity_counts"]["CRITICAL"] == 1
+        assert microsoft["pass_rate"] == 0.0
+
+        aws = rows[1]
+        assert aws["colour"] == "#FF9900"
+        assert aws["security_score"] == 100.0
+        assert aws["findings"][0]["id"] == "f-aws"
+
+    def test_provider_without_findings_is_omitted(self, tmp_path: Path):
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+        rows = _generator(PdfReportGenerator, tmp_path)._provider_breakdown()
+        assert "google_workspace" not in {r["id"] for r in rows}
+
+    def test_unmapped_service_is_ignored(self, tmp_path: Path):
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+        gen = PdfReportGenerator(
+            run=SAMPLE_RUN,
+            findings=[{"id": "x", "severity": "LOW", "state": "not_implemented", "service": "on_prem_ad"}],
+            output_dir=str(tmp_path),
+            tenant_id="test-tenant",
+        )
+        assert gen._provider_breakdown() == []
+
+
+class TestPdfProviderSections:
+    def test_pdf_renders_with_multiple_providers(self, tmp_path: Path):
+        import asyncio
+
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+        path = asyncio.run(_generator(PdfReportGenerator, tmp_path).generate("full"))
+        assert Path(path).exists()
+        assert Path(path).stat().st_size > 1000
+
+
+class TestDocxGenerator:
+    def test_docx_generates_with_provider_sections(self, tmp_path: Path):
+        pytest.importorskip("docx")
+        import asyncio
+
+        from docx import Document
+
+        from unimonitor.reporting.docx_generator import DocxReportGenerator
+
+        path = asyncio.run(_generator(DocxReportGenerator, tmp_path).generate("full"))
+        assert Path(path).exists()
+
+        doc = Document(path)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        for table in doc.tables:
+            for row in table.rows:
+                text += "\n" + " | ".join(cell.text for cell in row.cells)
+
+        assert "Cloud Provider Coverage" in text
+        assert "Findings by Cloud Provider" in text
+        assert "Microsoft 365" in text
+        assert "Amazon Web Services" in text
+        assert "Google Cloud Platform" in text
+        # aggregate summary is retained for the single org
+        assert "Executive Summary" in text
+
+    def test_docx_requires_python_docx(self, tmp_path: Path, monkeypatch):
+        from unimonitor.reporting import docx_generator
+
+        monkeypatch.setattr(docx_generator, "HAS_DOCX", False)
+        gen = _generator(docx_generator.DocxReportGenerator, tmp_path)
+        import asyncio
+
+        with pytest.raises(RuntimeError):
+            asyncio.run(gen.generate())

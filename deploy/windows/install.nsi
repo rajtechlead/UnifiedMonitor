@@ -16,7 +16,7 @@
 !define PUBLISHER    "rajtechlead"
 !define WEBSITE      "https://github.com/rajtechlead/UniMonitor"
 !define CONTACT      "rajrsngroup@gmail.com"
-!define DESCRIPTION  "Unified M365 Security Monitoring & GRC Platform"
+!define DESCRIPTION  "Unified Multi-Cloud Security Monitoring & GRC Platform"
 !define INSTALL_DIR  "$PROGRAMFILES64\${APPNAME}"
 !define REG_KEY      "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
 !define SERVICE_NAME "UniMonitor"
@@ -51,7 +51,7 @@ BrandingText   "${APPNAME} ${APPVERSION} — ${PUBLISHER}"
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_WELCOMEPAGE_TITLE  "Welcome to ${APPNAME} Setup"
-!define MUI_WELCOMEPAGE_TEXT   "This wizard will install ${APPNAME} ${APPVERSION} on your computer.$\r$\n$\r$\nUniMonitor provides unified Microsoft 365 security monitoring, GRC framework assessments, and compliance reporting.$\r$\n$\r$\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TEXT   "This wizard will install ${APPNAME} ${APPVERSION} on your computer.$\r$\n$\r$\nUniMonitor provides unified security monitoring across Microsoft 365, AWS, Google Cloud and Google Workspace, with GRC framework assessments and per-cloud compliance reporting.$\r$\n$\r$\nClick Next to continue."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT   "Open UniMonitor in browser (http://localhost:${SERVICE_PORT})"
 !define MUI_FINISHPAGE_RUN_FUNCTION FinishPageAction
@@ -113,9 +113,8 @@ SectionGroup "Core" SecCore
     WriteRegDWORD HKLM "${REG_KEY}" "NoModify"         1
     WriteRegDWORD HKLM "${REG_KEY}" "NoRepair"         1
 
-    ; Add to PATH
-    EnVar::AddValue "PATH" "$INSTDIR"
-    Pop $0
+    ; Shortcuts and the service use absolute paths, so PATH is left untouched
+    ; (avoids depending on the third-party EnVar NSIS plugin).
 
     ; Write a default .env if it doesn't exist
     ${IfNot} ${FileExists} "$INSTDIR\.env"
@@ -203,10 +202,6 @@ Section "Uninstall"
     ExecWait 'sc stop "${SERVICE_NAME}"'
     ExecWait 'sc delete "${SERVICE_NAME}"'
   ${EndIf}
-
-  ; Remove from PATH
-  EnVar::DeleteValue "PATH" "$INSTDIR"
-  Pop $0
 
   ; Remove files
   RMDir /r "$INSTDIR"

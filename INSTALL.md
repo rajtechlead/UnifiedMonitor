@@ -430,6 +430,11 @@ NSIS must be on your `PATH`. After installing, verify:
 makensis /VERSION
 ```
 
+> **No Windows machine?** The `Release` GitHub workflow builds this same installer on
+> `windows-latest` — either on a `v*.*.*` tag, or manually via **Actions → Release →
+> Run workflow**. The finished `UniMonitor-Setup-<version>-x64.exe` is attached to the
+> workflow run and to the GitHub Release.
+
 ### Step-by-Step Build
 
 #### 1. Clone the repository
@@ -465,6 +470,10 @@ cd ..
 # Copy built assets to where FastAPI serves them
 xcopy /E /I /Y frontend\dist unimonitor\static
 ```
+
+> The NSIS wizard and the executable icon come from `branding/icon.ico`, which is
+> checked in. If it is ever missing, regenerate it with `python scripts/make_icon.py`
+> — NSIS aborts the build without it.
 
 #### 5. Run PyInstaller
 

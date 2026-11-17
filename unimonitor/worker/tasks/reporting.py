@@ -11,7 +11,7 @@ from unimonitor.worker.celery_app import celery_app
 
 logger = get_task_logger(__name__)
 
-ReportFormat = Literal["pdf", "excel", "csv", "json"]
+ReportFormat = Literal["pdf", "docx", "excel", "csv", "json"]
 
 
 def _run_async(coro):
@@ -52,6 +52,7 @@ def generate_report_task(
         from unimonitor.db.models.finding import Finding
         from unimonitor.db.models.report import Report, ReportStatus
         from unimonitor.reporting.csv_generator import CsvReportGenerator
+        from unimonitor.reporting.docx_generator import DocxReportGenerator
         from unimonitor.reporting.excel_generator import ExcelReportGenerator
         from unimonitor.reporting.json_generator import JsonReportGenerator
         from unimonitor.reporting.pdf_generator import PdfReportGenerator
@@ -80,6 +81,7 @@ def generate_report_task(
             generated_files: dict[str, str] = {}
             generators = {
                 "pdf": PdfReportGenerator,
+                "docx": DocxReportGenerator,
                 "excel": ExcelReportGenerator,
                 "csv": CsvReportGenerator,
                 "json": JsonReportGenerator,

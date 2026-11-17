@@ -34,7 +34,7 @@ None
 | L-010 | Some new control keys still depend on the posture snapshot (Copilot Studio, LAPS policy, app blocklist, insider-risk connectors) because no Graph endpoint exposes them | `unimonitor/graph/collectors/snapshot.py` | 🟡 by design; documented in OPERATIONS |
 | M-023 | Google collectors use a pre-issued access token; there is no refresh flow, so a long run needs an external refresher | `unimonitor/graph/collectors/cloud_providers.py` | ⬜ P8-005 |
 | M-024 | AWS/GCP/Workspace controls have never run against live accounts — payload tests only | `controls/aws`, `controls/gcp`, `controls/google_workspace` | ⬜ P8-004 |
-| M-027 | Reports (PDF/DOCX/CSV) still emit one blended score; no per-provider sections or cloud breakdown | `unimonitor/reporting/` | ⬜ P8-007 |
+| M-029 | Windows installer is validated by static guards and the CI smoke test, but has not been executed on a Windows host from this workspace | `deploy/windows/` | 🟡 needs a Windows runner run |
 | M-028 | Azure-specific controls (25, `azure_security`) roll up under the Microsoft 365 provider; there is no standalone Azure dashboard | `unimonitor/grc/providers.py` | 🟡 grouping decision; split if Azure is sold separately |
 
 ## Resolved This Session (2026-11-16)
@@ -44,6 +44,8 @@ None
 | M-017 | `ExecutiveDashboard` read `scores.security`, `severity_counts`, `trend` — none of which `/dashboard/executive` returns; page silently displayed hard-coded demo values | Mapped to `security_score`/`compliance_score`/`risk_score`, `score_trends`, `framework_coverage`, `top_risks`; demo fallbacks removed |
 | M-018 | `ComplianceDashboard` expected `{framework, score, implemented…}`; API returns `{framework_id, framework_name, coverage_pct, controls_total, controls_passed}` — framework list rendered empty | Aligned to the API contract |
 | M-019 | Risk, SOC and Audit dashboard views required by PROJECT_REQUIREMENTS had no UI (Risk/SOC had API only; Audit had no API) | Added `RiskDashboard`, `SocDashboard`, `AuditPage` + `GET /api/v1/dashboard/audit`, routes and nav |
+| M-030 | DOCX export was documented but never implemented; PDF crashed on dict-shaped runs | Added `docx_generator.py`; PDF now uses the dict-safe accessors and emits per-cloud sections |
+| M-027 | Reports emitted one blended score with no cloud breakdown | PDF/DOCX now carry provider coverage + per-provider findings; aggregate summary retained |
 | M-025 | L-009 duplicate insider-risk title | CTRL-PUR-006 replaced with a departing-employee scenario control |
 | M-026 | 58 new controls had no collector producing their data keys | Added `extended.py` + snapshot ingestion; 19 payload tests prove collector → control |
 | M-021 | Control library depth — 100 controls across 10 areas; 7 named monitoring areas had no controls | Added 58 controls in 8 new files (Intune baselines, app inventory, Defender Office/Identity/Cloud Apps, Insider Risk, eDiscovery, Copilot Studio); library now 158 |

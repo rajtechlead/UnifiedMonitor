@@ -73,7 +73,7 @@ class PdfReportGenerator(BaseReportGenerator):
 
         sub_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey)
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
-        story.append(Paragraph(f"Tenant: {self.tenant_id}  |  Run: {self.run.id}  |  Generated: {now}", sub_style))
+        story.append(Paragraph(f"Tenant: {self.tenant_id}  |  Run: {self._get_run_id()}  |  Generated: {now}", sub_style))
         story.append(Spacer(1, 0.6 * cm))
 
         # ── Score summary table ──────────────────────────────────────────────
@@ -130,6 +130,41 @@ class PdfReportGenerator(BaseReportGenerator):
         story.append(sev_table)
         story.append(Spacer(1, 0.8 * cm))
 
+        # ── Cloud provider breakdown (keeps the aggregate figures above) ──────
+        providers = self._provider_breakdown()
+        if providers:
+            story.append(Paragraph("Cloud Provider Coverage", h2))
+            story.append(Spacer(1, 0.3 * cm))
+            provider_rows = [["Provider", "Findings", "Critical", "High", "Coverage", "Score"]]
+            cell_style = ParagraphStyle("provcell", fontSize=9, wordWrap="CJK")
+            for p in providers:
+                provider_rows.append(
+                    [
+                        Paragraph(f"<b>{p['short_name']}</b> — {p['name']}", cell_style),
+                        str(p["total"]),
+                        str(p["severity_counts"]["CRITICAL"]),
+                        str(p["severity_counts"]["HIGH"]),
+                        f"{p['pass_rate']}%",
+                        f"{p['security_score']:.1f}",
+                    ]
+                )
+            provider_table = Table(provider_rows, colWidths=[6.2 * cm, 2 * cm, 1.9 * cm, 1.6 * cm, 2.1 * cm, 1.9 * cm])
+            prov_style = [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.Color(*UNIMONITOR_BLUE)),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.lightgrey),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("ALIGN", (1, 0), (-1, -1), "CENTER"),
+                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+            ]
+            for i, p in enumerate(providers, start=1):
+                prov_style.append(("LINEBEFORE", (0, i), (0, i), 6, colors.Color(*p["rgb"])))
+                prov_style.append(("BACKGROUND", (0, i), (0, i), colors.Color(*p["rgb"], alpha=0.12)))
+            provider_table.setStyle(TableStyle(prov_style))
+            story.append(provider_table)
+            story.append(Spacer(1, 0.8 * cm))
+
         # ── Findings table ───────────────────────────────────────────────────
         if report_type == "full":
             story.append(Paragraph("Findings Detail", h2))
@@ -139,16 +174,19 @@ class PdfReportGenerator(BaseReportGenerator):
             findings_data = [["Control ID", "Title", "Severity", "Status"]]
             sorted_findings = sorted(
                 self.findings,
-                key=lambda f: {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}.get((f.severity or "INFORMATIONAL").upper(), 5),
+                key=lambda f: {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}.get(
+                    (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5
+                ),
             )
             cell_style = ParagraphStyle("cell", fontSize=8, wordWrap="CJK")
             for f in sorted_findings[:200]:  # cap at 200 rows
-                sev = (getattr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
-                state = getattr(f, "state", "not_implemented") or "not_implemented"
+                sev = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
+                state = self._get_finding_attr(f, "state", "not_implemented") or "not_implemented"
+                control_ref = self._get_finding_attr(f, "external_control_id") or str(self._get_finding_attr(f, "id", ""))[:8]
                 findings_data.append(
                     [
-                        Paragraph(getattr(f, "external_control_id", f.id[:8]), cell_style),
-                        Paragraph(getattr(f, "title", "")[:120], cell_style),
+                        Paragraph(control_ref, cell_style),
+                        Paragraph((self._get_finding_attr(f, "title", "") or "")[:120], cell_style),
                         Paragraph(sev, cell_style),
                         Paragraph(state.replace("_", " ").title(), cell_style),
                     ]
@@ -171,6 +209,66 @@ class PdfReportGenerator(BaseReportGenerator):
             findings_table.setStyle(TableStyle(f_style))
             story.append(findings_table)
 
+        # ── Per-provider sections ────────────────────────────────────────────
+        if report_type == "full" and providers:
+            story.append(Spacer(1, 0.8 * cm))
+            story.append(Paragraph("Findings by Cloud Provider", h2))
+            for p in providers:
+                story.append(Spacer(1, 0.4 * cm))
+                prov_h2 = ParagraphStyle(
+                    f"prov-{p['id']}",
+                    parent=h2,
+                    fontSize=12,
+                    textColor=colors.Color(*p["rgb"]),
+                )
+                story.append(Paragraph(p["name"], prov_h2))
+                states = p["state_counts"]
+                story.append(
+                    Paragraph(
+                        f"Score {p['security_score']:.1f}/100  |  Coverage {p['pass_rate']}%  |  "
+                        f"{states['implemented']} implemented, {states['partially_implemented']} partial, "
+                        f"{states['not_implemented']} not implemented, {states['not_applicable']} n/a  |  "
+                        f"Severity: {p['severity_counts']['CRITICAL']} critical, {p['severity_counts']['HIGH']} high",
+                        sub_style,
+                    )
+                )
+                story.append(Spacer(1, 0.2 * cm))
+
+                prov_findings = sorted(
+                    p["findings"],
+                    key=lambda f: {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}.get(
+                        (getattr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5
+                    ),
+                )
+                prov_rows = [["Control ID", "Title", "Severity", "Status"]]
+                for f in prov_findings[:80]:
+                    sev = (getattr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
+                    state = getattr(f, "state", "not_implemented") or "not_implemented"
+                    prov_rows.append(
+                        [
+                            Paragraph(getattr(f, "external_control_id", getattr(f, "id", "")[:8]), cell_style),
+                            Paragraph(getattr(f, "title", "")[:120], cell_style),
+                            Paragraph(sev, cell_style),
+                            Paragraph(state.replace("_", " ").title(), cell_style),
+                        ]
+                    )
+                prov_table = Table(prov_rows, colWidths=col_widths, repeatRows=1)
+                prov_f_style = [
+                    ("BACKGROUND", (0, 0), (-1, 0), colors.Color(*p["rgb"])),
+                    ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+                    ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                    ("GRID", (0, 0), (-1, -1), 0.3, colors.lightgrey),
+                    ("FONTSIZE", (0, 0), (-1, -1), 8),
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.Color(0.97, 0.97, 0.97)]),
+                ]
+                for i, row in enumerate(prov_rows[1:], start=1):
+                    sev_text = row[2].text if hasattr(row[2], "text") else str(row[2])
+                    rgb = SEVERITY_COLORS.get(sev_text, (1, 1, 1))
+                    prov_f_style.append(("BACKGROUND", (2, i), (2, i), colors.Color(*rgb, alpha=0.3)))
+                prov_table.setStyle(TableStyle(prov_f_style))
+                story.append(prov_table)
+
         doc.build(story)
         return str(output_path)
 
@@ -182,7 +280,7 @@ class PdfReportGenerator(BaseReportGenerator):
             "UniMonitor Security Assessment Report",
             "=" * 50,
             f"Tenant: {self.tenant_id}",
-            f"Run ID: {self.run.id}",
+            f"Run ID: {self._get_run_id()}",
             f"Security Score: {stats.get('security_score')}",
             f"Compliance Score: {stats.get('compliance_score')}",
             f"Total Findings: {stats['total_findings']}",
@@ -191,5 +289,14 @@ class PdfReportGenerator(BaseReportGenerator):
         ]
         for sev, cnt in stats["severity_counts"].items():
             lines.append(f"  {sev}: {cnt}")
+        providers = self._provider_breakdown()
+        if providers:
+            lines.extend(["", "Cloud Provider Breakdown:"])
+            for p in providers:
+                lines.append(
+                    f"  {p['name']}: {p['total']} findings, score {p['security_score']:.1f},"
+                    f" coverage {p['pass_rate']}%, {p['severity_counts']['CRITICAL']} critical,"
+                    f" {p['severity_counts']['HIGH']} high"
+                )
         output_path.write_text("\n".join(lines))
         return str(output_path)

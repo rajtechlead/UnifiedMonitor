@@ -21,8 +21,8 @@ with a per-cloud view and an aggregate view across all of them.
 | **AI Remediation** | Azure OpenAI GPT-4o powered remediation plans with rule-based fallback |
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
 | **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
-| **Reporting** | PDF, DOCX, JSON, CSV compliance reports |
-| **Dashboards** | Executive, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
+| **Reporting** | PDF, DOCX, Excel, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
+| **Dashboards** | Executive, CISO, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
 
 ---
 
@@ -172,7 +172,7 @@ See **[INSTALL.md § 9](INSTALL.md#9-building-the-windows-installer-from-source-
 **Short version:**
 
 ```powershell
-pip install pyinstaller==6.10.0
+pip install "pyinstaller>=6.15.0,<7"   # 6.15+ is required for Python 3.12/3.13/3.14
 pip install -e ".[all-secrets]"
 cd frontend && npm ci && npm run build && cd ..
 xcopy /E /I /Y frontend\dist unimonitor\static
@@ -182,8 +182,12 @@ makensis /DVERSION=1.0.0 deploy\windows\install.nsi
 # Output: dist/UniMonitor-Setup-1.0.0-x64.exe
 ```
 
-Pushing a `v*.*.*` tag triggers the [release workflow](.github/workflows/release.yml)
-which builds and publishes the installer automatically.
+You don't need a Windows machine: the [release workflow](.github/workflows/release.yml)
+builds the installer on `windows-latest` and uploads it as an artifact. It runs
+automatically on a `v*.*.*` tag, or on demand from **Actions → Release → Run
+workflow** (`workflow_dispatch`, with an optional version input). The NSIS
+wizard needs `branding/icon.ico`, which is checked in and regenerable with
+`python scripts/make_icon.py`.
 
 ---
 

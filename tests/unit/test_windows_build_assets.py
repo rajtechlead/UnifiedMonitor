@@ -1,0 +1,83 @@
+"""Guards for the Windows packaging pipeline (PyInstaller + NSIS + release workflow).
+
+These exist because the installer build broke on three things that static
+checks can catch: a hidden import that no longer exists, a missing NSIS icon,
+and a PyInstaller pin that does not exist for the target Python versions.
+"""
+
+from __future__ import annotations
+
+import ast
+import importlib.util
+from pathlib import Path
+
+import pytest
+import yaml
+
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = ROOT / "deploy" / "windows" / "unimonitor.spec"
+NSI = ROOT / "deploy" / "windows" / "install.nsi"
+RELEASE = ROOT / ".github" / "workflows" / "release.yml"
+
+
+def _spec_hiddenimports() -> list[str]:
+    tree = ast.parse(SPEC.read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "hiddenimports" for t in node.targets):
+            return list(ast.literal_eval(node.value))
+    raise AssertionError("hiddenimports not found in spec")
+
+
+def test_spec_hiddenimports_point_at_real_unimonitor_modules():
+    missing = []
+    for name in _spec_hiddenimports():
+        if not name.startswith("unimonitor"):
+            continue
+        try:
+            if importlib.util.find_spec(name) is None:
+                missing.append(name)
+        except ModuleNotFoundError:
+            missing.append(name)
+    assert missing == [], f"hidden imports that do not exist: {missing}"
+
+
+def test_spec_does_not_reference_removed_secrets_factory():
+    assert "unimonitor.secrets.factory" not in _spec_hiddenimports()
+
+
+def test_spec_collects_docx_templates_and_branding():
+    source = SPEC.read_text()
+    assert 'collect_data_files("docx")' in source, "python-docx needs its default.docx template at runtime"
+    assert '"branding"' in source
+
+
+def test_nsis_icon_exists():
+    """NSIS aborts the build when its MUI icon is missing."""
+    assert "branding\\icon.ico" in NSI.read_text()
+    icon = ROOT / "branding" / "icon.ico"
+    assert icon.exists(), "branding/icon.ico missing — run python scripts/make_icon.py"
+    assert icon.read_bytes()[:4] == b"\x00\x00\x01\x00", "not a valid .ico file"
+
+
+def test_nsis_does_not_require_third_party_plugins():
+    """EnVar is not shipped with stock NSIS, so a plugin call breaks the build."""
+    assert "EnVar::" not in NSI.read_text()
+
+
+def test_release_workflow_builds_installer_on_demand():
+    workflow = yaml.safe_load(RELEASE.read_text())
+    # PyYAML parses the bare ``on:`` key as boolean True
+    triggers = workflow.get("on", workflow.get(True))
+    assert "workflow_dispatch" in triggers, "installer should be buildable without pushing a tag"
+    assert "push" in triggers
+
+    job = workflow["jobs"]["windows-installer"]
+    text = yaml.safe_dump(job)
+    assert "pyinstaller>=6.16.0,<7" in text, "pin must be a version that exists for current Python"
+    assert "pyinstaller==6.10.0" not in text
+    assert "if-no-files-found: error" in text, "a missing installer must fail the job"
+
+
+@pytest.mark.parametrize("filename", ["unimonitor.spec", "install.nsi"])
+def test_windows_build_files_present(filename: str):
+    assert (ROOT / "deploy" / "windows" / filename).exists()

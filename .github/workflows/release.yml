@@ -5,6 +5,13 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # Build the Windows installer on demand, without pushing a tag.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (e.g. 1.0.0). Defaults to 1.0.0."
+        required: false
+        default: "1.0.0"
 
 env:
   REGISTRY:   ghcr.io
@@ -81,7 +88,8 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install --upgrade pip
-          pip install "pyinstaller>=6.15.0"
+          # 6.15+ is required for Python 3.12/3.13/3.14; 6.10.0 does not exist for these runtimes
+          pip install "pyinstaller>=6.16.0,<7"
           # Install only the packages needed to build (no optional providers)
           pip install -e "." --no-deps
           pip install -e ".[all-secrets]"
@@ -116,6 +124,30 @@ jobs:
           }
           Write-Host "PyInstaller output:" (Get-ChildItem dist/UniMonitor | Measure-Object).Count "files"
 
+      # ── Smoke-test the frozen bundle before packaging it ───────────────────
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $out = "exe-stdout.txt"
+          $err = "exe-stderr.txt"
+          $p = Start-Process -FilePath "dist/UniMonitor/UniMonitor.exe" `
+            -ArgumentList "--help" -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          if (-not $p.WaitForExit(90000)) {
+            $p.Kill()
+            Write-Error "UniMonitor.exe --help did not exit within 90s"
+            exit 1
+          }
+          Get-Content $out, $err -ErrorAction SilentlyContinue | Select-Object -First 25
+          if ($p.ExitCode -ne 0) {
+            Write-Error "UniMonitor.exe --help exited with $($p.ExitCode)"
+            exit 1
+          }
+          if (-not (Select-String -Path $out -Pattern "Usage" -Quiet)) {
+            Write-Error "UniMonitor.exe --help produced no usage text"
+            exit 1
+          }
+
       # ── Grab a prebuilt NSSM binary for Windows Service support ───────────
       - name: Download NSSM (Windows Service helper)
         shell: pwsh
@@ -142,31 +174,26 @@ jobs:
           # Verify
           makensis /VERSION
 
-      - name: Inject version into NSIS script
+      - name: Resolve installer version
         shell: pwsh
         run: |
-          $version = "${{ needs.docker.outputs.version }}"
-          if (!$version) { $version = "1.0.0" }
+          $version = "${{ github.event.inputs.version }}"
+          if (!$version) { $version = "${{ needs.docker.outputs.version }}" }
+          if (!$version -or $version -eq "latest") { $version = "1.0.0" }
           # Strip the leading 'v' if present
           $version = $version.TrimStart('v')
           Write-Host "Building installer for version $version"
           echo "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
 
-      - name: Create branding assets if missing
+      - name: Verify branding assets
         shell: pwsh
         run: |
-          # Create a placeholder icon if branding/icon.ico doesn't exist
-          # (CI won't fail on missing icon — NSIS skips it)
-          if (!(Test-Path "branding")) { mkdir branding }
+          # NSIS aborts if its icon is missing, so fail loudly with the fix.
           if (!(Test-Path "branding/icon.ico")) {
-            # Download a neutral placeholder icon
-            try {
-              Invoke-WebRequest -Uri "https://raw.githubusercontent.com/microsoft/vscode/main/resources/win32/code.ico" `
-                -OutFile branding/icon.ico -TimeoutSec 10
-            } catch {
-              Write-Host "Could not download icon, proceeding without it"
-            }
+            Write-Error "branding/icon.ico is missing. Regenerate it with: python scripts/make_icon.py"
+            exit 1
           }
+          Write-Host "Using branding/icon.ico" ((Get-Item branding/icon.ico).Length) "bytes"
 
       - name: Build NSIS installer
         shell: pwsh
@@ -175,16 +202,23 @@ jobs:
             /V4 `
             "/DVERSION=${{ env.INSTALLER_VERSION }}" `
             deploy/windows/install.nsi
-          # Check output
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "makensis failed with exit code $LASTEXITCODE"
+            exit 1
+          }
           $exe = "dist/UniMonitor-Setup-${{ env.INSTALLER_VERSION }}-x64.exe"
           if (!(Test-Path $exe)) {
-            # Try without NSIS (ship the folder as a zip fallback)
-            Write-Warning "NSIS build failed — creating zip fallback"
-            Compress-Archive -Path dist/UniMonitor/* `
-              -DestinationPath "dist/UniMonitor-${{ env.INSTALLER_VERSION }}-x64-portable.zip"
-          } else {
-            Write-Host "Installer created: $exe"
+            Write-Error "NSIS reported success but $exe is missing"
+            exit 1
           }
+          $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "Installer created: $exe ($sizeMb MB)"
+
+      - name: Create portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/UniMonitor/* `
+            -DestinationPath "dist/UniMonitor-${{ env.INSTALLER_VERSION }}-x64-portable.zip"
 
       # ── Upload both artefacts (installer exe + portable zip) ──────────────
       - name: Upload Windows installer artifacts
@@ -195,7 +229,7 @@ jobs:
           path: |
             dist/UniMonitor-Setup-*.exe
             dist/UniMonitor-*-portable.zip
-          if-no-files-found: warn
+          if-no-files-found: error
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Job 3 — Create GitHub Release with all assets attached
@@ -239,7 +273,8 @@ jobs:
           body: |
             ## UniMonitor v${{ env.VERSION }}
 
-            > **Unified Microsoft 365 Security Monitoring, GRC & Compliance Platform**
+            > **Unified Multi-Cloud Security Monitoring, GRC & Compliance Platform**
+            > Microsoft 365 · AWS · Google Cloud · Google Workspace
             > Developed by [rajtechlead](https://github.com/rajtechlead) · Contact: rajrsngroup@gmail.com
 
             ---

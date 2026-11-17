@@ -837,3 +837,153 @@ async def dashboard_cloud_provider(
         ],
         generated_at=datetime.now(UTC),
     )
+
+
+# ── CISO dashboard ───────────────────────────────────────────
+#
+# One board for the security leader: residual risk, cloud-by-cloud exposure,
+# the risks worth acting on this week, and the frameworks drifting furthest
+# from target. Aggregates every provider rather than a single cloud.
+
+
+class CloudRiskRow(BaseModel):
+    provider_id: str
+    name: str
+    short_name: str
+    colour: str
+    connected: bool
+    security_score: float
+    coverage_pct: float
+    critical: int
+    high: int
+    findings_total: int
+
+
+class CisoRiskItem(BaseModel):
+    id: str
+    title: str
+    severity: str
+    state: str
+    provider_id: str
+    provider_name: str
+    colour: str
+    service: str
+    risk_score: int
+    first_detected_at: datetime
+
+
+class CisoDashboardResponse(BaseModel):
+    scores: ScoreSummary
+    severity_totals: FindingCounts
+    state_totals: StateCounts
+    open_findings: int
+    suppressed_findings: int
+    clouds: list[CloudRiskRow]
+    top_risks: list[CisoRiskItem]
+    weakest_frameworks: list[FrameworkCoverage]
+    coverage_trend: list[TrendPoint]
+    generated_at: datetime
+
+
+@router.get("/ciso", response_model=CisoDashboardResponse)
+async def dashboard_ciso(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+    risk_limit: int = Query(default=10, ge=1, le=50),
+) -> CisoDashboardResponse:
+    """CISO view: residual risk across every monitored cloud."""
+    from unimonitor.grc.providers import PROVIDERS, provider_for_service
+    from unimonitor.grc.scoring import compute_framework_coverage
+
+    findings = await _load_findings(db, tenant_id)
+    groups = _group_by_provider(findings)
+
+    clouds = []
+    for pid, provider in PROVIDERS.items():
+        summary = _summarise_provider(provider, groups.get(pid, []), _provider_controls(pid))
+        clouds.append(
+            CloudRiskRow(
+                provider_id=pid,
+                name=provider.name,
+                short_name=provider.short_name,
+                colour=provider.colour,
+                connected=summary.connected,
+                security_score=summary.scores.security_score,
+                coverage_pct=summary.coverage_pct,
+                critical=summary.finding_counts.critical,
+                high=summary.finding_counts.high,
+                findings_total=summary.finding_counts.total,
+            )
+        )
+
+    risks = []
+    for finding in findings:
+        if finding.state in ("implemented", "not_applicable") or finding.is_suppressed:
+            continue
+        provider = provider_for_service(finding.service)
+        risks.append(
+            CisoRiskItem(
+                id=finding.id,
+                title=finding.title,
+                severity=finding.severity,
+                state=finding.state,
+                provider_id=provider.id if provider else "other",
+                provider_name=provider.name if provider else "Unassigned",
+                colour=provider.colour if provider else "#94A3B8",
+                service=finding.service,
+                risk_score=finding.risk_score,
+                first_detected_at=finding.first_detected_at,
+            )
+        )
+    risks.sort(key=lambda r: r.risk_score, reverse=True)
+
+    _, state_totals, sec, comp, risk = _count_states(findings)
+    severity_totals, _, _, _, _ = _count_states(findings)
+
+    try:
+        coverages = await compute_framework_coverage(db, tenant_id=tenant_id)
+    except Exception:  # noqa: BLE001 - coverage must never break the CISO board
+        coverages = {}
+    framework_gaps = [
+        FrameworkCoverage(
+            framework_id=fw_id,
+            framework_name=fw_id.replace("-", " ").title(),
+            coverage_pct=cov.get("coverage_pct", 0.0),
+            controls_total=cov.get("controls_total", 0),
+            controls_passed=cov.get("controls_passed", 0),
+        )
+        for fw_id, cov in coverages.items()
+        if cov.get("controls_total")
+    ]
+    framework_gaps.sort(key=lambda fw: fw.coverage_pct)
+
+    from unimonitor.db.repositories.assessment_repo import AssessmentRepository
+
+    trend_points = await AssessmentRepository(db).get_score_trends(tenant_id=tenant_id, days=30)
+
+    return CisoDashboardResponse(
+        scores=ScoreSummary(
+            security_score=sec,
+            compliance_score=comp,
+            risk_score=risk,
+            score_trend_7d=0.0,
+        ),
+        severity_totals=severity_totals,
+        state_totals=state_totals,
+        open_findings=len(risks),
+        suppressed_findings=sum(1 for f in findings if f.is_suppressed),
+        clouds=clouds,
+        top_risks=risks[:risk_limit],
+        weakest_frameworks=framework_gaps[:5],
+        coverage_trend=[
+            TrendPoint(
+                date=p.get("date", ""),
+                security_score=p.get("security_score", 0.0),
+                compliance_score=p.get("compliance_score", 0.0),
+                risk_score=p.get("risk_score", 0.0),
+            )
+            for p in trend_points
+        ],
+        generated_at=datetime.now(UTC),
+    )

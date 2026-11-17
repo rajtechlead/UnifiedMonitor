@@ -22,6 +22,8 @@ class CloudProvider:
     name: str
     short_name: str
     description: str
+    # Brand colour used to keep provider sections visually distinct in reports and UI.
+    colour: str
     services: tuple[str, ...]
     collectors: tuple[str, ...]
     # Settings that must be present before live data can be collected.
@@ -34,6 +36,7 @@ PROVIDERS: dict[str, CloudProvider] = {
         name="Microsoft 365",
         short_name="M365",
         description="Entra ID, Intune, Defender, Purview, Exchange, SharePoint, Teams and Copilot",
+        colour="#1776D2",
         services=(
             "entra_id",
             "intune",
@@ -69,6 +72,7 @@ PROVIDERS: dict[str, CloudProvider] = {
         name="Amazon Web Services",
         short_name="AWS",
         description="IAM, S3, CloudTrail, GuardDuty, AWS Config and Security Hub",
+        colour="#FF9900",
         services=("aws",),
         collectors=("aws",),
         credential_settings=("AWS_REGION", "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"),
@@ -78,6 +82,7 @@ PROVIDERS: dict[str, CloudProvider] = {
         name="Google Cloud Platform",
         short_name="GCP",
         description="Cloud IAM, service accounts, firewall rules, audit sinks, buckets, KMS and org policy",
+        colour="#34A853",
         services=("gcp",),
         collectors=("gcp",),
         credential_settings=("GCP_PROJECT_ID", "GCP_ACCESS_TOKEN"),
@@ -87,6 +92,7 @@ PROVIDERS: dict[str, CloudProvider] = {
         name="Google Workspace",
         short_name="Workspace",
         description="Admin roles, 2-step verification, OAuth grants, Drive sharing and mobile devices",
+        colour="#EA4335",
         services=("google_workspace",),
         collectors=("google_workspace",),
         credential_settings=("GOOGLE_WORKSPACE_CUSTOMER_ID", "GOOGLE_ACCESS_TOKEN"),

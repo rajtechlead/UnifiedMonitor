@@ -8,6 +8,8 @@
 import sys
 from pathlib import Path
 
+from PyInstaller.utils.hooks import collect_data_files
+
 ROOT = Path(SPECPATH).parent.parent  # repo root
 
 block_cipher = None
@@ -26,6 +28,10 @@ datas = [
     # Windows-specific scripts
     (str(ROOT / "deploy" / "windows" / "scripts"), "scripts"),
 ]
+
+# python-docx ships a default.docx template it opens at runtime, and the bundled
+# frontend build (unimonitor/static) is collected by the unimonitor hook below.
+datas += collect_data_files("docx")
 
 # ── Hidden imports that PyInstaller static analysis misses ────────────────────
 hiddenimports = [
@@ -72,7 +78,13 @@ hiddenimports = [
     "unimonitor.core.logging",
     "unimonitor.auth.dependencies",
     "unimonitor.graph.client",
-    "unimonitor.secrets.factory",
+    "unimonitor.grc.providers",
+    "unimonitor.secrets.provider",
+    "unimonitor.secrets.resolver",
+    # DOCX reporting (python-docx imports its parts lazily)
+    "docx",
+    "docx.shared",
+    "docx.oxml",
 ]
 
 # ── Analysis ──────────────────────────────────────────────────────────────────

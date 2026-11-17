@@ -86,6 +86,19 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 - Fixed a latent bug: `compute_framework_coverage` was imported by the dashboard and GRC APIs but
   never existed, so framework coverage silently returned empty. It now exists, and it normalises the
   hyphenated API framework ids (`iso27001-2022`) against the underscored control-mapping keys.
+- Compliance reports break down by cloud: the aggregate single-org summary is unchanged, then a
+  colour-coded “Cloud Provider Coverage” table and one section per provider (own score, control
+  states, findings) follow. PDF and DOCX both do this; DOCX did not exist before (README claimed it),
+  so `reporting/docx_generator.py` was added with `python-docx`.
+- CISO dashboard (`GET /dashboard/ciso`, `/ciso`): residual risk across every cloud, exposure table
+  per provider, top risks with provider labels, weakest frameworks and a 30-day posture trend.
+- Windows packaging repaired: `pyinstaller==6.10.0` pinned in README never existed for modern
+  Pythons (now `>=6.16,<7`), the spec listed a removed `unimonitor.secrets.factory` hidden import and
+  shipped without python-docx data, the PyInstaller hook crashed on production settings validation,
+  NSIS aborted on the missing `branding/icon.ico`, and it relied on the EnVar plugin that stock NSIS
+  does not ship. Icon is now committed (regenerable via `scripts/make_icon.py`) and the release
+  workflow builds on demand (`workflow_dispatch`), smoke-tests the packaged exe and fails if the
+  installer is missing. `tests/unit/test_windows_build_assets.py` guards each regression.
 - Fixed 157 ruff + 2 mypy errors that existed on HEAD (CI would have been red): import sorting,
   line length, unused imports/variables, `print` in CLI scripts, dummy-credential false positives.
 
@@ -149,10 +162,12 @@ same-vendor upgrades within the approved stack, not substitutions.
 
 | Component | Status | Notes |
 |---|---|---|
-| Python tests | ✅ 518/518 | 73s, 7 warnings (AsyncMock never-awaited in mocks) |
+| Python tests | ✅ 536/536 | 60s, 7 warnings (AsyncMock never-awaited in mocks) |
 | Control library | ✅ 180 controls | 21 YAML files, all framework keys resolve |
 | Multi-cloud collectors | ✅ AWS / GCP / Workspace | credential-dependent; payload tests only |
 | Multi-cloud dashboards | ✅ aggregate + per provider | provider registry drives both; React build clean |
+| CISO dashboard | ✅ API + UI | cross-cloud risk, weakest frameworks, 30-day trend |
+| Windows packaging | ✅ static + CI guarded | local NSIS/PyInstaller run still needs a Windows host |
 | Ruff check | ✅ CLEAN | 0 errors (was 157 on HEAD) |
 | Ruff format | ✅ CLEAN | 132 files formatted |
 | mypy | ✅ CLEAN | 87 source files |

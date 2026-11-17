@@ -31,7 +31,9 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P8-004 Live credential validation | ⬜ Open | no AWS/GCP/Workspace accounts in the agent workspace |
 | P8-005 Google token refresh | ⬜ Open | collectors take a static token; add service-account/OIDC refresh |
 | P8-006 Provider controls in the UI | ✅ Done | `/clouds` aggregate + `/clouds/:providerId` detail pages, Clouds nav entry |
-| P8-007 Provider segmentation in reports | ⬜ Open | PDF/DOCX exports still aggregate all providers into one score |
+| P8-007 Provider segmentation in reports | ✅ Done | aggregate summary retained + colour-coded per-cloud sections in PDF and DOCX |
+| P8-008 MSI package variant | ⬜ Open | NSIS `.exe` ships today; an MSI (WiX) is optional if group policy deployment needs it |
+| P8-009 CISO dashboard | ✅ Done | `/dashboard/ciso` + `/ciso` page: exposure by cloud, top risks, weakest frameworks, trend |
 | P7-006 Coverage re-measure | ⬜ Open | last 62% at `79dfb98` |
 | P7-007 Frontend majors remaining | ⬜ Open | `react` 18→19, `@vitejs/plugin-react` 4→6 |
 | P7-008 Jose/ecdsa CVE decision | ⬜ Open | accept-and-record or migrate to `pyjwt` |
