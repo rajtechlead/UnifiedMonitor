@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     ENTRA_TENANT_ID: str = ""
     ENTRA_CLIENT_ID: str = ""
     ENTRA_CLIENT_SECRET: str = ""
+    # Certificate authentication (the setup wizard's default). When both are set they
+    # take precedence over ENTRA_CLIENT_SECRET.
+    ENTRA_CLIENT_PRIVATE_KEY: str = ""
+    ENTRA_CLIENT_CERTIFICATE: str = ""
     ENTRA_AUTHORITY: str = "https://login.microsoftonline.com"
     ENTRA_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
     GRAPH_API_VERSION: str = "v1.0"

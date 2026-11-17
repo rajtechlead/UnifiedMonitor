@@ -612,10 +612,10 @@
     "semantic_hash": ""
   },
   "unimonitor/auth/oauth.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6290057,
-    "ast_hash": "4f1370ff54f4d51cbcef5c5716777285",
-    "semantic_hash": "4f1370ff54f4d51cbcef5c5716777285"
+    "mtime": 1794956913.1452897,
+    "seen": 1794957861.9374852,
+    "ast_hash": "35406d0de2e2843c80d90bf8efc48da5",
+    "semantic_hash": ""
   },
   "unimonitor/cli.py": {
     "mtime": 1794953391.4710376,
@@ -624,9 +624,9 @@
     "semantic_hash": ""
   },
   "unimonitor/config.py": {
-    "mtime": 1794953315.8622684,
-    "seen": 1794954236.627345,
-    "ast_hash": "26145cfb8d8ea8c56260b2e869efddee",
+    "mtime": 1794956910.8747602,
+    "seen": 1794957861.9374886,
+    "ast_hash": "12857afddc555f3a5c41cee791a5b2b0",
     "semantic_hash": ""
   },
   "unimonitor/core/__init__.py": {
@@ -1230,15 +1230,15 @@
     "semantic_hash": ""
   },
   "frontend/src/components/PlatformConnector.tsx": {
-    "mtime": 1794953503.2017927,
-    "seen": 1794954236.6272233,
-    "ast_hash": "e378cb18e9047aeae581be6e6018d360",
+    "mtime": 1794957694.588175,
+    "seen": 1794957861.9373543,
+    "ast_hash": "e3741dcc361ca0b33e55a5662daa2914",
     "semantic_hash": ""
   },
   "frontend/src/pages/SetupPage.tsx": {
-    "mtime": 1794953521.891193,
-    "seen": 1794954236.6272438,
-    "ast_hash": "65e63550e9a9c4fc11908a4ae28f8a10",
+    "mtime": 1794957149.516242,
+    "seen": 1794957861.9373806,
+    "ast_hash": "9ac929d7964c1ad39e5b703a8d084b8b",
     "semantic_hash": ""
   },
   "scripts/verify_bundled_ui.py": {
@@ -1248,9 +1248,9 @@
     "semantic_hash": ""
   },
   "tests/integration/test_onboarding_api.py": {
-    "mtime": 1794954155.9928925,
-    "seen": 1794954236.6272745,
-    "ast_hash": "d30ed5ade3463470a48db2dfc07f06c4",
+    "mtime": 1794957281.4897008,
+    "seen": 1794957861.9374125,
+    "ast_hash": "77adfd9c313fb897db8b62d93cee6b1e",
     "semantic_hash": ""
   },
   "tests/integration/test_reports_api.py": {
@@ -1266,15 +1266,15 @@
     "semantic_hash": ""
   },
   "tests/unit/test_onboarding.py": {
-    "mtime": 1794953935.8642738,
-    "seen": 1794954236.6272984,
-    "ast_hash": "a83b1209b991d45ca18bc08639af650d",
+    "mtime": 1794957562.8425488,
+    "seen": 1794957861.9374428,
+    "ast_hash": "aaa77a80fa711d6103bb7c8e1dda428c",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/onboarding.py": {
-    "mtime": 1794954155.9928925,
-    "seen": 1794954236.6273339,
-    "ast_hash": "4e2dfed4cbd9454a8aec2e8cbeeee5ad",
+    "mtime": 1794957692.4891384,
+    "seen": 1794957861.9374745,
+    "ast_hash": "3ef32ab3331bba4b5a824e10c09ae1c7",
     "semantic_hash": ""
   },
   "unimonitor/db/models/cloud_connection.py": {
@@ -1290,9 +1290,9 @@
     "semantic_hash": ""
   },
   "unimonitor/onboarding/clouds.py": {
-    "mtime": 1794954151.76348,
-    "seen": 1794954236.627409,
-    "ast_hash": "1ed4aa2d9f9f466a8221bc38001dfa19",
+    "mtime": 1794957483.0989606,
+    "seen": 1794957861.9375708,
+    "ast_hash": "24b904fac2e85c41a9572a3dcdf9def1",
     "semantic_hash": ""
   },
   "unimonitor/onboarding/google_auth.py": {
@@ -1302,9 +1302,9 @@
     "semantic_hash": ""
   },
   "unimonitor/onboarding/m365.py": {
-    "mtime": 1794953073.7066033,
-    "seen": 1794954236.6274111,
-    "ast_hash": "4dca1a0ae681c06ca41cef562be1258c",
+    "mtime": 1794956867.6223867,
+    "seen": 1794957861.9375746,
+    "ast_hash": "a1ed6a534efa613abaca7d22fb3aa319",
     "semantic_hash": ""
   },
   "unimonitor/onboarding/permissions.py": {
@@ -1314,9 +1314,15 @@
     "semantic_hash": ""
   },
   "unimonitor/onboarding/service.py": {
-    "mtime": 1794954155.9928925,
-    "seen": 1794954236.6274135,
-    "ast_hash": "bd4d8a9af51842338a09151ae9ebbc49",
+    "mtime": 1794957480.79222,
+    "seen": 1794957861.9375777,
+    "ast_hash": "52e9975354983c793e5b9f3da8033b95",
+    "semantic_hash": ""
+  },
+  "unimonitor/onboarding/certificates.py": {
+    "mtime": 1794957478.6177464,
+    "seen": 1794957861.9375684,
+    "ast_hash": "f10e5e089c02e246b58acf4a56463393",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {

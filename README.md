@@ -51,8 +51,13 @@ no findings, so its controls report *not implemented* rather than passing.
 
 1. Download **`UniMonitor-Setup-<version>-x64.exe`** from the [Releases page](https://github.com/rajtechlead/UniMonitor/releases)
 2. Run as Administrator — setup wizard installs and optionally registers a Windows Service
-3. Edit `C:\Program Files\UniMonitor\.env` with your credentials
+3. Finish in the browser wizard at **http://localhost:8000/setup**: create the administrator, pick the platforms and connect them
 4. Open **http://localhost:8000**
+
+Microsoft 365 registers its own Entra app after a Global Administrator sign-in, using a generated
+**certificate** by default (client secret optional). AWS can attach through an assumed IAM role,
+and Google Cloud and Workspace can share a single service account — see
+[INSTALL.md §6](INSTALL.md#6-microsoft-365-app-registration).
 
 See **[INSTALL.md](INSTALL.md)** for the full step-by-step guide.
 

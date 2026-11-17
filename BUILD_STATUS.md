@@ -25,10 +25,10 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 590/590 | 63s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 601/601 | 60s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
-| First-run onboarding | ✅ 23 tests | setup window closes after the first admin; connect/list/delete; mocked Graph app registration |
+| First-run onboarding | ✅ 34 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account |
 | Bundled UI | ✅ verify_bundled_ui.py | shell, hashed asset, `/setup` deep link, API precedence, 401/404 |
 | Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
 | CISO dashboard | ✅ API + UI | `/dashboard/ciso` and `/ciso` page; cloud exposure, top risks, framework gaps, trend |
@@ -37,8 +37,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Installer workflow | ✅ On demand | `windows-installer.yml` dispatch builds the .exe + portable zip |
 | Windows installer | 🟡 PyInstaller ✅ on runner | freezes 1134 files and `--help` passes on `windows-latest`; NSIS step fixed (`makensis` PATH) and awaiting a green run |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
-| Ruff format | ✅ CLEAN | 132 files |
-| mypy | ✅ CLEAN | 87 source files |
+| Ruff format | ✅ CLEAN | 162 files |
+| mypy | ✅ CLEAN | 101 source files |
 | SQLite validation | ✅ | in-memory SQLite for all tests |
 | PostgreSQL validation | ⬜ | not exercised this session |
 | Health endpoint | ✅ | covered by integration tests |
@@ -50,8 +50,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 481 | across 25 files |
-| Integration tests | ✅ PASS | 84 | health, e2e journeys, dashboard, cloud, CISO, report and SPA serving |
+| Unit tests | ✅ PASS | 503 | across 25 files |
+| Integration tests | ✅ PASS | 98 | health, e2e journeys, dashboard, cloud, CISO, onboarding, report and SPA serving |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
@@ -64,7 +64,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | npm ci | ✅ | clean install from lockfile |
 | ESLint | ✅ CLEAN | 0 warnings, `--max-warnings 0` |
 | TypeScript (`tsc`) | ✅ | no type errors |
-| Vite production build | ✅ | 2613 modules, 5.0s; charts chunk 437 kB (gzip 124 kB) |
+| Vite production build | ✅ | 2618 modules, 5.3s; charts chunk 452 kB (gzip 127 kB) |
 | npm audit | ⚠️ | major-version advisories only; two majors still pending |
 | Playwright E2E smoke | ⬜ NOT RUN | CI only |
 

@@ -6,8 +6,37 @@ Last Updated: 2026-11-17 UTC
 
 ## Current Session Commits (2026-11-17)
 
+- `feat: certificate credentials for the Entra app and shared cloud service accounts`
 - `feat: first-run setup wizard that asks which platforms to monitor`
 - `fix(ci): put makensis on PATH after installing NSIS`
+
+### Session 2026-11-17 — certificate credentials and one service account
+
+Microsoft 365 onboarding now defaults to certificate authentication and the cloud connectors
+accept a single shared identity:
+
+- `unimonitor/onboarding/certificates.py` — generates a self-signed RSA certificate with a
+  caller-chosen validity (365 days default, 1–1095), returns PEM/DER, computes the Entra
+  thumbprint and signs the `client_assertion` JWT used for client-credentials auth.
+- `m365.provision_app(auth_method=...)` — certificate is the default: the public certificate is
+  uploaded with `/applications/{id}/addKey`. `add_certificate()` is a separate step so a refused
+  upload is reported, not fatal: the result carries the certificate, the portal steps and
+  `certificate_uploaded=False`. `verify_client_credentials()` accepts a certificate or a secret.
+- Fallback flow: the connection is stored as `pending_certificate_upload`, which does **not**
+  count as configured, so the wizard cannot finish. The UI offers the certificate files for
+  download, the Entra portal steps and **Check certificate connectivity**
+  (`POST /microsoft/verify`), which re-tests and promotes the connection.
+- Runtime: `ENTRA_CLIENT_CERTIFICATE` + `ENTRA_CLIENT_PRIVATE_KEY` are hydrated from the vault and
+  MSAL authenticates with them; the secret is cleared in certificate mode.
+- AWS can connect as an assumed IAM role (`validate_aws_role`, `assume_role_credentials`); no
+  long-lived keys are stored and the collector assumes the role at collection time.
+- Google Cloud and Google Workspace can share one service account:
+  `POST /connections/google-service-account` validates both and stores one key for both.
+- UI: `PlatformConnector` gained an auth-method picker, a certificate validity field, the
+  fallback panel and a `GoogleSharedConnector` the wizard shows when both Google platforms are
+  selected.
+- Docs: INSTALL.md §6 (certificate default, fallback, SSO/shared service account), README quick
+  start, `docs/SECRET_MANAGEMENT.md` (vault entries and rotation).
 
 ### Session 2026-11-17 — first-run onboarding
 

@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 
 import httpx
 import pytest
 
-from unimonitor.onboarding import m365, permissions, service
+from unimonitor.onboarding import certificates, m365, permissions, service
 from unimonitor.onboarding.google_auth import GoogleAuthError, mint_access_token, reset_cache
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -77,6 +78,8 @@ def _graph_mock(roles: list[dict]) -> tuple[httpx.AsyncClient, list[tuple[str, s
             return httpx.Response(201, json={"appId": "app-1", "id": "obj-1"})
         if path.endswith("/addPassword"):
             return httpx.Response(200, json={"secretText": "s3cret~value"})
+        if path.endswith("/addKey"):
+            return httpx.Response(200, json={"keyId": "key-1"})
         if path.endswith("/servicePrincipals") and request.method == "POST":
             return httpx.Response(201, json={"id": "new-sp"})
         if path.endswith("/appRoleAssignedTo"):
@@ -104,19 +107,66 @@ class TestMicrosoftSetup:
             assert (await m365.poll_device_flow("dc-pending", client))["status"] == "pending"
             assert (await m365.poll_device_flow("dc-ready", client))["status"] == "ok"
 
-    async def test_provision_creates_app_consents_roles_and_returns_a_secret(self):
+    async def test_provision_creates_app_consents_roles_and_uploads_a_certificate(self):
         roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED + permissions.OPTIONAL)]
         client, calls = _graph_mock(roles)
         async with client:
             result = await m365.provision_app("graph-token", client=client)
 
         assert result.client_id == "app-1"
-        assert result.client_secret == "s3cret~value"
         assert result.tenant_id == "tenant-1"
+        assert result.auth_method == "certificate", "certificate is the default credential"
+        assert result.certificate is not None
+        assert "BEGIN CERTIFICATE" in result.certificate.certificate_pem
+        assert result.certificate_uploaded is True
+        assert result.certificate_error == ""
+        assert result.manual_steps == []
+        assert result.client_secret == "", "no secret is minted when a certificate is used"
         assert len(result.granted) == len(roles)
         assert result.warnings == []
         assert ("POST", "/v1.0/applications") in calls
+        assert ("POST", "/v1.0/applications/obj-1/addKey") in calls
+        assert not any(path.endswith("/addPassword") for _, path in calls)
         assert sum(1 for m, p in calls if p.endswith("/appRoleAssignedTo")) == len(roles)
+
+    async def test_a_client_secret_can_be_chosen_instead(self):
+        roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED)]
+        client, calls = _graph_mock(roles)
+        async with client:
+            result = await m365.provision_app("graph-token", auth_method="client_secret", client=client)
+
+        assert result.auth_method == "client_secret"
+        assert result.client_secret == "s3cret~value"
+        assert result.certificate is None
+        assert not any(path.endswith("/addKey") for _, path in calls)
+
+    async def test_refused_certificate_upload_falls_back_to_the_portal(self):
+        """The app and consent exist; only the file upload is left for the admin."""
+        roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED)]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            path = request.url.path
+            if path.endswith("/organization"):
+                return httpx.Response(200, json={"value": [{"id": "t", "displayName": "T"}]})
+            if path.endswith("/servicePrincipals") and request.method == "GET":
+                return httpx.Response(200, json={"value": [{"id": "graph-sp", "appRoles": roles}]})
+            if path.endswith("/applications"):
+                return httpx.Response(201, json={"appId": "app-1", "id": "obj-1"})
+            if path.endswith("/servicePrincipals"):
+                return httpx.Response(201, json={"id": "new-sp"})
+            if path.endswith("/addKey"):
+                return httpx.Response(403, json={"error": {"message": "Insufficient privileges"}})
+            return httpx.Response(201, json={})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            result = await m365.provision_app("token", client=client)
+
+        assert result.certificate_uploaded is False
+        assert result.certificate is not None, "the admin still needs the certificate to upload"
+        assert result.certificate_error.startswith("Graph POST")
+        assert result.manual_steps == list(m365.MANUAL_CERTIFICATE_STEPS)
+        assert any("Certificate upload failed" in w for w in result.warnings)
+        assert len(result.granted) == len(roles), "consent is unaffected by the upload failure"
 
     async def test_missing_optional_role_is_a_warning_not_a_failure(self):
         roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED)]
@@ -124,7 +174,7 @@ class TestMicrosoftSetup:
         async with client:
             result = await m365.provision_app("graph-token", client=client)
         assert result.warnings == [], "an absent optional role is simply not requested"
-        assert result.client_secret
+        assert result.certificate_uploaded is True
 
     async def test_consent_failure_on_a_role_is_reported(self):
         roles = [{"id": "role-1", "value": p.name} for p in permissions.REQUIRED]
@@ -139,16 +189,75 @@ class TestMicrosoftSetup:
                 return httpx.Response(201, json={"appId": "app-1", "id": "obj-1"})
             if path.endswith("/addPassword"):
                 return httpx.Response(200, json={"secretText": "s"})
+            if path.endswith("/addKey"):
+                return httpx.Response(200, json={})
             if path.endswith("/servicePrincipals"):
                 return httpx.Response(201, json={"id": "new-sp"})
             return httpx.Response(403, json={"error": "insufficient privileges"})
 
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            result = await m365.provision_app("token", client=client)
+            result = await m365.provision_app("token", auth_method="client_secret", client=client)
 
         assert result.granted == []
         assert all("not granted" in w for w in result.warnings)
         assert result.client_secret, "the app registration is still usable without consent"
+
+
+class TestCertificates:
+    def test_generates_a_usable_certificate_and_key(self):
+        cert = certificates.generate_client_certificate("UniMonitor", 90)
+        assert "BEGIN CERTIFICATE" in cert.certificate_pem
+        assert "PRIVATE KEY" in cert.private_key_pem
+        assert certificates.thumbprint(cert.certificate_pem) == cert.thumbprint
+        remaining = (cert.not_after - datetime.now(UTC)).days
+        assert 88 <= remaining <= 90
+
+    def test_validity_is_clamped_to_defaults_and_a_maximum(self):
+        assert certificates.clamp_validity_days(None) == 365
+        assert certificates.clamp_validity_days(0) == 365
+        assert certificates.clamp_validity_days(30) == 30
+        assert certificates.clamp_validity_days(5000) == certificates.MAX_VALIDITY_DAYS
+
+    def test_assertion_signed_with_the_private_key(self):
+        import jwt
+
+        cert = certificates.generate_client_certificate("UniMonitor", 1)
+        assertion = certificates.client_assertion("app-1", "tenant-1", cert.private_key_pem, cert.certificate_pem)
+        header = jwt.get_unverified_header(assertion)
+        claims = jwt.decode(assertion, options={"verify_signature": False, "verify_aud": False})
+        assert header["alg"] == "RS256"
+        assert header["x5t"]
+        assert claims["aud"].endswith("/tenant-1/oauth2/v2.0/token")
+        assert claims["iss"] == claims["sub"] == "app-1"
+
+    async def test_verifies_a_certificate_credential(self):
+        cert = certificates.generate_client_certificate("UniMonitor", 1)
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.url.path.endswith("/oauth2/v2.0/token"):
+                seen["body"] = request.content.decode()
+                return httpx.Response(200, json={"access_token": "tok"})
+            if request.url.path.endswith("/organization"):
+                return httpx.Response(200, json={"value": [{"id": "t", "displayName": "Contoso"}]})
+            return httpx.Response(404, json={})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            name = await m365.verify_client_credentials(
+                "tenant-1",
+                "app-1",
+                certificate_pem=cert.certificate_pem,
+                private_key_pem=cert.private_key_pem,
+                client=client,
+            )
+
+        assert name == "Contoso"
+        assert "client_assertion=" in seen["body"]
+        assert "client_secret=" not in seen["body"]
+
+    async def test_rejects_missing_credentials(self):
+        with pytest.raises(m365.M365Error, match="client secret or a certificate"):
+            await m365.verify_client_credentials("tenant-1", "app-1")
 
 
 class TestGoogleServiceAccounts:

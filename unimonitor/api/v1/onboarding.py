@@ -20,6 +20,7 @@ from unimonitor.core.logging import get_logger
 from unimonitor.db.models.user import AppUser
 from unimonitor.db.session import get_db
 from unimonitor.onboarding import m365, service
+from unimonitor.onboarding.certificates import ClientCertificate
 from unimonitor.onboarding.clouds import CloudError
 
 logger = get_logger(__name__)
@@ -57,6 +58,29 @@ class FirstAdmin(BaseModel):
 class CompleteRequest(BaseModel):
     device_code: str
     display_name: str = "UniMonitor"
+    # Certificate is the default; a client secret stays available for tenants whose
+    # policy blocks certificate credentials.
+    auth_method: str = "certificate"
+    certificate_validity_days: int | None = None
+
+
+class GoogleServiceAccountRequest(BaseModel):
+    project_id: str = ""
+    admin_email: str = ""
+    customer_id: str = "my_customer"
+    credentials_json: str = ""
+    access_token: str = ""
+    providers: list[str] = Field(default_factory=list)
+
+
+def _certificate_payload(certificate: ClientCertificate | None) -> dict[str, Any] | None:
+    if certificate is None:
+        return None
+    return {
+        "thumbprint": certificate.thumbprint,
+        "not_after": certificate.not_after_iso,
+        "files": certificate.files(),
+    }
 
 
 @router.get("/status")
@@ -113,27 +137,93 @@ async def microsoft_complete(
         if poll["status"] != "ok":
             return {"status": poll["status"]}
 
-        result = await m365.provision_app(poll["access_token"], display_name=body.display_name)
+        result = await m365.provision_app(
+            poll["access_token"],
+            display_name=body.display_name,
+            auth_method=body.auth_method,
+            certificate_validity_days=body.certificate_validity_days,
+        )
         tenant = await service.first_tenant(db)
         if tenant is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No tenant exists yet.")
+
+        config: dict[str, Any] = {
+            "client_id": result.client_id,
+            "auth_method": result.auth_method,
+            "granted_permissions": result.granted,
+            "app_object_id": result.app_object_id,
+        }
+        secrets: dict[str, str] = {}
+        if result.auth_method == "certificate" and result.certificate is not None:
+            config["certificate_thumbprint"] = result.certificate.thumbprint
+            config["certificate_expires_at"] = result.certificate.not_after_iso
+            secrets = {
+                "certificate_pem": result.certificate.certificate_pem,
+                "private_key_pem": result.certificate.private_key_pem,
+            }
+        else:
+            secrets = {"client_secret": result.client_secret}
+
+        # Until the certificate is in Entra the connection is not usable, so it does
+        # not count as configured and the wizard cannot finish on it.
         row = await service.upsert_connection(
             db,
             tenant_id=tenant.id,
             provider="microsoft",
             account=result.tenant_id,
             display_name=result.tenant_name or body.display_name,
-            config={"client_id": result.client_id, "granted_permissions": result.granted},
-            secrets={"client_secret": result.client_secret},
+            config=config,
+            secrets=secrets,
+            status="connected" if result.certificate_uploaded or result.auth_method == "client_secret" else "pending_certificate_upload",
         )
         return {
-            "status": "connected",
+            "status": row.status,
             "connection": service.connection_dict(row),
             "granted": result.granted,
             "warnings": result.warnings,
+            "auth_method": result.auth_method,
+            "certificate": _certificate_payload(result.certificate),
+            "certificate_uploaded": result.certificate_uploaded,
+            "certificate_error": result.certificate_error,
+            "manual_steps": result.manual_steps,
         }
     except m365.M365Error as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/microsoft/verify")
+async def microsoft_verify(
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_setup_admin),
+) -> dict:
+    """Re-check the stored Microsoft connection, e.g. after a manual certificate upload."""
+    try:
+        row = await service.verify_microsoft_connection(db)
+    except (m365.M365Error, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"status": "connected", "connection": service.connection_dict(row)}
+
+
+@router.post("/connections/google-service-account")
+async def connect_google_service_account(
+    body: GoogleServiceAccountRequest,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_setup_admin),
+) -> dict:
+    """Connect Google Cloud and Workspace with one shared service account."""
+    try:
+        rows = await service.connect_google_service_account(
+            db,
+            project_id=body.project_id.strip(),
+            admin_email=body.admin_email.strip(),
+            customer_id=body.customer_id.strip(),
+            credentials_json=body.credentials_json.strip(),
+            access_token=body.access_token.strip(),
+            providers=body.providers,
+        )
+    except (CloudError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return {"status": "connected", "connections": [service.connection_dict(row) for row in rows]}
 
 
 @router.post("/connections/{provider}")

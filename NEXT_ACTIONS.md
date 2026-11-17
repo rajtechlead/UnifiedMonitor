@@ -26,11 +26,16 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | Task | Status | Notes |
 |---|---|---|
 | P9-001 Setup wizard (platform selection, min 1) | ✅ Done | `/setup` + `/api/v1/onboarding`, launched by the installer |
-| P9-002 Microsoft 365 app registration automation | ✅ Done | device-code sign-in → Graph creates app, roles, consent, secret |
+| P9-002 Microsoft 365 app registration automation | ✅ Done | device-code sign-in → Graph creates app, roles, consent, credential |
 | P9-003 Connect more platforms later | ✅ Done | Settings → Platform connections, same connector component |
 | P9-004 AWS/GCP/Workspace credential validation | ✅ Done | validated against the live API before saving |
 | P9-005 Automated M365 consent against a real tenant | ⬜ Open | needs a live Global Administrator; the Graph calls are covered by mocked tests only |
 | P9-006 Multi-tenant (MSP) client onboarding | ⬜ Open | one connection set per install today |
+| P9-007 Certificate credential as the M365 default | ✅ Done | generated certificate uploaded via `addKey`; validity 1–1095 days, 365 default |
+| P9-008 Manual certificate-upload fallback | ✅ Done | files to save + portal steps + `/microsoft/verify`; pending uploads do not count as configured |
+| P9-009 Certificate fallback against a real tenant | ⬜ Open | `addKey` is only exercised against mocked Graph responses |
+| P9-010 AWS IAM role (SSO) connection | ✅ Done | `validate_aws_role` / `assume_role_credentials`; collector assumes the role |
+| P9-011 One shared service account for the Google platforms | ✅ Done | `POST /connections/google-service-account` connects GCP + Workspace with one key |
 
 ## Phase 8 — Multi-Cloud (AWS, Google Cloud, Google Workspace)
 

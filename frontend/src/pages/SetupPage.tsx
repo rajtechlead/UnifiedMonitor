@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { CheckCircle, ChevronRight, Database, Plug, ShieldCheck, UserPlus } from 'lucide-react'
 import { api } from '../hooks/useApi'
 import { useAuthStore } from '../store/authStore'
-import PlatformConnector, { type Connection, type Platform } from '../components/PlatformConnector'
+import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
 
 type SetupStatus = {
   needs_admin: boolean
@@ -56,6 +56,7 @@ export default function SetupPage() {
   const [password, setPassword] = useState('')
   const [organisation, setOrganisation] = useState('')
   const [selected, setSelected] = useState<string[]>([])
+  const [sharedGoogle, setSharedGoogle] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
@@ -74,7 +75,11 @@ export default function SetupPage() {
   }, [status])
 
   const selectedPlatforms = (status?.platforms || []).filter((p) => selected.includes(p.id))
-  const allSelectedConnected = selectedPlatforms.length > 0 && selectedPlatforms.every((p) => connections[p.id])
+  const allSelectedConnected = selectedPlatforms.length > 0
+    && selectedPlatforms.every((p) => connections[p.id]?.status === 'connected')
+  const googleBothSelected = selected.includes('gcp') && selected.includes('google_workspace')
+  const useSharedGoogle = sharedGoogle && googleBothSelected
+    && !(connections.gcp?.status === 'connected' && connections.google_workspace?.status === 'connected')
 
   const createAdmin = async () => {
     setError(''); setBusy(true)
@@ -212,7 +217,22 @@ export default function SetupPage() {
           <StepHeader n={3} title="Connect" active={step === 3} done={step > 3} />
           {step === 3 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {selectedPlatforms.map((p) => (
+              {useSharedGoogle && (
+                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <Plug size={15} color="#4285F4" />
+                    <span style={{ fontSize: 14, fontWeight: 600 }}>Google Cloud + Google Workspace</span>
+                  </div>
+                  <GoogleSharedConnector onConnected={() => { void onConnected() }} />
+                  <button
+                    onClick={() => setSharedGoogle(false)}
+                    style={{ marginTop: 10, background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer', padding: 0 }}
+                  >
+                    Use separate service accounts instead
+                  </button>
+                </div>
+              )}
+              {selectedPlatforms.filter((p) => !(useSharedGoogle && (p.id === 'gcp' || p.id === 'google_workspace'))).map((p) => (
                 <div key={p.id} style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                     <Plug size={15} color={p.colour} />

@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-16 UTC
+Last Updated: 2026-11-17 UTC
 
 ## Critical — Active
 
@@ -20,6 +20,8 @@ None
 | M-013 | Release tag not pushed; no tag exists in any clone | `.git` | 🟡 recreate + push with tag permission |
 | M-015 | Docker Compose never validated end-to-end (CI builds the image only) | `deploy/docker/` | ⬜ no Docker daemon in agent workspace |
 | M-034 | Google Cloud / Workspace credentials stored by setup are minted into tokens on demand; a service-account key whose domain-wide delegation scopes are wrong fails at collection, not at connect | `unimonitor/onboarding/google_auth.py` | 🟡 connect-time validation covers reads only |
+| M-037 | Certificate generation, `addKey` upload and the manual-upload verification path have only run against mocked Graph responses; a tenant that blocks certificate credentials is untested against Entra | `unimonitor/onboarding/certificates.py`, `unimonitor/onboarding/m365.py` | ⬜ P9-009 — live tenant required |
+| M-038 | AWS IAM-role (SSO) connection and role assumption are covered by mocked STS calls; no AWS account exercised the trust policy | `unimonitor/onboarding/clouds.py` | ⬜ P8-004 — AWS account required |
 
 ## Low — Active
 

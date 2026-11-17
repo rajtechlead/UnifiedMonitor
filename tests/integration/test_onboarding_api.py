@@ -163,6 +163,13 @@ class TestConnectPlatforms:
         status = (await client.get("/api/v1/onboarding/status")).json()
         assert status["configured"] is False, "a dashboard with no platform has nothing to show"
 
+    async def test_status_offers_the_authentication_choices(self, client: AsyncClient):
+        body = (await client.get("/api/v1/onboarding/status")).json()
+        catalogue = {p["id"]: p for p in body["platforms"]}
+        assert [m["id"] for m in catalogue["microsoft"]["auth_methods"]] == ["certificate", "client_secret"]
+        assert [m["id"] for m in catalogue["aws"]["auth_methods"]] == ["access_keys", "iam_role"]
+        assert "shared_service_account" in [m["id"] for m in catalogue["gcp"]["auth_methods"]]
+
     async def test_device_flow_is_open_only_during_the_first_run_window(self, client: AsyncClient, monkeypatch):
         async def fake_start():
             from unimonitor.onboarding.m365 import DeviceCode
@@ -178,3 +185,111 @@ class TestConnectPlatforms:
         await _bootstrap(client)
         locked = await client.post("/api/v1/onboarding/microsoft/device-code")
         assert locked.status_code == 401, "after setup only an admin may start a connection"
+
+    async def test_aws_role_is_accepted_instead_of_access_keys(self, client: AsyncClient, monkeypatch):
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+
+        async def fake_role(role_arn, region="us-east-1", external_id="", session_name="unimonitor-setup"):
+            assert role_arn.endswith(":role/UniMonitorReadOnly")
+            return "123456789012"
+
+        monkeypatch.setattr("unimonitor.onboarding.service.clouds.validate_aws_role", fake_role)
+        r = await client.post(
+            "/api/v1/onboarding/connections/aws",
+            json={
+                "region": "us-east-1",
+                "role_arn": "arn:aws:iam::123456789012:role/UniMonitorReadOnly",
+                "auth_method": "iam_role",
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["connection"]["config"]["auth_mode"] == "iam_role"
+
+    async def test_one_service_account_connects_both_google_platforms(self, client: AsyncClient, monkeypatch):
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+        seen: dict[str, str] = {}
+
+        async def fake_gcp(project_id, credentials_json="", access_token="", client=None):
+            seen["project"] = project_id
+            seen["key"] = credentials_json
+            return "Security Project"
+
+        async def fake_workspace(admin_email, customer_id="my_customer", credentials_json="", access_token="", client=None):
+            seen["admin"] = admin_email
+            assert credentials_json == seen["key"], "both platforms must use the same key"
+            return customer_id
+
+        monkeypatch.setattr("unimonitor.onboarding.service.clouds.validate_gcp", fake_gcp)
+        monkeypatch.setattr("unimonitor.onboarding.service.clouds.validate_workspace", fake_workspace)
+
+        r = await client.post(
+            "/api/v1/onboarding/connections/google-service-account",
+            json={
+                "project_id": "proj-1",
+                "admin_email": "admin@example.com",
+                "credentials_json": '{"client_email": "svc@proj.iam.gserviceaccount.com"}',
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        providers = sorted(c["provider"] for c in r.json()["connections"])
+        assert providers == ["gcp", "google_workspace"]
+        assert seen["project"] == "proj-1" and seen["admin"] == "admin@example.com"
+
+        status = (await client.get("/api/v1/onboarding/status")).json()
+        assert status["connected_providers"] == ["gcp", "google_workspace"]
+
+
+class TestMicrosoftCertificateFallback:
+    async def test_a_refused_certificate_upload_blocks_setup_until_verified(self, client: AsyncClient, monkeypatch):
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+
+        from unimonitor.onboarding import certificates, m365
+
+        cert = certificates.generate_client_certificate("UniMonitor", 30)
+
+        async def fake_poll(_device_code):
+            return {"status": "ok", "access_token": "graph-token"}
+
+        async def fake_provision(_token, **_kwargs):
+            return m365.ProvisionResult(
+                tenant_id="tenant-1",
+                tenant_name="Contoso",
+                client_id="app-1",
+                auth_method="certificate",
+                certificate=cert,
+                certificate_uploaded=False,
+                certificate_error="Graph POST /applications/obj-1/addKey failed: 403",
+                manual_steps=list(m365.MANUAL_CERTIFICATE_STEPS),
+            )
+
+        monkeypatch.setattr("unimonitor.api.v1.onboarding.m365.poll_device_flow", fake_poll)
+        monkeypatch.setattr("unimonitor.api.v1.onboarding.m365.provision_app", fake_provision)
+
+        r = await client.post("/api/v1/onboarding/microsoft/complete", json={"device_code": "dc"}, headers=headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["status"] == "pending_certificate_upload"
+        assert body["certificate"]["files"], "the admin must be able to save the certificate"
+        assert body["manual_steps"]
+        assert body["auth_method"] == "certificate"
+
+        status = (await client.get("/api/v1/onboarding/status")).json()
+        assert status["configured"] is False, "an unverified upload is not a usable connection"
+        assert status["connected_providers"] == []
+
+        async def fake_verify(*_args, **_kwargs):
+            return "Contoso"
+
+        monkeypatch.setattr("unimonitor.onboarding.m365.verify_client_credentials", fake_verify)
+        verified = await client.post("/api/v1/onboarding/microsoft/verify", headers=headers)
+        assert verified.status_code == 200, verified.text
+        assert verified.json()["connection"]["status"] == "connected"
+
+        status = (await client.get("/api/v1/onboarding/status")).json()
+        assert status["configured"] is True
+        assert status["connected_providers"] == ["microsoft"]

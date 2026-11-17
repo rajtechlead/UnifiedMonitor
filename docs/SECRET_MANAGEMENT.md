@@ -118,6 +118,31 @@ On first run, a master key is generated and stored at `VAULT_KEY_PATH`
 2. Asks which platforms to monitor — Microsoft 365, AWS, Google Cloud, Google Workspace; at least one
 3. Connects each one: Microsoft 365 registers its Entra app automatically after a Global
    Administrator device sign-in, the other platforms validate the credentials they are given
+
+Microsoft 365 uses a **certificate** by default: the wizard generates the key pair with the
+validity the administrator chooses (365 days by default), uploads the public certificate to the
+app registration and stores the private key in the configured secret provider. A client secret
+remains selectable. If Entra refuses the upload, the wizard hands over the certificate files and
+the portal steps, and only marks the connection usable once **Check certificate connectivity**
+succeeds. AWS can likewise run as an assumed IAM role instead of stored keys, and Google Cloud
+and Workspace can share one service-account key.
+
+Certificates are listed under `Certificates & secrets → Certificates` in Entra. Rotate one by
+re-running the Microsoft 365 connector from **Settings → Platform connections**: the wizard
+generates and uploads a new certificate and replaces the stored private key.
+
+---
+
+## Third-party credentials held by the wizard
+
+| Credential | Vault entry | Notes |
+|---|---|---|
+| Entra certificate private key | `unimonitor/connections/microsoft/private_key_pem` | Certificate mode (default) |
+| Entra certificate | `unimonitor/connections/microsoft/certificate_pem` | Public part; also uploaded to Entra |
+| Entra client secret | `unimonitor/connections/microsoft/client_secret` | Only when that method is chosen |
+| AWS access keys | `unimonitor/connections/aws/access_key_id`, `.../secret_access_key` | Not used in IAM-role mode |
+| AWS external ID | `unimonitor/connections/aws/external_id` | IAM-role mode only |
+| Google service-account key | `unimonitor/connections/gcp/credentials_json`, `.../google_workspace/credentials_json` | One key may serve both |
 4. Stores every secret through the configured provider (`SECRETS_PROVIDER`) and keeps only the
    reference in the database
 

@@ -3,12 +3,17 @@
 The old flow told the administrator to click through Entra, paste three GUIDs and a
 secret into a text file. This module does the same work through Graph: an admin signs
 in with a device code, the app registration is created with every role UniMonitor
-needs, admin consent is granted, and a client secret is returned — then stored in the
-secret vault by the caller.
+needs, admin consent is granted, and a credential is returned — a certificate by
+default, a client secret on request.
 
 Two Graph permissions drive the automation: `Application.ReadWrite.All` (create the
-app and its secret) and `AppRoleAssignment.ReadWrite.All` (grant consent). Both come
-from the delegated sign-in, so no credential has to exist beforehand.
+app and its credential) and `AppRoleAssignment.ReadWrite.All` (grant consent). Both
+come from the delegated sign-in, so no credential has to exist beforehand.
+
+Certificate upload can be refused (tenant policy, or a consent that only covers app
+creation). That is not fatal: the certificate is handed back to the administrator to
+upload in the portal, and `verify_client_credentials()` proves it works before setup
+is allowed to finish.
 """
 
 from __future__ import annotations
@@ -20,11 +25,12 @@ from typing import Any
 import httpx
 
 from unimonitor.core.logging import get_logger
+from unimonitor.onboarding import certificates
 from unimonitor.onboarding.permissions import GRAPH_APP_ID, OPTIONAL, REQUIRED
 
 logger = get_logger(__name__)
 
-LOGIN_BASE = "https://login.microsoftonline.com"
+LOGIN_BASE = certificates.LOGIN_BASE
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
 # Azure CLI's first-party client: a public client that supports the device-code flow
@@ -36,6 +42,19 @@ SCOPES = (
     "https://graph.microsoft.com/AppRoleAssignment.ReadWrite.All "
     "https://graph.microsoft.com/Directory.Read.All "
     "offline_access openid profile"
+)
+
+GRAPH_SCOPE = "https://graph.microsoft.com/.default"
+ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+
+AUTH_METHODS = ("certificate", "client_secret")
+
+MANUAL_CERTIFICATE_STEPS = (
+    "Save the certificate files to this computer — the .cer file is what Entra accepts.",
+    "Open Entra admin centre → Identity → Applications → App registrations → UniMonitor → "
+    "Certificates & secrets → Certificates → Upload certificate.",
+    "Choose the downloaded .cer file, then Add.",
+    "Come back here and press “Check certificate connectivity” to finish.",
 )
 
 
@@ -58,7 +77,13 @@ class ProvisionResult:
     tenant_id: str
     tenant_name: str
     client_id: str
-    client_secret: str
+    auth_method: str = "certificate"
+    client_secret: str = ""
+    certificate: certificates.ClientCertificate | None = None
+    certificate_uploaded: bool = False
+    certificate_error: str = ""
+    app_object_id: str = ""
+    manual_steps: list[str] = field(default_factory=list)
     granted: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -66,7 +91,7 @@ class ProvisionResult:
 def _client(client: httpx.AsyncClient | None) -> tuple[httpx.AsyncClient, bool]:
     if client is not None:
         return client, False
-    return httpx.AsyncClient(timeout=30), True
+    return httpx.AsyncClient(timeout=60), True
 
 
 async def _graph(
@@ -129,7 +154,7 @@ async def poll_device_flow(device_code: str, client: httpx.AsyncClient | None = 
     """Poll the token endpoint once.
 
     Returns `{"status": "pending"}` until the administrator finishes signing in, then
-    `{"status": "ok", "access_token": ..., "tenant_id": ...}`.
+    `{"status": "ok", "access_token": ...}`.
     """
     http, owned = _client(client)
     try:
@@ -178,13 +203,46 @@ async def _tenant_info(client: httpx.AsyncClient, token: str) -> tuple[str, str]
     return org.get("id", ""), org.get("displayName", "")
 
 
+async def add_certificate(
+    access_token: str,
+    app_object_id: str,
+    certificate: certificates.ClientCertificate,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> None:
+    """Upload the public certificate to an existing app registration."""
+    http, owned = _client(client)
+    try:
+        await _graph(
+            http,
+            "POST",
+            f"/applications/{app_object_id}/addKey",
+            access_token,
+            payload={"keyCredential": certificates.graph_key_credential(certificate)},
+        )
+    finally:
+        if owned:
+            await http.aclose()
+
+
 async def provision_app(
     access_token: str,
     *,
     display_name: str = "UniMonitor",
+    auth_method: str = "certificate",
+    certificate_validity_days: int | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> ProvisionResult:
-    """Create the app registration, grant admin consent and mint a client secret."""
+    """Create the app registration, grant admin consent and add one credential.
+
+    `auth_method="certificate"` (the default) generates a certificate and uploads it.
+    If Graph refuses the upload the result carries the certificate and the portal
+    steps instead of raising: the app and its consent are already in place, so all
+    that is left is a file upload the administrator can do.
+    """
+    if auth_method not in AUTH_METHODS:
+        raise M365Error(f"Unknown authentication method '{auth_method}'.")
+
     http, owned = _client(client)
     try:
         tenant_id, tenant_name = await _tenant_info(http, access_token)
@@ -217,15 +275,6 @@ async def provision_app(
         )
         app_id, app_object_id = app["appId"], app["id"]
 
-        secret = await _graph(
-            http,
-            "POST",
-            f"/applications/{app_object_id}/addPassword",
-            access_token,
-            payload={"passwordCredential": {"displayName": "unimonitor-setup"}},
-        )
-        client_secret = secret.get("secretText", "")
-
         sp = await _graph(
             http,
             "POST",
@@ -256,18 +305,48 @@ async def provision_app(
                 # An optional role a tenant refuses must not abort the whole setup.
                 warnings.append(f"{perm.name} not granted: {exc}")
 
-        if not client_secret:
-            raise M365Error("Graph created the app but returned no client secret.")
-
-        logger.info("M365 app registration provisioned", app_id=app_id, tenant_id=tenant_id, granted=len(granted))
-        return ProvisionResult(
+        result = ProvisionResult(
             tenant_id=tenant_id,
             tenant_name=tenant_name,
             client_id=app_id,
-            client_secret=client_secret,
+            auth_method=auth_method,
+            app_object_id=app_object_id,
             granted=granted,
             warnings=warnings,
         )
+
+        if auth_method == "client_secret":
+            secret = await _graph(
+                http,
+                "POST",
+                f"/applications/{app_object_id}/addPassword",
+                access_token,
+                payload={"passwordCredential": {"displayName": "unimonitor-setup"}},
+            )
+            result.client_secret = secret.get("secretText", "")
+            if not result.client_secret:
+                raise M365Error("Graph created the app but returned no client secret.")
+            logger.info("M365 app registration provisioned", app_id=app_id, tenant_id=tenant_id, auth="client_secret")
+            return result
+
+        result.certificate = certificates.generate_client_certificate(display_name, certificate_validity_days)
+        try:
+            await add_certificate(access_token, app_object_id, result.certificate, client=http)
+            result.certificate_uploaded = True
+        except M365Error as exc:
+            result.certificate_error = str(exc)
+            result.manual_steps = list(MANUAL_CERTIFICATE_STEPS)
+            warnings.append(f"Certificate upload failed: {exc}")
+
+        logger.info(
+            "M365 app registration provisioned",
+            app_id=app_id,
+            tenant_id=tenant_id,
+            auth="certificate",
+            uploaded=result.certificate_uploaded,
+            granted=len(granted),
+        )
+        return result
     finally:
         if owned:
             await http.aclose()
@@ -276,29 +355,43 @@ async def provision_app(
 async def verify_client_credentials(
     tenant_id: str,
     client_id: str,
-    client_secret: str,
+    client_secret: str = "",
+    *,
+    certificate_pem: str = "",
+    private_key_pem: str = "",
     client: httpx.AsyncClient | None = None,
 ) -> str:
     """Prove the saved credentials work; returns the tenant display name.
 
-    Used for both the automated and the manual path, so a typo surfaces during setup
-    instead of as an empty dashboard.
+    Accepts a client secret or a certificate + private key, so both the automated and
+    the manual path (and the manual-upload fallback) are checked the same way — a typo
+    surfaces during setup instead of as an empty dashboard.
     """
+    if not (certificate_pem and private_key_pem) and not client_secret:
+        raise M365Error("Supply a client secret or a certificate with its private key.")
+
     http, owned = _client(client)
     try:
-        resp = await http.post(
-            f"{LOGIN_BASE}/{tenant_id}/oauth2/v2.0/token",
-            data={
-                "grant_type": "client_credentials",
-                "client_id": client_id,
-                "client_secret": client_secret,
-                "scope": "https://graph.microsoft.com/.default",
-            },
-        )
-        data = resp.json() if resp.content else {}
-        token = data.get("access_token")
+        data: dict[str, str] = {
+            "grant_type": "client_credentials",
+            "client_id": client_id,
+            "scope": GRAPH_SCOPE,
+        }
+        if certificate_pem and private_key_pem:
+            try:
+                data["client_assertion_type"] = ASSERTION_TYPE
+                data["client_assertion"] = certificates.client_assertion(client_id, tenant_id, private_key_pem, certificate_pem)
+            except Exception as exc:  # noqa: BLE001 — a bad key file is a user-facing error
+                raise M365Error(f"Could not read the certificate or private key: {exc}") from exc
+        else:
+            data["client_secret"] = client_secret
+
+        resp = await http.post(f"{LOGIN_BASE}/{tenant_id}/oauth2/v2.0/token", data=data)
+        body = resp.json() if resp.content else {}
+        token = body.get("access_token")
         if not token:
-            raise M365Error(data.get("error_description", "Client credentials were rejected."))
+            detail = body.get("error_description") or body.get("error") or f"HTTP {resp.status_code}"
+            raise M365Error(f"Entra rejected the credentials: {detail}")
         name = ""
         try:
             _, name = await _tenant_info(http, token)

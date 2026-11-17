@@ -22,7 +22,7 @@ from unimonitor.db.models.cloud_connection import CloudConnection
 from unimonitor.db.models.tenant import Tenant
 from unimonitor.db.models.user import AppUser
 from unimonitor.grc.providers import PROVIDERS
-from unimonitor.onboarding import clouds, m365
+from unimonitor.onboarding import certificates, clouds, m365
 from unimonitor.onboarding.google_auth import GCP_SCOPES, WORKSPACE_SCOPES, mint_access_token
 from unimonitor.onboarding.permissions import MANUAL_FOLLOW_UP
 from unimonitor.secrets.resolver import get_secret_resolver
@@ -31,10 +31,58 @@ logger = get_logger(__name__)
 
 # What each platform asks for, in the order the wizard shows it. Secrets are listed
 # under `secret_fields` so the UI can mask them and the service knows to vault them.
-PLATFORM_FIELDS: dict[str, dict[str, list[dict[str, str]]]] = {
+# `auth_methods` drives the mode selector: Entra defaults to a certificate, AWS can use
+# a role instead of long-lived keys, and the two Google platforms can share one key.
+PLATFORM_FIELDS: dict[str, dict[str, Any]] = {
     "microsoft": {
-        "config": [],
-        "secrets": [],
+        "config": [
+            {
+                "name": "tenant",
+                "label": "Directory (tenant) ID",
+                "placeholder": "filled in automatically by the wizard",
+                "required": "",
+            },
+            {
+                "name": "client_id",
+                "label": "Application (client) ID",
+                "placeholder": "00000000-0000-0000-0000-000000000000",
+                "required": "",
+            },
+        ],
+        "secrets": [
+            {
+                "name": "client_secret",
+                "label": "Client secret",
+                "placeholder": "only for client-secret authentication",
+                "required": "",
+            },
+            {
+                "name": "certificate_pem",
+                "label": "Certificate",
+                "placeholder": "-----BEGIN CERTIFICATE-----",
+                "required": "",
+                "multiline": "1",
+            },
+            {
+                "name": "private_key_pem",
+                "label": "Private key",
+                "placeholder": "-----BEGIN PRIVATE KEY-----",
+                "required": "",
+                "multiline": "1",
+            },
+        ],
+        "auth_methods": [
+            {
+                "id": "certificate",
+                "label": "Certificate (recommended)",
+                "description": "UniMonitor generates a certificate, uploads it to the app registration and keeps the private key in the vault.",
+            },
+            {
+                "id": "client_secret",
+                "label": "Client secret",
+                "description": "Entra mints a secret string instead; rotate it in the portal when it expires.",
+            },
+        ],
         "automated": [
             {
                 "id": "device_code",
@@ -46,11 +94,29 @@ PLATFORM_FIELDS: dict[str, dict[str, list[dict[str, str]]]] = {
     "aws": {
         "config": [
             {"name": "region", "label": "AWS region", "placeholder": "us-east-1", "required": "1"},
+            {
+                "name": "role_arn",
+                "label": "IAM role ARN",
+                "placeholder": "arn:aws:iam::123456789012:role/UniMonitorReadOnly",
+                "required": "",
+            },
         ],
         "secrets": [
-            {"name": "access_key_id", "label": "Access key ID", "placeholder": "AKIA...", "required": "1"},
-            {"name": "secret_access_key", "label": "Secret access key", "placeholder": "", "required": "1"},
+            {"name": "access_key_id", "label": "Access key ID", "placeholder": "AKIA...", "required": ""},
+            {"name": "secret_access_key", "label": "Secret access key", "placeholder": "", "required": ""},
             {"name": "session_token", "label": "Session token", "placeholder": "optional", "required": ""},
+            {"name": "external_id", "label": "External ID", "placeholder": "only if the role trust policy requires one", "required": ""},
+        ],
+        "auth_methods": [
+            {"id": "access_keys", "label": "Access keys", "description": "An IAM user's key pair with the read-only policy attached."},
+            {
+                "id": "iam_role",
+                "label": "IAM role / SSO (assume role)",
+                "description": (
+                    "One role trust-policy for UniMonitor; it assumes the role with the identity it already "
+                    "runs as — no long-lived access keys to hand out."
+                ),
+            },
         ],
     },
     "gcp": {
@@ -61,8 +127,17 @@ PLATFORM_FIELDS: dict[str, dict[str, list[dict[str, str]]]] = {
                 "label": "Service-account JSON key",
                 "placeholder": "paste the key file contents",
                 "required": "",
+                "multiline": "1",
             },
             {"name": "access_token", "label": "— or an access token", "placeholder": "ya29...", "required": ""},
+        ],
+        "auth_methods": [
+            {"id": "service_account_key", "label": "Service-account key", "description": "Paste a key that can read this project."},
+            {
+                "id": "shared_service_account",
+                "label": "One service account for both Google platforms",
+                "description": "Reuse a single service account for Google Cloud and Workspace so the administrator maintains one identity.",
+            },
         ],
     },
     "google_workspace": {
@@ -76,8 +151,17 @@ PLATFORM_FIELDS: dict[str, dict[str, list[dict[str, str]]]] = {
                 "label": "Service-account JSON key (domain-wide delegation)",
                 "placeholder": "paste the key file contents",
                 "required": "",
+                "multiline": "1",
             },
             {"name": "access_token", "label": "— or an access token", "placeholder": "ya29...", "required": ""},
+        ],
+        "auth_methods": [
+            {"id": "service_account_key", "label": "Service-account key", "description": "A key with domain-wide delegation for the admin scopes."},
+            {
+                "id": "shared_service_account",
+                "label": "One service account for both Google platforms",
+                "description": "Reuse the Google Cloud service account, adding domain-wide delegation, so there is only one key to rotate.",
+            },
         ],
     },
 }
@@ -106,6 +190,7 @@ def platform_catalogue() -> list[dict[str, Any]]:
                 "automated": bool(fields.get("automated")),
                 "config_fields": fields["config"],
                 "secret_fields": fields["secrets"],
+                "auth_methods": fields.get("auth_methods", []),
             }
         )
     return catalogue
@@ -124,11 +209,13 @@ async def get_status(session: AsyncSession) -> dict[str, Any]:
     """Drive the first-run redirect and the setup checklist."""
     admin_exists = await has_admin(session)
     rows = list((await session.execute(select(CloudConnection))).scalars())
-    connected = {row.provider: connection_dict(row) for row in rows}
+    # A connection waiting for its certificate upload is listed but does not count as
+    # configured: the wizard may not finish until connectivity is proven.
+    connected = {row.provider: connection_dict(row) for row in rows if row.status == "connected"}
     return {
         "needs_admin": not admin_exists,
         "configured": admin_exists and bool(connected),
-        "connections": list(connected.values()),
+        "connections": [connection_dict(row) for row in rows],
         "connected_providers": sorted(connected),
         "platforms": platform_catalogue(),
         "manual_follow_up": MANUAL_FOLLOW_UP,
@@ -187,6 +274,7 @@ async def upsert_connection(
     display_name: str,
     config: dict[str, Any],
     secrets: dict[str, str],
+    status: str = "connected",
 ) -> CloudConnection:
     """Store a connection; secrets go to the vault, only their names to the database."""
     resolver = await get_secret_resolver()
@@ -207,7 +295,7 @@ async def upsert_connection(
     row = existing or CloudConnection(tenant_id=tenant_id, provider=provider)
     row.account = account
     row.display_name = display_name or PROVIDERS[provider].name
-    row.status = "connected"
+    row.status = status
     row.config = json.dumps(config)
     row.secret_refs = json.dumps(secret_refs)
     row.last_error = None
@@ -230,22 +318,74 @@ async def connect_microsoft(
     *,
     tenant_id: str,
     client_id: str,
-    client_secret: str,
+    client_secret: str = "",
     tenant: str = "",
     display_name: str = "",
     granted: list[str] | None = None,
+    auth_method: str = "certificate",
+    certificate_pem: str = "",
+    private_key_pem: str = "",
 ) -> CloudConnection:
-    """Validate and save Microsoft 365 client credentials (automated or manual)."""
-    name = await m365.verify_client_credentials(tenant or tenant_id, client_id, client_secret)
+    """Validate and save Microsoft 365 credentials (automated or manual)."""
+    if auth_method not in m365.AUTH_METHODS:
+        raise ValueError(f"Unknown authentication method '{auth_method}'.")
+    if not client_id:
+        raise ValueError("An application (client) ID is required.")
+    if auth_method == "certificate" and not (certificate_pem and private_key_pem):
+        raise ValueError("Certificate authentication needs both the certificate and its private key.")
+    if auth_method == "client_secret" and not client_secret:
+        raise ValueError("Client-secret authentication needs a client secret.")
+
+    directory = tenant or tenant_id
+    name = await m365.verify_client_credentials(
+        directory,
+        client_id,
+        client_secret,
+        certificate_pem=certificate_pem,
+        private_key_pem=private_key_pem,
+    )
+    config: dict[str, Any] = {"client_id": client_id, "auth_method": auth_method, "granted_permissions": granted or []}
+    if certificate_pem:
+        config["certificate_thumbprint"] = certificates.thumbprint(certificate_pem)
     return await upsert_connection(
         session,
         tenant_id=tenant_id,
         provider="microsoft",
-        account=tenant or tenant_id,
+        account=directory,
         display_name=display_name or name,
-        config={"client_id": client_id, "granted_permissions": granted or []},
-        secrets={"client_secret": client_secret},
+        config=config,
+        secrets={
+            "client_secret": client_secret,
+            "certificate_pem": certificate_pem,
+            "private_key_pem": private_key_pem,
+        },
     )
+
+
+async def verify_microsoft_connection(session: AsyncSession) -> CloudConnection:
+    """Re-check a stored Microsoft connection and mark it connected.
+
+    This is what the certificate-upload fallback calls after the administrator has
+    added the certificate in the Entra portal.
+    """
+    row = (await session.execute(select(CloudConnection).where(CloudConnection.provider == "microsoft"))).scalars().first()
+    if row is None:
+        raise ValueError("No Microsoft 365 connection has been started yet.")
+    config = _loads(row.config)
+    auth_method = config.get("auth_method", "client_secret")
+    await m365.verify_client_credentials(
+        row.account,
+        config.get("client_id", ""),
+        await _stored_secret(session, "microsoft", "client_secret"),
+        certificate_pem=await _stored_secret(session, "microsoft", "certificate_pem") if auth_method == "certificate" else "",
+        private_key_pem=await _stored_secret(session, "microsoft", "private_key_pem") if auth_method == "certificate" else "",
+    )
+    row.status = "connected"
+    row.last_error = None
+    row.last_checked_at = datetime.now(UTC)
+    await session.flush()
+    logger.info("microsoft connection verified", provider="microsoft", auth=auth_method)
+    return row
 
 
 async def connect_platform(session: AsyncSession, provider: str, payload: dict[str, Any]) -> CloudConnection:
@@ -261,10 +401,27 @@ async def connect_platform(session: AsyncSession, provider: str, payload: dict[s
             client_secret=str(payload.get("client_secret", "")).strip(),
             tenant=str(payload.get("tenant", "")).strip(),
             granted=payload.get("granted_permissions") or [],
+            auth_method=str(payload.get("auth_method") or "certificate"),
+            certificate_pem=str(payload.get("certificate_pem", "")).strip(),
+            private_key_pem=str(payload.get("private_key_pem", "")).strip(),
         )
 
     if provider == "aws":
         region = str(payload.get("region") or get_settings().AWS_REGION or "us-east-1")
+        role_arn = str(payload.get("role_arn", "")).strip()
+        auth_method = str(payload.get("auth_method") or ("iam_role" if role_arn else "access_keys"))
+        if auth_method == "iam_role":
+            account = await clouds.validate_aws_role(role_arn, region, str(payload.get("external_id", "")).strip())
+            return await upsert_connection(
+                session,
+                tenant_id=local_tenant,
+                provider="aws",
+                account=account,
+                display_name=f"AWS {account}",
+                config={"region": region, "role_arn": role_arn, "auth_mode": "iam_role"},
+                secrets={"external_id": str(payload.get("external_id", "")).strip()},
+            )
+
         account = await clouds.validate_aws(
             region,
             str(payload.get("access_key_id", "")).strip(),
@@ -277,7 +434,7 @@ async def connect_platform(session: AsyncSession, provider: str, payload: dict[s
             provider="aws",
             account=account,
             display_name=f"AWS {account}",
-            config={"region": region},
+            config={"region": region, "auth_mode": "access_keys"},
             secrets={
                 "access_key_id": str(payload.get("access_key_id", "")).strip(),
                 "secret_access_key": str(payload.get("secret_access_key", "")).strip(),
@@ -328,6 +485,58 @@ async def connect_platform(session: AsyncSession, provider: str, payload: dict[s
         )
 
     raise ValueError(f"Unknown platform '{provider}'.")
+
+
+async def connect_google_service_account(
+    session: AsyncSession,
+    *,
+    project_id: str = "",
+    admin_email: str = "",
+    customer_id: str = "",
+    credentials_json: str = "",
+    access_token: str = "",
+    providers: list[str] | None = None,
+) -> list[CloudConnection]:
+    """Connect Google Cloud and Workspace with a single service account.
+
+    The administrator creates one service account, grants it project read access and
+    domain-wide delegation, then pastes one key here. Both connections share it, so
+    there is one key to rotate instead of one per platform.
+    """
+    local_tenant = _require_tenant(await first_tenant(session))
+    wanted = [p for p in (providers or ["gcp", "google_workspace"]) if p in ("gcp", "google_workspace")]
+    if not wanted:
+        raise ValueError("Choose Google Cloud, Google Workspace or both.")
+
+    rows: list[CloudConnection] = []
+    if "gcp" in wanted:
+        name = await clouds.validate_gcp(project_id, credentials_json, access_token)
+        rows.append(
+            await upsert_connection(
+                session,
+                tenant_id=local_tenant,
+                provider="gcp",
+                account=project_id,
+                display_name=name,
+                config={"project_id": project_id, "shared_service_account": True},
+                secrets={"credentials_json": credentials_json},
+            )
+        )
+    if "google_workspace" in wanted:
+        customer = customer_id.strip() or "my_customer"
+        await clouds.validate_workspace(admin_email, customer, credentials_json, access_token)
+        rows.append(
+            await upsert_connection(
+                session,
+                tenant_id=local_tenant,
+                provider="google_workspace",
+                account=customer,
+                display_name=f"Google Workspace ({admin_email})",
+                config={"admin_email": admin_email, "customer_id": customer, "shared_service_account": True},
+                secrets={"credentials_json": credentials_json},
+            )
+        )
+    return rows
 
 
 async def delete_connection(session: AsyncSession, provider: str) -> bool:
@@ -393,6 +602,18 @@ async def aws_credentials_for(session: AsyncSession | None = None) -> dict[str, 
     if row is None:
         return None
     config = _loads(row.config)
+    if config.get("auth_mode") == "iam_role" and config.get("role_arn"):
+        try:
+            assumed = await clouds.assume_role_credentials(
+                config["role_arn"],
+                await _stored_secret(session, "aws", "external_id"),
+                config.get("region", "us-east-1"),
+            )
+        except Exception as exc:  # noqa: BLE001 — collection must not raise on a bad role
+            logger.warning("AWS role assumption failed", error=str(exc))
+            return None
+        assumed.pop("aws_account_id", None)
+        return assumed
     return {
         "aws_access_key_id": await _stored_secret(session, "aws", "access_key_id"),
         "aws_secret_access_key": await _stored_secret(session, "aws", "secret_access_key"),
@@ -407,15 +628,23 @@ async def hydrate_runtime_config(session: AsyncSession) -> None:
     browser becomes the credential the Graph client uses after a restart.
     """
     settings = get_settings()
-    rows = list((await session.execute(select(CloudConnection))).scalars())
+    rows = [row for row in (await session.execute(select(CloudConnection))).scalars() if row.status == "connected"]
     for row in rows:
         config = _loads(row.config)
         if row.provider == "microsoft":
             settings.ENTRA_TENANT_ID = row.account or settings.ENTRA_TENANT_ID
             settings.ENTRA_CLIENT_ID = config.get("client_id") or settings.ENTRA_CLIENT_ID
-            secret = await _stored_secret(session, "microsoft", "client_secret")
-            if secret:
-                settings.ENTRA_CLIENT_SECRET = secret
+            if config.get("auth_method") == "certificate":
+                certificate_pem = await _stored_secret(session, "microsoft", "certificate_pem")
+                private_key = await _stored_secret(session, "microsoft", "private_key_pem")
+                if certificate_pem and private_key:
+                    settings.ENTRA_CLIENT_CERTIFICATE = certificate_pem
+                    settings.ENTRA_CLIENT_PRIVATE_KEY = private_key
+                    settings.ENTRA_CLIENT_SECRET = ""
+            else:
+                secret = await _stored_secret(session, "microsoft", "client_secret")
+                if secret:
+                    settings.ENTRA_CLIENT_SECRET = secret
         elif row.provider == "gcp":
             settings.GCP_PROJECT_ID = config.get("project_id", settings.GCP_PROJECT_ID)
         elif row.provider == "google_workspace":

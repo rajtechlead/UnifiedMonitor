@@ -268,10 +268,13 @@ SECRETS_PROVIDER=local             # local | azure_key_vault | aws_secrets_manag
 # AWS_REGION=us-east-1
 
 # ── Microsoft Graph API ───────────────────────────────────────────────────────
-# Set per-tenant via UI or unimonitor tenant add command
-# AZURE_CLIENT_ID=
-# AZURE_CLIENT_SECRET=   (stored in secret provider — never in .env)
-# AZURE_TENANT_ID=
+# The setup wizard writes these from the connection you make in the browser.
+# Certificate authentication is the default; a secret is used only if you chose one.
+# ENTRA_CLIENT_ID=
+# ENTRA_TENANT_ID=
+# ENTRA_CLIENT_CERTIFICATE=   (stored in the secret provider — never in .env)
+# ENTRA_CLIENT_PRIVATE_KEY=   (stored in the secret provider — never in .env)
+# ENTRA_CLIENT_SECRET=        (only for client-secret authentication)
 
 # ── AI Remediation (optional) ─────────────────────────────────────────────────
 # AZURE_OPENAI_ENDPOINT=https://my-openai.openai.azure.com/
@@ -306,10 +309,44 @@ Open <http://localhost:8000/setup> (the Windows installer opens it for you). The
 3. connects the platforms you picked.
 
 For Microsoft 365, sign in as a Global Administrator and UniMonitor creates the Entra app
-registration, adds the read-only Graph permissions below, grants admin consent and stores the
-client secret in the encrypted secret vault. AWS, Google Cloud and Google Workspace ask only for
-the credentials that cannot be created for you, and each one is validated against the live API
-before it is saved.
+registration, adds the read-only Graph permissions below, grants admin consent, generates a
+client certificate and uploads it to the app. The private key is kept in the encrypted secret
+vault; no client secret is created unless you choose that method.
+
+AWS, Google Cloud and Google Workspace ask only for the credentials that cannot be created for
+you, and each one is validated against the live API before it is saved.
+
+#### Certificate authentication (default)
+
+The wizard offers two credentials for the Entra app registration:
+
+| Method | How it works | When to choose it |
+|--------|--------------|-------------------|
+| **Certificate** (default) | UniMonitor generates a self-signed certificate with the validity you pick (365 days by default, 1–1095 allowed), uploads the public part to the app registration and keeps the private key in the vault. | Almost always — nothing guessable is stored and rotation is explicit. |
+| **Client secret** | Entra mints a secret string, stored in the vault. | Tenant policy blocks certificate credentials. |
+
+If Graph refuses the certificate upload (tenant policy, or a consent that only covers app
+creation) the wizard does **not** fail. It offers the certificate files for download —
+`.key.pem`, `.crt.pem` and the `.cer` Entra accepts — and lists the portal steps:
+
+1. **Entra admin centre → Identity → Applications → App registrations → UniMonitor →
+   Certificates & secrets → Certificates → Upload certificate**
+2. Choose the downloaded `.cer` file, then **Add**.
+3. Return to the wizard and press **Check certificate connectivity**.
+
+Only after that check succeeds does the connection count as configured and the wizard allow
+you to continue to the next window.
+
+#### One service account for every platform (SSO)
+
+An administrator who would rather not hand out long-lived keys can connect the clouds with a
+single identity per platform:
+
+| Platform | SSO / shared identity |
+|----------|-----------------------|
+| **AWS** | Create one IAM role with the read-only policy and a trust policy for the account UniMonitor runs in. In the wizard choose **IAM role / SSO (assume role)** and paste the role ARN (plus an external ID if the trust policy requires one). UniMonitor assumes the role and refreshes temporary credentials — no access keys are stored. |
+| **Google Cloud + Google Workspace** | Create **one** service account, grant it read access to the project and domain-wide delegation for the Workspace admin scopes, then paste its JSON key once. In the wizard, with both Google platforms selected, use **Google Cloud + Google Workspace → Connect both with one service account** — one key, one thing to rotate. |
+| **Google Cloud or Workspace alone** | Use the platform's own **Service-account key** method. |
 
 Platforms can be added or removed later from **Settings → Platform connections**, so a business
 that starts with Microsoft 365 alone can connect AWS or Google Cloud when it needs them.
@@ -321,7 +358,8 @@ Only needed when the wizard's automated registration is blocked by tenant policy
 1. Sign in to [Entra admin centre](https://entra.microsoft.com) as a Global Administrator
 2. Go to **Identity → Applications → App registrations** → **New registration**
 3. Name: `UniMonitor`, account type **Accounts in this organisational directory only**, then **Register**
-4. **Certificates & secrets → New client secret**; copy the value immediately
+4. **Certificates & secrets → Certificates → Upload certificate** and upload a `.cer` file, or
+   **Certificates & secrets → New client secret** if you prefer a secret; copy the value immediately
 5. **API permissions → Add a permission → Microsoft Graph → Application permissions**, select the
    read-only roles below, then **Grant admin consent**
 
@@ -342,8 +380,10 @@ Only needed when the wizard's automated registration is blocked by tenant policy
 `Exchange.ManageAsApp` is an Exchange Online role, not a Graph permission: assign it in the
 Exchange admin center only if you collect Exchange settings.
 
-Then choose **Microsoft 365 → enter credentials manually** in the setup wizard — it validates the
-credentials before saving, so a typo surfaces immediately.
+Then choose **Microsoft 365 → I already have an app registration — enter credentials manually** in
+the setup wizard, pick **Certificate** (paste the certificate and its private key) or **Client
+secret**, and continue. The wizard validates the credential against Entra before saving, so a typo
+surfaces immediately.
 
 ---
 

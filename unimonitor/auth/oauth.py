@@ -25,13 +25,23 @@ DELEGATED_SCOPES = [
 ]
 
 
+def client_credential() -> str | dict[str, str]:
+    """The configured credential: a certificate when there is one, else the secret."""
+    settings = get_settings()
+    if settings.ENTRA_CLIENT_PRIVATE_KEY and settings.ENTRA_CLIENT_CERTIFICATE:
+        from unimonitor.onboarding.certificates import certificate_credential
+
+        return certificate_credential(settings.ENTRA_CLIENT_PRIVATE_KEY, settings.ENTRA_CLIENT_CERTIFICATE)
+    return settings.ENTRA_CLIENT_SECRET
+
+
 def get_msal_app(tenant_id: str | None = None) -> msal.ConfidentialClientApplication:
     """Create an MSAL confidential client application."""
     settings = get_settings()
     authority = f"{settings.ENTRA_AUTHORITY}/{tenant_id or settings.ENTRA_TENANT_ID}"
     return msal.ConfidentialClientApplication(
         client_id=settings.ENTRA_CLIENT_ID,
-        client_credential=settings.ENTRA_CLIENT_SECRET,
+        client_credential=client_credential(),
         authority=authority,
     )
 
