@@ -100,6 +100,12 @@ frontend dependency migrations already merged. Trackers have now been reconciled
   and a clean `pip install -e .` now audits with no known vulnerabilities.
 - Added `.github/workflows/windows-installer.yml`: a dispatch-only workflow that builds the NSIS
   `.exe` plus a portable zip on `windows-latest`, independent of the release pipeline.
+- Verified the packaged UI end to end after the audit/workflow commit: nothing served the built SPA, so
+  `/` was a 404 in the Docker image and in the Windows installer. `create_app()` now mounts
+  `unimonitor/static` at `/` with an index fallback for client-side routes (API routes still win),
+  `UNIMONITOR_STATIC_DIR` overrides the location for tests, and the Docker image copies `dist` to the
+  path the app actually reads. Checked against a real `npm run build`: `/`, `/clouds`, hashed assets
+  and `/api/v1/health` all behave.
 - Code review (2026-11-17) found three integration defects beyond the audit failure, all fixed with
   tests: `unimonitor/worker/tasks/__init__.py` exported nothing, so every API report request hit the
   “Celery unavailable” branch and the task never ran; `POST /reports/generate` required

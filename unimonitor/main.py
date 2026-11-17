@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, MutableMapping
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Any
 
 import structlog
 from fastapi import FastAPI, Request, Response
@@ -13,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from unimonitor.config import get_settings
 from unimonitor.exceptions import (
@@ -26,6 +29,22 @@ from unimonitor.exceptions import (
 logger = structlog.get_logger(__name__)
 
 APP_VERSION = "1.0.0"
+
+
+class _SpaStaticFiles(StaticFiles):
+    """Serve the built single-page app, falling back to index.html.
+
+    Client-side routes (/clouds, /ciso, /findings …) have no file on disk, so a
+    plain StaticFiles mount answers 404 there and a browser refresh breaks.
+    """
+
+    async def get_response(self, path: str, scope: MutableMapping[str, Any]):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code == 404 and path != "index.html":
+                return await super().get_response("index.html", scope)
+            raise
 
 
 @asynccontextmanager
@@ -164,6 +183,21 @@ def create_app() -> FastAPI:
     from unimonitor.api.v1.router import api_v1_router
 
     app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
+
+    # ── Bundled single-page frontend ─────────────────────────
+    # The CI/installer builds copy the Vite output to unimonitor/static; Docker
+    # images use ./static. Mounted last so API routes always win.
+    candidates: list[Path] = []
+    override = os.environ.get("UNIMONITOR_STATIC_DIR")
+    if override:
+        candidates.append(Path(override))
+    candidates.extend([Path(__file__).parent / "static", Path("static")])
+
+    for spa_dir in candidates:
+        if (spa_dir / "index.html").is_file():
+            app.mount("/", _SpaStaticFiles(directory=str(spa_dir), html=True), name="spa")
+            logger.info("spa_served", directory=str(spa_dir))
+            break
 
     return app
 

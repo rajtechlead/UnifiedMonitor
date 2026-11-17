@@ -29,8 +29,11 @@ COPY controls/ ./controls/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
 
-# Copy built frontend assets
-COPY --from=frontend-builder /app/frontend/dist ./static/
+# Copy built frontend assets where the app looks for them (unimonitor/static)
+COPY --from=frontend-builder /app/frontend/dist ./unimonitor/static/
+
+# Branding assets are mounted at /static by the app
+COPY branding/ ./branding/
 
 # Non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser /app
