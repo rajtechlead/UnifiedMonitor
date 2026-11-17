@@ -100,6 +100,13 @@ frontend dependency migrations already merged. Trackers have now been reconciled
   and a clean `pip install -e .` now audits with no known vulnerabilities.
 - Added `.github/workflows/windows-installer.yml`: a dispatch-only workflow that builds the NSIS
   `.exe` plus a portable zip on `windows-latest`, independent of the release pipeline.
+- First real Windows runner run (dispatch on `961ccb0`): pip install, frontend build, PyInstaller
+  freeze (1134 files) and the `UniMonitor.exe --help` smoke test all passed. The build then failed
+  at `makensis /VERSION` with "The term 'makensis' is not recognized": `choco install nsis` updates
+  the *machine* PATH, which the already-running PowerShell process never re-reads. Both installer
+  workflows now resolve `makensis.exe` explicitly (`C:\Program Files (x86)\NSIS`) and append its
+  folder to `$env:GITHUB_PATH` before use, failing loudly if it is absent;
+  `tests/unit/test_windows_build_assets.py` guards the export.
 - Both Docker images now copy `unimonitor/` before `pip install`: without the package hatchling
   still exits 0 and writes an empty 5 KB wheel, so the old ordering only worked because the source
   was copied in afterwards. `tests/unit/test_windows_build_assets.py` asserts the ordering.
@@ -141,7 +148,7 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 - Phase 3 Architecture ✅ — unified secrets framework done; setup wizard script exists
   (`scripts/setup_wizard.py`, wired into `unimonitor/cli.py setup`)
 - Phase 4 Build Validation ✅ — tests, lint, mypy, ESLint, Playwright, Docker (CI)
-- Phase 5 Packaging 🟡 — Docker ✅ CI, PyInstaller Linux ✅, NSIS/Windows ⬜
+- Phase 5 Packaging 🟡 — Docker ✅ CI, PyInstaller ✅ Windows runner, NSIS 🟡 PATH fix awaiting a green run
 - Phase 6 Release 🟡 — all four production guides written; release tag not pushed
 
 ## In Progress
@@ -150,8 +157,9 @@ None.
 
 ## Blocking Issues
 
-1. **NSIS / Windows validation** — requires a Windows Server 2019+ host. Not possible in this
-   Linux cloud workspace. Covers P5-003…P5-006.
+1. **NSIS / Windows validation** — the PyInstaller half now runs on a real `windows-latest` runner,
+   but a fully green installer build and a fresh install/upgrade are still unproven; neither this
+   Linux workspace nor scripting can substitute for a Windows host. Covers P5-003…P5-006.
 2. **Docker Compose local validation** — no Docker daemon in this workspace. CI builds the image,
    but `docker compose up` end-to-end has never been run.
 3. **Release tag** — no tags exist in any clone. `v1.0.0-rc1` must be recreated and pushed by a

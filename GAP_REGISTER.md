@@ -34,7 +34,7 @@ None
 | L-010 | Some new control keys still depend on the posture snapshot (Copilot Studio, LAPS policy, app blocklist, insider-risk connectors) because no Graph endpoint exposes them | `unimonitor/graph/collectors/snapshot.py` | 🟡 by design; documented in OPERATIONS |
 | M-023 | Google collectors use a pre-issued access token; there is no refresh flow, so a long run needs an external refresher | `unimonitor/graph/collectors/cloud_providers.py` | ⬜ P8-005 |
 | M-024 | AWS/GCP/Workspace controls have never run against live accounts — payload tests only | `controls/aws`, `controls/gcp`, `controls/google_workspace` | ⬜ P8-004 |
-| M-029 | Windows installer is validated by static guards and the CI smoke test, but has not been executed on a Windows host from this workspace | `deploy/windows/` | 🟡 needs a Windows runner run |
+| M-029 | Windows installer: PyInstaller freeze and the packaged `--help` smoke test are verified on a `windows-latest` runner, and the NSIS step's PATH bug is fixed, but a green installer build and a real fresh install/upgrade have not been observed | `deploy/windows/` | 🟡 needs a green NSIS run |
 | M-028 | Azure-specific controls (25, `azure_security`) roll up under the Microsoft 365 provider; there is no standalone Azure dashboard | `unimonitor/grc/providers.py` | 🟡 grouping decision; split if Azure is sold separately |
 
 ## Resolved This Session (2026-11-16)

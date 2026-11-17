@@ -33,7 +33,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Report exports | ✅ PDF + DOCX | per-cloud sections in every report type; aggregate summary retained |
 | Dependency audit | ✅ Clean | python-jose/ecdsa removed (PyJWT); pip-audit reports no known vulnerabilities |
 | Installer workflow | ✅ On demand | `windows-installer.yml` dispatch builds the .exe + portable zip |
-| Windows installer | ✅ CI path repaired | PyInstaller pin, icon, hidden imports, NSIS plugin and fail-fast checks fixed |
+| Windows installer | 🟡 PyInstaller ✅ on runner | freezes 1134 files and `--help` passes on `windows-latest`; NSIS step fixed (`makensis` PATH) and awaiting a green run |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
 | Ruff format | ✅ CLEAN | 132 files |
 | mypy | ✅ CLEAN | 87 source files |
@@ -136,7 +136,7 @@ runtime install reports no known vulnerabilities (verified 2026-11-17).
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)
-- [x] PyInstaller Build Passes (Linux, 2026-11-13)
+- [x] PyInstaller Build Passes (Linux 2026-11-13; packaged `--help` smoke test green on windows-latest)
 - [x] GitHub Actions Green (last confirmed `1de7bcd`)
 - [x] All 6 required dashboard views present
 - [ ] NSIS Build Passes (Windows environment required)

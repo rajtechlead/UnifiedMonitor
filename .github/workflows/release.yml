@@ -171,8 +171,19 @@ jobs:
         shell: pwsh
         run: |
           choco install nsis --no-progress -y
-          # Verify
-          makensis /VERSION
+          # choco updates the machine PATH, but this process never sees it — so
+          # resolve makensis explicitly and export its folder for later steps.
+          $makensis = @(
+            "C:\Program Files (x86)\NSIS\makensis.exe",
+            "C:\Program Files\NSIS\makensis.exe",
+            (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (!$makensis) {
+            Write-Error "NSIS installed but makensis.exe was not found"
+            exit 1
+          }
+          Split-Path $makensis | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & $makensis /VERSION
 
       - name: Resolve installer version
         shell: pwsh

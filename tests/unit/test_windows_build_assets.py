@@ -95,6 +95,20 @@ def test_release_workflow_builds_installer_on_demand():
     assert "if-no-files-found: error" in text, "a missing installer must fail the job"
 
 
+@pytest.mark.parametrize("workflow", [INSTALLER_WORKFLOW, RELEASE])
+def test_nsis_is_put_on_path_before_it_is_used(workflow: Path):
+    """``choco install nsis`` does not refresh the running process PATH.
+
+    Calling bare ``makensis`` straight after the install fails with "The term
+    'makensis' is not recognized" (exit 1), which is how the installer build broke.
+    """
+    text = workflow.read_text()
+    assert "$env:GITHUB_PATH" in text, "later steps need the NSIS folder exported to PATH"
+    assert "makensis.exe" in text, "workflow must resolve makensis.exe explicitly"
+    install_block = text.split("choco install nsis", 1)[1]
+    assert "$env:GITHUB_PATH" in install_block.split("- name:", 1)[0], "GITHUB_PATH must be set in the Install NSIS step, right after choco"
+
+
 @pytest.mark.parametrize("filename", ["unimonitor.spec", "install.nsi"])
 def test_windows_build_files_present(filename: str):
     assert (ROOT / "deploy" / "windows" / filename).exists()
