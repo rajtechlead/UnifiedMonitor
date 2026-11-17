@@ -1,17 +1,17 @@
-# Graph Report - cbb7236d17c7b011ebaca937  (2026-11-16)
+# Graph Report - cbb7236d17c7b011ebaca937  (2026-11-17)
 
 ## Corpus Check
-- 196 files · ~101,622 words
+- 201 files · ~105,650 words
 - Verdict: corpus is large enough that graph structure adds value.
-- Unclassified: 15 file(s) not represented in the graph (top: (none) 7, .example 2, .ini 2)
+- Unclassified: 16 file(s) not represented in the graph (top: (none) 7, .example 2, .ini 2)
 
 ## Summary
-- 3352 nodes · 6771 edges · 188 communities (137 shown, 51 thin omitted)
-- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 438 edges (avg confidence: 0.89)
+- 3425 nodes · 6922 edges · 201 communities (143 shown, 58 thin omitted)
+- Extraction: 94% EXTRACTED · 6% INFERRED · 0% AMBIGUOUS · INFERRED: 431 edges (avg confidence: 0.89)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `b608f39e`
+- Built from commit: `a95d73e3`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -51,7 +51,7 @@
 - LocalVaultProvider
 - CloudDashboard.tsx
 - auth.py
-- client.py
+- _run
 - AssessmentRun
 - main.py
 - App.tsx
@@ -69,7 +69,7 @@
 - controls
 - controls
 - monitoring.py
-- @tanstack/react-query
+- v1/notifications.py
 - crosswalk.py
 - SecretCache
 - compliance_mapping
@@ -79,7 +79,7 @@
 - SecretAuditLog
 - controls
 - BaseRepository
-- test_control_loader.py
+- _parse_legacy_format
 - Settings
 - controls
 - get_settings
@@ -89,9 +89,9 @@
 - ports
 - CsvReportGenerator
 - smoke_test.py
-- acquire_token_for_client
+- NotificationDispatcher
 - BaseReportGenerator
-- useApi.ts
+- @tanstack/react-query
 - resolver.py
 - TestLoginJourney
 - _normalise
@@ -99,7 +99,7 @@
 - @playwright/test
 - SecretProvider
 - ExcelReportGenerator
-- session.py
+- require_role
 - controls
 - controls
 - controls
@@ -114,7 +114,6 @@
 - AsyncClient
 - ControlDefinition
 - test_reporting.py
-- ._get_output_path
 - services
 - db
 - containers
@@ -122,7 +121,7 @@
 - setup.py
 - TestFindingsJourney
 - TestDashboardJourney
-- collect_google_workspace
+- test_reporting.py
 - _parse_list_format
 - controls
 - beat
@@ -142,13 +141,14 @@
 - compilerOptions
 - TestReportsJourney
 - TestTenantJourney
+- test_windows_build_assets.py
 - redis
 - Deployment unimonitor-api
 - spec
 - service.yaml
 - Deployment unimonitor-beat
 - test_cloud_providers.py
-- SettingsPage.tsx
+- CisoDashboard.tsx
 - CloudProviderPage.tsx
 - controls
 - db
@@ -169,61 +169,70 @@
 - controls
 - controls
 - pytest
-- cloud_providers.py
+- dispatch_finding_alert
+- DocxReportGenerator
+- get_settings
 - unimonitor
 - TestIndividualCollectors
-- ReportsPage.tsx
-- pytest
+- useApi.ts
+- Tenant
 - Base
-- load_controls_for_frameworks
-- RiskDashboard.tsx
-- _BotoClient
+- test_control_loader.py
+- SecurityDashboard.tsx
+- pathlib
 - compute_framework_coverage
+- generate_report_task
+- FakeGraph
+- TestRunAsyncHelper
+- session.py
+- test_every_control_evaluates
+- 001_initial_schema.py
+- set_sqlite_pragma
 
 ## God Nodes (most connected - your core abstractions)
 1. `GraphClient` - 103 edges
-2. `get_current_user()` - 57 edges
+2. `get_current_user()` - 58 edges
 3. `get_settings()` - 52 edges
 4. `FindingRepository` - 43 edges
 5. `_run()` - 39 edges
 6. `Tenant` - 38 edges
-7. `SecretMetadata` - 36 edges
-8. `LocalVaultProvider` - 36 edges
-9. `require_role()` - 36 edges
-10. `AssessmentRepository` - 35 edges
+7. `AssessmentRepository` - 36 edges
+8. `SecretMetadata` - 36 edges
+9. `LocalVaultProvider` - 36 edges
+10. `require_role()` - 36 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `TestDocxGenerator` --uses--> `DocxReportGenerator`  [INFERRED]
+  tests/unit/test_reporting.py → unimonitor/reporting/docx_generator.py
 - `TestAWSSecretsManagerProvider` --uses--> `AWSSecretsManagerProvider`  [INFERRED]
   tests/unit/test_secrets_backends.py → unimonitor/secrets/aws_secrets_manager.py
 - `TestDashboardViews` --uses--> `AuditLog`  [INFERRED]
   tests/integration/test_dashboard_views.py → unimonitor/db/models/audit_log.py
-- `TestEvaluateControl` --uses--> `FindingSeverity`  [INFERRED]
-  tests/unit/test_grc_engine.py → unimonitor/db/models/finding.py
-- `TestEvaluateControl` --uses--> `FindingState`  [INFERRED]
-  tests/unit/test_grc_engine.py → unimonitor/db/models/finding.py
-- `_make_finding()` --uses--> `FindingSeverity`  [INFERRED]
-  tests/unit/test_crosswalk.py → unimonitor/db/models/finding.py
+- `TestAcquireTokenForClient` --uses--> `AuthenticationError`  [INFERRED]
+  tests/unit/test_auth_and_cli.py → unimonitor/exceptions.py
+- `TestExchangeCodeForToken` --uses--> `AuthenticationError`  [INFERRED]
+  tests/unit/test_auth_and_cli.py → unimonitor/exceptions.py
 
 ## Import Cycles
 - None detected.
 
-## Communities (188 total, 51 thin omitted)
+## Communities (201 total, 58 thin omitted)
 
 ### Community 0 - "asyncio"
 Cohesion: 0.09
-Nodes (21): _make_gc(), _run(), TestCollectAll, TestRunCollector, TestSafeGet, _collect_aws(), _collect_azure_security(), _collect_copilot() (+13 more)
+Nodes (19): _make_gc(), _run(), TestCollectAll, TestRunCollector, TestSafeGet, _run(), _collect_aws(), _collect_azure_security() (+11 more)
 
 ### Community 1 - ".get"
-Cohesion: 0.09
-Nodes (19): _fail(), _make_client(), _ok(), _run(), TestEntraIdCollector, _get(), _get(), _get() (+11 more)
+Cohesion: 0.08
+Nodes (21): TestGraphResponse, _fail(), _make_client(), _ok(), _run(), TestEntraIdCollector, _get(), _get() (+13 more)
 
 ### Community 2 - "Tenant"
-Cohesion: 0.06
-Nodes (30): AlertThresholds, get_notification_settings(), _get_tenant(), _mask(), NotificationSettings, NotificationSettingsUpdate, SlackSettings, SmtpSettings (+22 more)
+Cohesion: 0.10
+Nodes (14): ConnectionTestResponse, create_tenant(), delete_tenant(), get_tenant(), list_tenants(), PaginatedTenants, tenant_health(), TenantCreate (+6 more)
 
 ### Community 3 - "typing"
-Cohesion: 0.10
-Nodes (5): upgrade(), set_sqlite_pragma(), AssessmentStatus, FindingSeverity, FindingState
+Cohesion: 0.13
+Nodes (3): Finding, FindingEvidence, FindingHistory
 
 ### Community 4 - "AIRemediationEngine"
 Cohesion: 0.08
@@ -231,39 +240,39 @@ Nodes (10): _run(), TestAIRemediationEngineFallback, TestAIRemediationEngineOpen
 
 ### Community 5 - "dashboard.py"
 Cohesion: 0.08
-Nodes (43): ActivityItem, AuditEntry, AuditViewResponse, _build_framework_coverage(), CategoryBreakdown, CloudAggregateResponse, CloudProviderDetailResponse, CloudProviderSummary (+35 more)
+Nodes (48): ActivityItem, AuditEntry, AuditViewResponse, _build_framework_coverage(), CategoryBreakdown, CisoDashboardResponse, CisoRiskItem, CloudAggregateResponse (+40 more)
 
 ### Community 6 - "NotificationDispatcher"
-Cohesion: 0.09
-Nodes (10): _db_result(), _make_dispatcher(), _make_settings_obj(), _run(), TestPublicAPI, TestSendSlackWebhook, TestSendSmtp, TestSendTeamsWebhook (+2 more)
+Cohesion: 0.18
+Nodes (7): _make_dispatcher(), _make_settings_obj(), _run(), TestSendSlackWebhook, TestSendSmtp, TestSendTeamsWebhook, TestSendToChannels
 
 ### Community 7 - "AsyncClient"
 Cohesion: 0.05
 Nodes (6): TestAssessmentsAPI, TestAuthEndpoints, TestDashboardAPI, TestFindingsAPI, TestHealthEndpoint, TestReportsAPI
 
 ### Community 8 - "test_core_logging.py"
-Cohesion: 0.06
-Nodes (16): _run(), TestCacheDelete, TestCacheGet, TestCacheKeyHelpers, TestCacheLifecycle, TestCacheSet, TestConfigureLogging, TestCorrelationId (+8 more)
+Cohesion: 0.07
+Nodes (15): _run(), TestCacheDelete, TestCacheGet, TestCacheLifecycle, TestCacheSet, TestConfigureLogging, TestCorrelationId, TestGetLogger (+7 more)
 
 ### Community 9 - "FindingRepository"
-Cohesion: 0.10
+Cohesion: 0.09
 Nodes (16): AiRemediationRequest, FindingHistoryItem, FindingResponse, findings_summary(), FindingSummaryResponse, get_finding(), get_finding_history(), list_findings() (+8 more)
 
 ### Community 10 - "logging.py"
-Cohesion: 0.06
-Nodes (17): get_audit_logger(), get_logger(), log_audit_event(), AzureSecurityCollector, AzureSecurityData, CopilotCollector, CopilotData, DefenderCollector (+9 more)
+Cohesion: 0.07
+Nodes (15): get_logger(), AzureSecurityCollector, AzureSecurityData, CopilotCollector, CopilotData, DefenderCollector, DefenderData, ExchangeCollector (+7 more)
 
 ### Community 11 - "test_providers.py"
-Cohesion: 0.16
-Nodes (10): test_aliases_resolve(), test_provider_ids_cover_all_clouds(), test_service_maps_to_provider(), test_unknown_service_has_no_provider(), _group_by_provider(), _provider_controls(), CloudProvider, get_provider() (+2 more)
+Cohesion: 0.19
+Nodes (9): test_aliases_resolve(), test_provider_ids_cover_all_clouds(), test_service_maps_to_provider(), test_unknown_service_has_no_provider(), _group_by_provider(), CloudProvider, get_provider(), provider_for_service() (+1 more)
 
 ### Community 12 - "annotations"
 Cohesion: 0.05
 Nodes (43): nginx.ingress.kubernetes.io/limit-rps, nginx.ingress.kubernetes.io/proxy-body-size, nginx.ingress.kubernetes.io/proxy-read-timeout, nginx.ingress.kubernetes.io/proxy-send-timeout, nginx.ingress.kubernetes.io/ssl-redirect, Ingress unimonitor, HorizontalPodAutoscaler unimonitor-api, HorizontalPodAutoscaler unimonitor-worker (+35 more)
 
 ### Community 13 - "test_worker_tasks.py"
-Cohesion: 0.08
-Nodes (17): _db_result(), _make_session_factory(), TestCleanupOldRuns, TestDispatchFindingAlert, TestGenerateReportTask, TestRunAssessmentTask, TestRunAsyncHelper, TestRunScheduledAssessments (+9 more)
+Cohesion: 0.10
+Nodes (13): _db_result(), _make_session_factory(), TestCleanupOldRuns, TestGenerateReportTask, TestRunAssessmentTask, TestRunScheduledAssessments, TestRunSingleCollectorTask, TestSendWeeklyDigests (+5 more)
 
 ### Community 14 - "package.json"
 Cohesion: 0.07
@@ -278,16 +287,16 @@ Cohesion: 0.10
 Nodes (8): TestConstantTimeCompare, TestEncryptDecrypt, TestGenerateApiKey, constant_time_compare(), decrypt_secret(), encrypt_secret(), generate_api_key(), _get_fernet()
 
 ### Community 17 - "_make_engine"
-Cohesion: 0.19
-Nodes (6): _make_control_def(), _make_engine(), _make_run(), _run(), TestAssessmentEngineRun, TestEvaluateControl
+Cohesion: 0.14
+Nodes (9): _make_control_def(), _make_engine(), _make_run(), _run(), TestAssessmentEngineRun, TestEvaluateControl, FindingSeverity, FindingState (+1 more)
 
 ### Community 18 - "test_auth_and_cli.py"
-Cohesion: 0.13
-Nodes (14): TestCreateAccessToken, TestCreateRefreshToken, TestDecodeToken, TestValidateAccessToken, TestValidateRefreshToken, create_access_token(), create_refresh_token(), decode_refresh_token() (+6 more)
+Cohesion: 0.14
+Nodes (13): TestCreateAccessToken, TestCreateRefreshToken, TestDecodeToken, TestValidateAccessToken, TestValidateRefreshToken, create_access_token(), create_refresh_token(), decode_refresh_token() (+5 more)
 
 ### Community 19 - "conftest.py"
-Cohesion: 0.10
-Nodes (10): admin_user(), auth_headers(), auth_token(), client(), db_session(), engine(), event_loop(), _session_factory() (+2 more)
+Cohesion: 0.13
+Nodes (9): admin_user(), auth_headers(), auth_token(), client(), db_session(), engine(), event_loop(), _session_factory() (+1 more)
 
 ### Community 20 - "grc.py"
 Cohesion: 0.12
@@ -298,7 +307,7 @@ Cohesion: 0.07
 Nodes (31): apiVersion, data, kind, metadata, CELERY_BROKER_URL, CELERY_RESULT_BACKEND, CONTROLS_DIR, CORS_ORIGINS (+23 more)
 
 ### Community 22 - "test_api_auth.py"
-Cohesion: 0.15
+Cohesion: 0.14
 Nodes (15): test_callback_error_param(), test_callback_invalid_state(), test_entra_login_redirects(), test_get_me_authenticated(), test_get_me_bad_token(), test_get_me_unauthenticated(), test_login_inactive_user(), test_login_success() (+7 more)
 
 ### Community 23 - "AssessmentRun"
@@ -306,15 +315,15 @@ Cohesion: 0.09
 Nodes (18): _assessment_to_response(), AssessmentCreate, AssessmentResponse, AssessmentUpdate, cancel_run(), create_assessment(), delete_assessment(), get_assessment() (+10 more)
 
 ### Community 24 - "GraphClient"
-Cohesion: 0.09
-Nodes (21): _run(), _test(), TestEnsureToken, _test(), _test(), _test(), TestGetAllPages, _test() (+13 more)
+Cohesion: 0.07
+Nodes (16): TestBatchGet, _test(), TestEnsureToken, _test(), _test(), _test(), TestGetAllPages, _test() (+8 more)
 
 ### Community 25 - "SecretMetadata"
 Cohesion: 0.12
 Nodes (4): _stub_azure_modules(), TestRotationManager, SecretMetadata, RotationManager
 
 ### Community 26 - "reports.py"
-Cohesion: 0.13
+Cohesion: 0.15
 Nodes (11): delete_report(), download_report(), generate_report(), get_report_status(), list_report_runs(), list_reports(), PaginatedRunReports, ReportGenerateRequest (+3 more)
 
 ### Community 27 - "controls"
@@ -322,8 +331,8 @@ Cohesion: 0.09
 Nodes (21): cis_controls_v8, cis_m365_benchmark, gdpr, hipaa, iso27001_2022, nist_800_53_r5, nist_csf_2, pci_dss_v4 (+13 more)
 
 ### Community 28 - "Tenant"
-Cohesion: 0.16
-Nodes (8): TestSendDailyDigests, NotificationSetting, Tenant, _run_async(), send_daily_digests(), _run(), send_weekly_digests(), _run()
+Cohesion: 0.21
+Nodes (6): TestSendDailyDigests, _run_async(), send_daily_digests(), _run(), send_weekly_digests(), _run()
 
 ### Community 29 - "_run"
 Cohesion: 0.23
@@ -342,32 +351,32 @@ Cohesion: 0.09
 Nodes (5): TestLocalVault, TestProviderProtocolCompliance, TestSecretResolver, LocalVaultProvider, SecretResolver
 
 ### Community 33 - "CloudDashboard.tsx"
-Cohesion: 0.17
-Nodes (13): recharts@^3.10.1, cardStyle, CloudDashboard(), CloudsResponse, FindingCounts, ProviderSummary, scoreColor(), StateCounts (+5 more)
+Cohesion: 0.22
+Nodes (9): recharts@^3.10.1, cardStyle, CloudDashboard(), CloudsResponse, FindingCounts, ProviderSummary, scoreColor(), StateCounts (+1 more)
 
 ### Community 34 - "auth.py"
 Cohesion: 0.09
 Nodes (10): get_me(), login(), login_local(), logout(), oauth_callback(), refresh_token(), RefreshRequest, TokenResponse (+2 more)
 
-### Community 35 - "client.py"
-Cohesion: 0.12
-Nodes (9): TestBatchGet, TestGraphResponse, TestRateLimiter, GraphAPIError, GraphPermissionError, GraphRateLimitError, GraphTimeoutError, GraphResponse (+1 more)
+### Community 35 - "_run"
+Cohesion: 0.11
+Nodes (8): _run(), _test(), _test(), _test(), _test(), _test(), TestRateLimiter, RateLimiter
 
 ### Community 36 - "AssessmentRun"
-Cohesion: 0.09
-Nodes (9): Assessment, AssessmentRun, ReportStatus, AssessmentRunRepository, AssessmentEngine, run_assessment_task(), _run(), generate_report_task() (+1 more)
+Cohesion: 0.15
+Nodes (6): Assessment, AssessmentRun, AssessmentStatus, AssessmentRunRepository, run_scheduled_assessments(), _run()
 
 ### Community 37 - "main.py"
-Cohesion: 0.09
-Nodes (5): init_cache(), init_db(), create_app(), lifespan(), _setup_otel()
+Cohesion: 0.10
+Nodes (4): init_db(), create_app(), lifespan(), _setup_otel()
 
 ### Community 38 - "App.tsx"
 Cohesion: 0.19
 Nodes (15): zustand@^5.1.0, App(), ProtectedRoute(), RouteErrorBoundary(), Layout(), NAV_ITEMS, LoginPage(), AuthState (+7 more)
 
 ### Community 39 - "cli.py"
-Cohesion: 0.20
-Nodes (7): run_setup(), main(), migrate(), secrets_health(), setup(), smoke_test(), start()
+Cohesion: 0.14
+Nodes (10): run_setup(), main(), run_smoke_tests(), migrate(), secrets_get(), secrets_health(), secrets_set(), setup() (+2 more)
 
 ### Community 40 - "controls"
 Cohesion: 0.09
@@ -390,20 +399,20 @@ Cohesion: 0.09
 Nodes (22): cis_controls_v8, cis_m365_benchmark, gdpr, hipaa, iso27001_2022, nist_800_53_r5, nist_csf_2, pci_dss_v4 (+14 more)
 
 ### Community 45 - "core/cache.py"
-Cohesion: 0.23
-Nodes (6): cache_delete(), cache_delete_pattern(), cache_get(), cache_set(), close_cache(), get_redis()
+Cohesion: 0.13
+Nodes (9): TestCacheKeyHelpers, cache_delete(), cache_delete_pattern(), cache_get(), close_cache(), get_redis(), make_assessment_cache_key(), make_dashboard_cache_key() (+1 more)
 
 ### Community 46 - "AzureKeyVaultProvider"
-Cohesion: 0.12
+Cohesion: 0.10
 Nodes (3): TestBuildProvider, AzureKeyVaultProvider, _build_provider()
 
 ### Community 47 - "get_current_user"
-Cohesion: 0.20
+Cohesion: 0.19
 Nodes (9): ComplianceMapping, ControlResponse, FrameworkControlSummary, FrameworkResponse, get_control(), get_framework(), list_controls(), list_frameworks() (+1 more)
 
 ### Community 48 - "get_secret_resolver"
-Cohesion: 0.13
-Nodes (10): TestGetSecretResolver, secrets_get(), _get(), _check(), secrets_rotate(), _rotate(), secrets_set(), _set() (+2 more)
+Cohesion: 0.16
+Nodes (8): TestGetSecretResolver, _get(), _check(), secrets_rotate(), _rotate(), _set(), get_secret_resolver(), reset_resolver()
 
 ### Community 49 - "controls"
 Cohesion: 0.09
@@ -418,12 +427,12 @@ Cohesion: 0.09
 Nodes (21): cis_controls_v8, cis_m365_benchmark, cmmc_2, hipaa, iso27001_2022, nist_800_53_r5, nist_csf_2, pci_dss_v4 (+13 more)
 
 ### Community 52 - "monitoring.py"
-Cohesion: 0.17
+Cohesion: 0.18
 Nodes (8): CollectionHistoryEntry, CollectorRunResponse, CollectorStatus, get_collection_history(), get_collectors(), get_platform_health(), PlatformHealthResponse, run_collector()
 
-### Community 53 - "@tanstack/react-query"
+### Community 53 - "v1/notifications.py"
 Cohesion: 0.17
-Nodes (10): react@^18.2.0, findingsApi, queryClient, Finding, FindingListResponse, FindingsPage(), SEVERITIES, STATES (+2 more)
+Nodes (14): AlertThresholds, get_notification_settings(), _get_tenant(), _mask(), NotificationSettings, NotificationSettingsUpdate, SlackSettings, SmtpSettings (+6 more)
 
 ### Community 54 - "crosswalk.py"
 Cohesion: 0.14
@@ -453,17 +462,21 @@ Nodes (3): _run(), TestAWSSecretsManagerProvider, TestAzureKeyVaultProvider
 Cohesion: 0.11
 Nodes (18): cis_m365_benchmark, hipaa, iso27001_2022, nist_csf_2, soc2, zero_trust, controls, category (+10 more)
 
-### Community 63 - "test_control_loader.py"
-Cohesion: 0.14
-Nodes (5): TestLoadAllControls, TestParseLegacyFormat, load_all_controls(), _load_yaml_file(), _parse_legacy_format()
+### Community 62 - "BaseRepository"
+Cohesion: 0.15
+Nodes (4): BaseRepository, UserRepository, FrameworkNotFoundError, NotFoundError
+
+### Community 63 - "_parse_legacy_format"
+Cohesion: 0.29
+Nodes (3): TestParseLegacyFormat, _load_yaml_file(), _parse_legacy_format()
 
 ### Community 65 - "controls"
 Cohesion: 0.10
 Nodes (20): cis_controls_v8, gdpr, iso27001_2022, iso42001, nist_800_53_r5, nist_csf_2, soc2, zero_trust (+12 more)
 
 ### Community 66 - "get_settings"
-Cohesion: 0.12
-Nodes (9): TestGetAuthCodeUrl, TestGetMsalApp, TestGetMsalAppForTenant, build_authorize_url(), _exchange_code_for_token_sync(), get_auth_code_url(), get_msal_app(), get_msal_app_for_tenant() (+1 more)
+Cohesion: 0.08
+Nodes (14): _run(), TestAcquireTokenForClient, TestExchangeCodeForToken, TestGetAuthCodeUrl, TestGetEntraUserInfo, TestGetMsalApp, TestGetMsalAppForTenant, acquire_token_for_client() (+6 more)
 
 ### Community 67 - "controls"
 Cohesion: 0.10
@@ -474,27 +487,27 @@ Cohesion: 0.14
 Nodes (3): TestFindingScoring, compute_framework_score(), compute_score()
 
 ### Community 69 - "test_extended_collectors.py"
-Cohesion: 0.08
-Nodes (20): evaluate(), FakeGraph, _new_control_ids(), _run(), test_all_new_controls_return_canonical_states(), test_application_inventory_controls_evaluate(), test_cloud_apps_controls_evaluate(), test_copilot_studio_controls_evaluate() (+12 more)
+Cohesion: 0.10
+Nodes (18): evaluate(), _new_control_ids(), test_all_new_controls_return_canonical_states(), test_application_inventory_controls_evaluate(), test_cloud_apps_controls_evaluate(), test_copilot_studio_controls_evaluate(), test_defender_identity_controls_evaluate(), test_defender_office_controls_evaluate() (+10 more)
 
 ### Community 70 - "ports"
 Cohesion: 0.16
 Nodes (16): Service unimonitor-postgres, app, name, port, protocol, targetPort, app, matchLabels (+8 more)
 
 ### Community 72 - "smoke_test.py"
-Cohesion: 0.23
-Nodes (6): main(), run_smoke_tests(), test_authenticated_endpoints(), test_health(), test_login(), test_static_assets()
+Cohesion: 0.27
+Nodes (5): main(), test_authenticated_endpoints(), test_health(), test_login(), test_static_assets()
 
-### Community 73 - "acquire_token_for_client"
-Cohesion: 0.21
-Nodes (6): _run(), TestAcquireTokenForClient, TestExchangeCodeForToken, TestGetEntraUserInfo, acquire_token_for_client(), exchange_code_for_token()
+### Community 73 - "NotificationDispatcher"
+Cohesion: 0.16
+Nodes (3): _db_result(), TestPublicAPI, NotificationDispatcher
 
-### Community 75 - "useApi.ts"
-Cohesion: 0.18
-Nodes (12): dashboardApi, monitoringApi, AuditEntry, AuditPage(), CollectorRow(), CollectorStatus, SecurityDashboard(), ServiceCard (+4 more)
+### Community 75 - "@tanstack/react-query"
+Cohesion: 0.11
+Nodes (17): dashboardApi, queryClient, AuditEntry, AuditPage(), ComplianceDashboard(), FrameworkBar(), FrameworkCoverage, scoreColor() (+9 more)
 
 ### Community 76 - "resolver.py"
-Cohesion: 0.11
+Cohesion: 0.13
 Nodes (4): AggregatedHealthReport, check_all_providers(), HealthStatus, ProviderType
 
 ### Community 79 - "engine.py"
@@ -505,9 +518,9 @@ Nodes (5): _make_finding(), TestCalculateFrameworkCoverage, TestCalculateScores,
 Cohesion: 0.28
 Nodes (4): loginAsAdmin(), loginViaApi(), TEST_ADMIN, @playwright/test
 
-### Community 83 - "session.py"
-Cohesion: 0.18
-Nodes (4): create_all_tables(), db_session_context(), drop_all_tables(), get_async_session()
+### Community 83 - "require_role"
+Cohesion: 0.13
+Nodes (9): get_current_active_user(), require_admin(), require_analyst(), require_compliance(), require_role(), _check(), db_session_context(), get_async_session() (+1 more)
 
 ### Community 84 - "controls"
 Cohesion: 0.17
@@ -526,8 +539,8 @@ Cohesion: 0.23
 Nodes (12): metadata, PersistentVolumeClaim unimonitor-reports, app, app.kubernetes.io/component, app.kubernetes.io/name, labels, name, namespace (+4 more)
 
 ### Community 88 - "dependencies.py"
-Cohesion: 0.12
-Nodes (15): get_current_active_user(), require_admin(), require_analyst(), require_compliance(), AssessmentAlreadyRunningError, AssessmentError, AuthorisationError, ConflictError (+7 more)
+Cohesion: 0.14
+Nodes (15): TestGraphClientGet, cache_set(), AssessmentAlreadyRunningError, AssessmentError, AuthenticationError, ConflictError, DatabaseError, generic_exception_handler() (+7 more)
 
 ### Community 89 - "env.py"
 Cohesion: 0.22
@@ -574,12 +587,12 @@ Cohesion: 0.20
 Nodes (10): scripts, build, dev, lint, preview, test:e2e, test:e2e:report, test:e2e:smoke (+2 more)
 
 ### Community 103 - "setup.py"
-Cohesion: 0.18
-Nodes (6): check_env(), create_default_admin(), generate_password(), main(), run_migrations(), seed_notification_settings()
+Cohesion: 0.22
+Nodes (5): check_env(), create_default_admin(), generate_password(), main(), run_migrations()
 
-### Community 106 - "collect_google_workspace"
-Cohesion: 0.24
-Nodes (7): aws_data(), _FakeHTTP, gcp_data(), gws_data(), _run(), test_workspace_without_token_returns_empty(), collect_google_workspace()
+### Community 106 - "test_reporting.py"
+Cohesion: 0.27
+Nodes (5): _generator(), TestDocxGenerator, TestPdfProviderSections, TestProviderBreakdown, PdfReportGenerator
 
 ### Community 108 - "controls"
 Cohesion: 0.10
@@ -613,6 +626,10 @@ Nodes (9): fsGroup, runAsNonRoot, runAsUser, securityContext, serviceAccountName
 Cohesion: 0.10
 Nodes (19): cis_controls_v8, cis_m365_benchmark, iso27001_2022, nist_800_53_r5, nist_csf_2, soc2, zero_trust, controls (+11 more)
 
+### Community 116 - "AsyncClient"
+Cohesion: 0.15
+Nodes (4): TestCisoDashboard, TestCloudAggregate, TestCloudProviderDetail, TestFrameworkCoverage
+
 ### Community 117 - "worker"
 Cohesion: 0.25
 Nodes (8): worker, container_name, env_file, environment, image, networks, restart, volumes
@@ -641,6 +658,10 @@ Nodes (7): ExecutiveDashboard(), FrameworkCoverage, ScoreGauge(), StatCard(), to
 Cohesion: 0.25
 Nodes (7): compilerOptions, allowSyntheticDefaultImports, composite, module, moduleResolution, skipLibCheck, include
 
+### Community 126 - "test_windows_build_assets.py"
+Cohesion: 0.19
+Nodes (6): _spec_hiddenimports(), test_nsis_does_not_require_third_party_plugins(), test_nsis_icon_exists(), test_release_workflow_builds_installer_on_demand(), test_spec_does_not_reference_removed_secrets_factory(), test_spec_hiddenimports_point_at_real_unimonitor_modules()
+
 ### Community 127 - "redis"
 Cohesion: 0.29
 Nodes (7): command, container_name, image, networks, restart, volumes, redis
@@ -662,12 +683,12 @@ Cohesion: 0.29
 Nodes (6): apiVersion, kind, apiVersion, kind, Deployment unimonitor-beat, Deployment unimonitor-redis
 
 ### Community 132 - "test_cloud_providers.py"
-Cohesion: 0.26
-Nodes (7): evaluate(), test_aws_controls_detect_failure(), test_aws_controls_evaluate(), test_gcp_control_flags_internet_ssh(), test_gcp_controls_evaluate(), test_workspace_controls_evaluate(), test_workspace_flags_external_sharing_and_high_risk_oauth()
+Cohesion: 0.11
+Nodes (17): aws_data(), _BotoClient, _BotoSession, evaluate(), _FakeHTTP, gcp_data(), gws_data(), _run() (+9 more)
 
-### Community 133 - "SettingsPage.tsx"
-Cohesion: 0.43
-Nodes (6): api, FormField(), NotificationSettings, Section(), SettingsPage(), Toggle()
+### Community 133 - "CisoDashboard.tsx"
+Cohesion: 0.25
+Nodes (8): cardStyle, CisoDashboard(), CisoResponse, CisoRiskItem, CloudRiskRow, FrameworkRow, scoreColor(), TrendPoint
 
 ### Community 134 - "CloudProviderPage.tsx"
 Cohesion: 0.24
@@ -702,8 +723,8 @@ Cohesion: 0.33
 Nodes (6): requests, accessModes, resources, volumeClaimTemplates, metadata, spec
 
 ### Community 142 - "extended.py"
-Cohesion: 0.15
-Nodes (13): collected(), collect_cloud_apps(), collect_copilot_studio(), collect_defender_identity(), collect_defender_office(), collect_ediscovery(), collect_insider_risk(), collect_intune_extended() (+5 more)
+Cohesion: 0.13
+Nodes (15): collected(), _collect_defender(), _collect_purview(), collect_cloud_apps(), collect_copilot_studio(), collect_defender_identity(), collect_defender_office(), collect_ediscovery() (+7 more)
 
 ### Community 144 - "controls"
 Cohesion: 0.10
@@ -722,8 +743,8 @@ Cohesion: 0.40
 Nodes (5): spec, storage, requests, accessModes, resources
 
 ### Community 148 - "test_control_library.py"
-Cohesion: 0.13
-Nodes (5): controls(), test_every_control_evaluates(), FrameworkMeta, get_framework(), list_frameworks()
+Cohesion: 0.16
+Nodes (4): controls(), FrameworkMeta, get_framework(), list_frameworks()
 
 ### Community 149 - "controls"
 Cohesion: 0.12
@@ -741,41 +762,53 @@ Nodes (18): cis_controls_v8, cis_m365_benchmark, iso27001_2022, nist_800_53_r5, 
 Cohesion: 0.12
 Nodes (15): cis_controls_v8, iso27001_2022, nist_800_53_r5, nist_csf_2, pci_dss_v4, soc2, controls, category (+7 more)
 
-### Community 163 - "cloud_providers.py"
-Cohesion: 0.21
-Nodes (6): test_aws_without_sdk_returns_empty(), test_gcp_without_token_returns_empty(), _aws_snapshot(), collect_aws(), collect_gcp(), _rest()
+### Community 154 - "dispatch_finding_alert"
+Cohesion: 0.36
+Nodes (3): TestDispatchFindingAlert, dispatch_finding_alert(), _run()
 
-### Community 178 - "ReportsPage.tsx"
-Cohesion: 0.22
-Nodes (9): lucide-react@^1.73.0, reportsApi, FORMAT_LABELS, FORMAT_OPTIONS, Report, ReportsPage(), RunReportSummary, StatusIcon() (+1 more)
+### Community 163 - "get_settings"
+Cohesion: 0.13
+Nodes (6): get_settings(), _aws_snapshot(), collect_aws(), collect_gcp(), collect_google_workspace(), _rest()
+
+### Community 178 - "useApi.ts"
+Cohesion: 0.11
+Nodes (23): lucide-react@^1.73.0, react@^18.2.0, api, findingsApi, reportsApi, Finding, FindingListResponse, FindingsPage() (+15 more)
+
+### Community 179 - "Tenant"
+Cohesion: 0.14
+Nodes (4): seed_notification_settings(), NotificationSetting, ReportStatus, Tenant
 
 ### Community 181 - "Base"
-Cohesion: 0.09
-Nodes (12): Base, AuditLog, Control, ControlMapping, Framework, Finding, FindingEvidence, FindingHistory (+4 more)
+Cohesion: 0.11
+Nodes (10): Base, AuditLog, Control, ControlMapping, Framework, Report, RiskItem, RiskScore (+2 more)
 
-### Community 183 - "RiskDashboard.tsx"
-Cohesion: 0.40
-Nodes (5): cellColor(), LEVELS, RiskCell, RiskDashboard(), TopFinding
+### Community 182 - "test_control_loader.py"
+Cohesion: 0.18
+Nodes (4): TestLoadAllControls, TestLoadControlsForFrameworks, load_all_controls(), load_controls_for_frameworks()
+
+### Community 183 - "SecurityDashboard.tsx"
+Cohesion: 0.43
+Nodes (6): monitoringApi, CollectorRow(), CollectorStatus, SecurityDashboard(), ServiceCard, StatusIcon()
 
 ## Knowledge Gaps
 - **1 isolated node(s):** `unimonitor`
-  These have ≤1 connection - possible missing edges. (Counts symbols only; 1463 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
-- **51 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+  These have ≤1 connection - possible missing edges. (Counts symbols only; 1489 node(s) total have ≤1 connection when file, concept and rationale nodes are included.)
+- **58 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `GraphClient` connect `GraphClient` to `asyncio`, `.get`, `Tenant`, `typing`, `client.py`, `get_settings`, `logging.py`, `extended.py`, `test_auth_and_cli.py`, `monitoring.py`?**
-  _High betweenness centrality (0.037) - this node is a cross-community bridge._
+- **Why does `get_settings()` connect `get_settings` to `AIRemediationEngine`, `test_core_logging.py`, `security.py`, `test_auth_and_cli.py`, `grc.py`, `GraphClient`, `reports.py`, `auth.py`, `_run`, `main.py`, `core/cache.py`, `Tenant`, `Base`, `Settings`, `get_settings`, `test_extended_collectors.py`, `BaseReportGenerator`, `dependencies.py`, `test_reporting.py`?**
+  _High betweenness centrality (0.035) - this node is a cross-community bridge._
 - **Are the 19 inferred relationships involving `GraphClient` (e.g. with `TestBatchGet` and `TestEnsureToken`) actually correct?**
   _`GraphClient` has 19 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `unimonitor` to the rest of the system?**
   _1 weakly-connected nodes found - possible missing edges._
 - **Should `asyncio` be split into smaller, more focused modules?**
-  _Cohesion score 0.08672659968270756 - nodes in this community are weakly interconnected._
-- **Why does `get_settings()` connect `get_settings` to `typing`, `AIRemediationEngine`, `test_core_logging.py`, `logging.py`, `security.py`, `test_auth_and_cli.py`, `grc.py`, `reports.py`, `auth.py`, `client.py`, `cloud_providers.py`, `main.py`, `core/cache.py`, `config.py`, `Settings`, `test_extended_collectors.py`, `acquire_token_for_client`, `BaseReportGenerator`, `collect_google_workspace`, `._summary_stats`?**
-  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+  _Cohesion score 0.08956228956228957 - nodes in this community are weakly interconnected._
+- **Why does `ControlLoader` connect `ControlLoader` to `ControlDefinition`, `typing`, `test_cloud_providers.py`, `test_extended_collectors.py`, `dashboard.py`, `logging.py`, `_make_engine`, `test_control_library.py`, `test_control_loader.py`, `compute_framework_coverage`, `FrameworkCrosswalk`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
 - **Are the 5 inferred relationships involving `FindingRepository` (e.g. with `Finding` and `FindingEvidence`) actually correct?**
   _`FindingRepository` has 5 INFERRED edges - model-reasoned connections that need verification._
 - **Should `.get` be split into smaller, more focused modules?**
-  _Cohesion score 0.08548168249660787 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.07785602503912363 - nodes in this community are weakly interconnected._

@@ -18,80 +18,80 @@
     "semantic_hash": "bf08939ed774a2e42970c745dd9ee288"
   },
   "controls/azure/security_controls.yaml": {
-    "mtime": 1794847867.1519833,
-    "seen": 1794848210.6287217,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667525,
     "ast_hash": "5aace03db5dc4c162dca51605cca4323",
     "semantic_hash": "5aace03db5dc4c162dca51605cca4323"
   },
   "controls/copilot/security_controls.yaml": {
-    "mtime": 1794847867.1519833,
-    "seen": 1794848210.6287239,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667546,
     "ast_hash": "58e53c8ff7fe799e88c5e55018a82d8c",
     "semantic_hash": "58e53c8ff7fe799e88c5e55018a82d8c"
   },
   "controls/defender/endpoint_protection.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287332,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667603,
     "ast_hash": "72a7e935991b0b0b44ebc1a417a3b92b",
     "semantic_hash": "72a7e935991b0b0b44ebc1a417a3b92b"
   },
   "controls/devices/app_protection.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287403,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667654,
     "ast_hash": "b11b00961dcc999b39b485f06c7d3f7a",
     "semantic_hash": "b11b00961dcc999b39b485f06c7d3f7a"
   },
   "controls/devices/compliance_policies.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287427,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667668,
     "ast_hash": "cee774c8739c660b6a6170fe313f26c1",
     "semantic_hash": "cee774c8739c660b6a6170fe313f26c1"
   },
   "controls/exchange/security_controls.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287446,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667685,
     "ast_hash": "bf76327a9c3c21cc553bfe8105fcbca9",
     "semantic_hash": ""
   },
   "controls/identity/mfa_controls.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.628747,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667727,
     "ast_hash": "c5462682d562881ea215d291427e49bf",
     "semantic_hash": "c5462682d562881ea215d291427e49bf"
   },
   "controls/identity/privileged_access.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287494,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667742,
     "ast_hash": "64d65524fa09d741a46900b0e4c47951",
     "semantic_hash": "64d65524fa09d741a46900b0e4c47951"
   },
   "controls/identity/risky_users.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287513,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667758,
     "ast_hash": "fa385b8f876887fe25a4fb1419d7460c",
     "semantic_hash": "fa385b8f876887fe25a4fb1419d7460c"
   },
   "controls/intune/security_controls.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287575,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667801,
     "ast_hash": "24471a16425aba1ed8f4ef94b1dcab8d",
     "semantic_hash": "24471a16425aba1ed8f4ef94b1dcab8d"
   },
   "controls/purview/data_protection.yaml": {
-    "mtime": 1794849815.3049903,
-    "seen": 1794851337.4368622,
+    "mtime": 1794849815.0,
+    "seen": 1794939184.2667818,
     "ast_hash": "a46e5726659e8f068149cf45279d3320",
     "semantic_hash": ""
   },
   "controls/sharepoint/security_controls.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.628765,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667859,
     "ast_hash": "8370d95ee9abc9fe45a62a1c3c4e3efa",
     "semantic_hash": ""
   },
   "controls/teams/security_controls.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287675,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.266787,
     "ast_hash": "a887815f48b22dcb43f583d715e08769",
     "semantic_hash": ""
   },
@@ -138,10 +138,10 @@
     "semantic_hash": "4532f257f8be13fdec35f043cf0552c4"
   },
   "deploy/windows/hooks/hook-unimonitor.py": {
-    "mtime": 1794834873.0,
-    "seen": 1794848210.6287825,
-    "ast_hash": "dff6d7feb89ef0123fc10cfb70686893",
-    "semantic_hash": "dff6d7feb89ef0123fc10cfb70686893"
+    "mtime": 1794938323.56893,
+    "seen": 1794939184.2668004,
+    "ast_hash": "3d6bb2f7b31cbad74e690611e755c9b7",
+    "semantic_hash": ""
   },
   "deploy/windows/scripts/install-service.ps1": {
     "mtime": 1794833357.0,
@@ -216,9 +216,9 @@
     "semantic_hash": "3c4396bc42448a5680085dd88d566512"
   },
   "frontend/src/App.tsx": {
-    "mtime": 1794853336.3089857,
-    "seen": 1794853879.2252913,
-    "ast_hash": "e62751b19691e488a8b93ff8b7852df7",
+    "mtime": 1794938484.6694942,
+    "seen": 1794939184.2668204,
+    "ast_hash": "52e3af9b984045a6cc509cc131a72056",
     "semantic_hash": ""
   },
   "frontend/src/components/ErrorBoundary.tsx": {
@@ -228,15 +228,15 @@
     "semantic_hash": "1db81e707691f6dd160c08da2240a4b1"
   },
   "frontend/src/components/Layout.tsx": {
-    "mtime": 1794853338.4720988,
-    "seen": 1794853879.225296,
-    "ast_hash": "62e19b14455e6a45e2486cd21ac84c57",
+    "mtime": 1794938487.4124622,
+    "seen": 1794939184.266823,
+    "ast_hash": "1482c4c2b1d1913a7f57c069d2861f9c",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useApi.ts": {
-    "mtime": 1794853308.7157812,
-    "seen": 1794853879.2252982,
-    "ast_hash": "1c3daeab8c7d7de64b5fc84e379d62e2",
+    "mtime": 1794938481.8759232,
+    "seen": 1794939184.2668247,
+    "ast_hash": "6933769040050189ecd889cba45045a6",
     "semantic_hash": ""
   },
   "frontend/src/main.tsx": {
@@ -348,10 +348,10 @@
     "semantic_hash": "980223403b878b39f415a8bae7703013"
   },
   "pyproject.toml": {
-    "mtime": 1794834934.0,
-    "seen": 1794848210.6288695,
-    "ast_hash": "3517bbdf26a60ff94f362eaffd711ce4",
-    "semantic_hash": "3517bbdf26a60ff94f362eaffd711ce4"
+    "mtime": 1794854514.0,
+    "seen": 1794939184.2668595,
+    "ast_hash": "97d22ac7463cc8d802dd9b891b2e662c",
+    "semantic_hash": ""
   },
   "scripts/setup.py": {
     "mtime": 1794834997.0,
@@ -486,10 +486,10 @@
     "semantic_hash": "bf2b5935d7de47bd3aa4fb233034eb92"
   },
   "tests/unit/test_reporting.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.628939,
-    "ast_hash": "ef7794f9c7cea06208f80ecb74a1ab75",
-    "semantic_hash": "ef7794f9c7cea06208f80ecb74a1ab75"
+    "mtime": 1794938646.4323888,
+    "seen": 1794939184.266907,
+    "ast_hash": "210670c83def29c8e55205cd916c332d",
+    "semantic_hash": ""
   },
   "tests/unit/test_scoring.py": {
     "mtime": 1794833357.0,
@@ -558,9 +558,9 @@
     "semantic_hash": "0afc239c7f1163a7a53daa48a9f6872c"
   },
   "unimonitor/api/v1/dashboard.py": {
-    "mtime": 1794853371.0153837,
-    "seen": 1794853879.2254057,
-    "ast_hash": "9ad40a4d7c6b2fe7cd9bfaa5aaedbed6",
+    "mtime": 1794854646.0,
+    "seen": 1794939184.266927,
+    "ast_hash": "ff5f6efd0b83e7cec7682b0609731a92",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/findings.py": {
@@ -576,8 +576,8 @@
     "semantic_hash": "fd9b15a0100a5a6f306af57c2c18847d"
   },
   "unimonitor/api/v1/monitoring.py": {
-    "mtime": 1794853059.1041462,
-    "seen": 1794853879.2254097,
+    "mtime": 1794853059.0,
+    "seen": 1794939184.2669318,
     "ast_hash": "de8ae4e2868db8a1d36b7e7551a696aa",
     "semantic_hash": ""
   },
@@ -588,10 +588,10 @@
     "semantic_hash": "f8541c748d9162194b98b9c5ae960c89"
   },
   "unimonitor/api/v1/reports.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6289885,
-    "ast_hash": "9b8926ef154b8f3882d537efd7a5e683",
-    "semantic_hash": "9b8926ef154b8f3882d537efd7a5e683"
+    "mtime": 1794854523.0,
+    "seen": 1794939184.2669346,
+    "ast_hash": "ffa3a4cb55e301b3ff6f62335f2eadea",
+    "semantic_hash": ""
   },
   "unimonitor/api/v1/router.py": {
     "mtime": 1794833357.0,
@@ -636,8 +636,8 @@
     "semantic_hash": "61ddc8ea20c918cff4ecce51c6a4fda1"
   },
   "unimonitor/config.py": {
-    "mtime": 1794851186.2126548,
-    "seen": 1794851337.437044,
+    "mtime": 1794851186.0,
+    "seen": 1794939184.2669468,
     "ast_hash": "f1f80cef8b11275a58527973814ab406",
     "semantic_hash": ""
   },
@@ -786,8 +786,8 @@
     "semantic_hash": "8e3748bb0c9dddcd3e27345fb6bda19b"
   },
   "unimonitor/graph/collector_registry.py": {
-    "mtime": 1794850932.3973281,
-    "seen": 1794851337.4370894,
+    "mtime": 1794850932.0,
+    "seen": 1794939184.2669842,
     "ast_hash": "4b5d6fbc3dc269105a4216fd6a1ad1e1",
     "semantic_hash": ""
   },
@@ -888,8 +888,8 @@
     "semantic_hash": "800a71b5f55a1293fb6a3574c785b1a8"
   },
   "unimonitor/grc/scoring.py": {
-    "mtime": 1794853017.911235,
-    "seen": 1794853879.2254965,
+    "mtime": 1794853017.0,
+    "seen": 1794939184.2670174,
     "ast_hash": "641312bb52a1d331ec39c601f23b20a1",
     "semantic_hash": ""
   },
@@ -918,10 +918,10 @@
     "semantic_hash": "f537b2142061e41e88060fe6ffbad1e8"
   },
   "unimonitor/reporting/base.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6291444,
-    "ast_hash": "ce6c7f49cc00e58f68ea108683eeee21",
-    "semantic_hash": "ce6c7f49cc00e58f68ea108683eeee21"
+    "mtime": 1794854304.0,
+    "seen": 1794939184.2670255,
+    "ast_hash": "2167a7a6cf82b41455bb518f2c7cc9a8",
+    "semantic_hash": ""
   },
   "unimonitor/reporting/csv_generator.py": {
     "mtime": 1794833357.0,
@@ -942,10 +942,10 @@
     "semantic_hash": "f3371785e6c97ef65c52c49f6c543b55"
   },
   "unimonitor/reporting/pdf_generator.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.629155,
-    "ast_hash": "ac17090617d38a101527f91d1bc33189",
-    "semantic_hash": "ac17090617d38a101527f91d1bc33189"
+    "mtime": 1794938738.154447,
+    "seen": 1794939184.2670338,
+    "ast_hash": "d96a8f667760038668c625c5ad78e1fa",
+    "semantic_hash": ""
   },
   "unimonitor/secrets/__init__.py": {
     "mtime": 1794833357.0,
@@ -1038,10 +1038,10 @@
     "semantic_hash": "b066a4a9beab97e2961ecbf1798548ad"
   },
   "unimonitor/worker/tasks/reporting.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.629198,
-    "ast_hash": "b0bdd520c6d18ee3ca05e444406d22b7",
-    "semantic_hash": "b0bdd520c6d18ee3ca05e444406d22b7"
+    "mtime": 1794854509.0,
+    "seen": 1794939184.2670588,
+    "ast_hash": "dc8c84536b5e5b10887dd76dacdeb6e2",
+    "semantic_hash": ""
   },
   "deploy/windows/version_info.txt": {
     "mtime": 1794833357.0,
@@ -1050,8 +1050,8 @@
     "semantic_hash": ""
   },
   "frontend/index.html": {
-    "mtime": 1794853340.3248584,
-    "seen": 1794853879.2255394,
+    "mtime": 1794853340.0,
+    "seen": 1794939184.2670622,
     "ast_hash": "4029adc4b31584e4f8aefed1306c6985",
     "semantic_hash": ""
   },
@@ -1080,135 +1080,165 @@
     "semantic_hash": ""
   },
   "controls/copilot/studio_governance.yaml": {
-    "mtime": 1794847867.1519833,
-    "seen": 1794848210.628727,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667568,
     "ast_hash": "564de8d8a218f8c95b9f6dabcd6b2287",
     "semantic_hash": ""
   },
   "controls/defender/cloud_apps.yaml": {
-    "mtime": 1794850123.8331318,
-    "seen": 1794851337.4368284,
+    "mtime": 1794850123.0,
+    "seen": 1794939184.2667587,
     "ast_hash": "12c90758070381b84f81428e6f2e694c",
     "semantic_hash": ""
   },
   "controls/defender/identity_protection.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287355,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667623,
     "ast_hash": "e0468f546d43e610fa076fdff88af10e",
     "semantic_hash": ""
   },
   "controls/defender/office_protection.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287374,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.2667637,
     "ast_hash": "52b0517ea2e5a4a6e01738cef2c5d996",
     "semantic_hash": ""
   },
   "controls/intune/application_inventory.yaml": {
-    "mtime": 1794850121.3903842,
-    "seen": 1794851337.4368553,
+    "mtime": 1794850121.0,
+    "seen": 1794939184.266777,
     "ast_hash": "40083eb80b6dd25665528e8b6c2f2e49",
     "semantic_hash": ""
   },
   "controls/intune/security_baselines.yaml": {
-    "mtime": 1794849818.8845139,
-    "seen": 1794851337.4368577,
+    "mtime": 1794849818.0,
+    "seen": 1794939184.2667787,
     "ast_hash": "f82ef869a3e09525efce090f6f247020",
     "semantic_hash": ""
   },
   "controls/purview/ediscovery.yaml": {
-    "mtime": 1794847867.1559832,
-    "seen": 1794848210.6287613,
+    "mtime": 1794847867.0,
+    "seen": 1794939184.266783,
     "ast_hash": "78a212c72cebc278df55ec76955c1049",
     "semantic_hash": ""
   },
   "controls/purview/insider_risk.yaml": {
-    "mtime": 1794850126.0149436,
-    "seen": 1794851337.4368663,
+    "mtime": 1794850126.0,
+    "seen": 1794939184.2667844,
     "ast_hash": "04d0929206841f4e40a76751ca34e26b",
     "semantic_hash": ""
   },
   "tests/unit/test_control_library.py": {
-    "mtime": 1794848083.3394644,
-    "seen": 1794848210.6289127,
+    "mtime": 1794848083.0,
+    "seen": 1794939184.2668903,
     "ast_hash": "f5b15f4e7f29e708d0d6e706f90796e3",
     "semantic_hash": ""
   },
   "controls/aws/security_controls.yaml": {
-    "mtime": 1794850934.9889908,
-    "seen": 1794851337.436811,
+    "mtime": 1794850934.0,
+    "seen": 1794939184.2667494,
     "ast_hash": "dac6e81b2728160100f58d45bac34eb0",
     "semantic_hash": ""
   },
   "controls/gcp/security_controls.yaml": {
-    "mtime": 1794850937.77394,
-    "seen": 1794851337.436845,
+    "mtime": 1794850937.0,
+    "seen": 1794939184.26677,
     "ast_hash": "2c358e461feff04dd29de0badcfc67d2",
     "semantic_hash": ""
   },
   "controls/google_workspace/security_controls.yaml": {
-    "mtime": 1794850940.1684306,
-    "seen": 1794851337.4368467,
+    "mtime": 1794850940.0,
+    "seen": 1794939184.2667713,
     "ast_hash": "3b7c67321eeab60cc5da6ea9f6e2ec10",
     "semantic_hash": ""
   },
   "tests/unit/test_cloud_providers.py": {
-    "mtime": 1794851187.4984815,
-    "seen": 1794851337.436976,
+    "mtime": 1794851187.0,
+    "seen": 1794939184.2668874,
     "ast_hash": "311461ae9a7d8700b98a0a66396c6d6e",
     "semantic_hash": ""
   },
   "tests/unit/test_extended_collectors.py": {
-    "mtime": 1794850221.3338797,
-    "seen": 1794851337.4369905,
+    "mtime": 1794850221.0,
+    "seen": 1794939184.266898,
     "ast_hash": "326d5506d8a7b6f986afecc3a79336ff",
     "semantic_hash": ""
   },
   "unimonitor/graph/collectors/cloud_providers.py": {
-    "mtime": 1794851187.4984815,
-    "seen": 1794851337.4370954,
+    "mtime": 1794851187.0,
+    "seen": 1794939184.2669888,
     "ast_hash": "1ba13a64db0fb3f5f90e3865139b7ac7",
     "semantic_hash": ""
   },
   "unimonitor/graph/collectors/extended.py": {
-    "mtime": 1794850221.3338797,
-    "seen": 1794851337.4371042,
+    "mtime": 1794850221.0,
+    "seen": 1794939184.2669966,
     "ast_hash": "d39c4e6f76eda8476b69c1a2e01ca4e5",
     "semantic_hash": ""
   },
   "unimonitor/graph/collectors/snapshot.py": {
-    "mtime": 1794849657.7088864,
-    "seen": 1794851337.4371116,
+    "mtime": 1794849657.0,
+    "seen": 1794939184.267003,
     "ast_hash": "69e6141478e170556c1c56469bf3f4db",
     "semantic_hash": ""
   },
   "frontend/src/pages/CloudDashboard.tsx": {
-    "mtime": 1794853465.4046865,
-    "seen": 1794853879.225306,
+    "mtime": 1794853465.0,
+    "seen": 1794939184.2668333,
     "ast_hash": "f0814a7ed757e96081af01dc033bb303",
     "semantic_hash": ""
   },
   "frontend/src/pages/CloudProviderPage.tsx": {
-    "mtime": 1794853370.9753838,
-    "seen": 1794853879.225308,
+    "mtime": 1794853370.0,
+    "seen": 1794939184.2668352,
     "ast_hash": "69f518e02308fc5dd801ff753b99b0c2",
     "semantic_hash": ""
   },
   "tests/integration/test_cloud_dashboards.py": {
-    "mtime": 1794853371.0153837,
-    "seen": 1794853879.2253475,
+    "mtime": 1794853371.0,
+    "seen": 1794939184.2668757,
     "ast_hash": "0f70373a17f553b736b9b86bb6dc0058",
     "semantic_hash": ""
   },
   "tests/unit/test_providers.py": {
-    "mtime": 1794853166.4892979,
-    "seen": 1794853879.2253828,
+    "mtime": 1794853166.0,
+    "seen": 1794939184.2669053,
     "ast_hash": "5933fe56e6f7d0296a30acdfdc819215",
     "semantic_hash": ""
   },
   "unimonitor/grc/providers.py": {
-    "mtime": 1794852952.8453572,
-    "seen": 1794853879.225495,
-    "ast_hash": "7021c3de5697082ec1099bf2865e6e62",
+    "mtime": 1794854302.0,
+    "seen": 1794939184.267016,
+    "ast_hash": "17b60917723b73678b72e95779cbdf2a",
+    "semantic_hash": ""
+  },
+  "frontend/src/pages/CisoDashboard.tsx": {
+    "mtime": 1794854648.0,
+    "seen": 1794939184.2668312,
+    "ast_hash": "2a4145a9a00d6ea3ce5e7a719460c803",
+    "semantic_hash": ""
+  },
+  "scripts/make_icon.py": {
+    "mtime": 1794938106.7398934,
+    "seen": 1794939184.266861,
+    "ast_hash": "7ffaf1fdab12cbc756f3c51f2dc644e3",
+    "semantic_hash": ""
+  },
+  "tests/integration/test_ciso_dashboard.py": {
+    "mtime": 1794938908.0432923,
+    "seen": 1794939184.266874,
+    "ast_hash": "88b8ca20f9ef659a023e8ad113253c06",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_windows_build_assets.py": {
+    "mtime": 1794938825.1767275,
+    "seen": 1794939184.2669146,
+    "ast_hash": "1d2c06ddc3ef730c4f7e1cff99f12dda",
+    "semantic_hash": ""
+  },
+  "unimonitor/reporting/docx_generator.py": {
+    "mtime": 1794938908.0432923,
+    "seen": 1794939184.2670288,
+    "ast_hash": "b5885ff32ad7f1e194df07a9dc8ae01d",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {
