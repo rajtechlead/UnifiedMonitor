@@ -63,3 +63,26 @@ class TestSpaServing:
             # an authenticated API path must not be swallowed by the SPA fallback
             unauthorized = await client.get("/api/v1/dashboard/clouds")
             assert unauthorized.status_code == 401
+
+            # nor should an unknown API path answer with HTML
+            missing = await client.get("/api/v1/does-not-exist")
+            assert missing.status_code == 404
+            assert "text/html" not in missing.headers.get("content-type", "")
+
+    @pytest.mark.parametrize(
+        "route",
+        ["/api/v1/tenants", "/api/v1/tenants/", "/api/v1/findings", "/api/v1/reports", "/api/v1/assessments"],
+    )
+    async def test_existing_api_routes_are_not_shadowed_by_the_spa(self, tmp_path, monkeypatch, route):
+        """Regression: a `/{path}` catch-all hid routes whose path is "" (e.g. /tenants)."""
+        spa = _build_spa(tmp_path)
+        monkeypatch.setenv("UNIMONITOR_STATIC_DIR", str(spa))
+
+        from unimonitor.main import create_app
+
+        app = create_app()
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            r = await client.get(route, follow_redirects=True)
+            # the route exists, so it answers 401 from auth, never 404 HTML from the SPA
+            assert r.status_code == 401, f"{route} -> {r.status_code} {r.headers.get('content-type')}"
+            assert "text/html" not in r.headers.get("content-type", "")

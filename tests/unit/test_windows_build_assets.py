@@ -52,6 +52,22 @@ def test_spec_collects_docx_templates_and_branding():
     assert '"branding"' in source
 
 
+def test_docker_images_copy_the_package_before_installing():
+    """pip must see `unimonitor/` or it builds an empty wheel and the image lies."""
+    for dockerfile in (Path("deploy/docker/Dockerfile"), Path("deploy/docker/Dockerfile.worker")):
+        lines = [line.strip() for line in dockerfile.read_text().splitlines()]
+        copy_index = lines.index("COPY unimonitor/ ./unimonitor/")
+        install_index = next(i for i, line in enumerate(lines) if line.startswith("RUN pip install"))
+        assert copy_index < install_index, f"{dockerfile} installs before copying the package"
+        assert "-e " not in lines[install_index], f"{dockerfile} should install, not link, the package"
+
+
+def test_docker_image_stages_the_frontend_where_the_app_serves_it():
+    dockerfile = Path("deploy/docker/Dockerfile").read_text()
+    assert "--from=frontend-builder /app/frontend/dist ./unimonitor/static/" in dockerfile
+    assert "COPY branding/ ./branding/" in dockerfile
+
+
 def test_nsis_icon_exists():
     """NSIS aborts the build when its MUI icon is missing."""
     assert "branding\\icon.ico" in NSI.read_text()

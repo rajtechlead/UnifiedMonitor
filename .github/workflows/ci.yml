@@ -119,6 +119,46 @@ jobs:
           path: frontend/dist/
           retention-days: 7
 
+  # ── Packaged UI: build the frontend and prove the app serves it ──────────
+  bundled-ui:
+    name: Bundled UI Serves
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Stage the build where the app looks for it
+        run: |
+          mkdir -p unimonitor/static
+          cp -r frontend/dist/* unimonitor/static/
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install backend
+        run: pip install -e .
+
+      - name: Serve the bundle and probe UI + API
+        run: python scripts/verify_bundled_ui.py
+
+      - name: Show server log on failure
+        if: failure()
+        run: ls -la unimonitor/static/ && cat unimonitor/static/index.html | head -20
+
   # ── Secrets scan ─────────────────────────────────────────────────────────
   secrets-scan:
     name: Secrets Scan

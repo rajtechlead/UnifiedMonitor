@@ -18,22 +18,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-# Install Python dependencies (cached layer)
+# Metadata *and* the package must be present before installing: hatchling builds
+# the wheel from `unimonitor/`, so installing earlier ships an empty distribution
+# and only appears to work because the source is copied in afterwards.
 COPY pyproject.toml README.md ./
-RUN pip install --no-cache-dir --break-system-packages -e ".[production]" 2>/dev/null || \
-    pip install --no-cache-dir -e ".[production]"
-
-# Copy application source
 COPY unimonitor/ ./unimonitor/
+RUN pip install --no-cache-dir .
+
+# Runtime data that is not part of the wheel
 COPY controls/ ./controls/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
-
-# Copy built frontend assets where the app looks for them (unimonitor/static)
-COPY --from=frontend-builder /app/frontend/dist ./unimonitor/static/
-
-# Branding assets are mounted at /static by the app
 COPY branding/ ./branding/
+
+# Built frontend, where create_app() looks for it
+COPY --from=frontend-builder /app/frontend/dist ./unimonitor/static/
 
 # Non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser /app

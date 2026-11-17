@@ -25,7 +25,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 558/558 | 57s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 565/565 | 57s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
@@ -48,8 +48,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 479 | across 25 files |
-| Integration tests | ✅ PASS | 79 | health, e2e journeys, dashboard, cloud, CISO, report and SPA serving |
+| Unit tests | ✅ PASS | 481 | across 25 files |
+| Integration tests | ✅ PASS | 84 | health, e2e journeys, dashboard, cloud, CISO, report and SPA serving |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
@@ -131,8 +131,8 @@ runtime install reports no known vulnerabilities (verified 2026-11-17).
 
 - [x] Backend Build Passes
 - [x] Frontend Build Passes
-- [x] Unit Tests Pass (479)
-- [x] Integration Tests Pass (79)
+- [x] Unit Tests Pass (481)
+- [x] Integration Tests Pass (84)
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)

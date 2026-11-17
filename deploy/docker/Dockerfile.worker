@@ -7,10 +7,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[production]"
-
+# The package must exist before pip runs, or the wheel is empty and the image
+# silently relies on the later source copy.
+COPY pyproject.toml README.md ./
 COPY unimonitor/ ./unimonitor/
+RUN pip install --no-cache-dir .
+
 COPY controls/ ./controls/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./

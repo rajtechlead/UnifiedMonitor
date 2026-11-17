@@ -100,6 +100,17 @@ frontend dependency migrations already merged. Trackers have now been reconciled
   and a clean `pip install -e .` now audits with no known vulnerabilities.
 - Added `.github/workflows/windows-installer.yml`: a dispatch-only workflow that builds the NSIS
   `.exe` plus a portable zip on `windows-latest`, independent of the release pipeline.
+- Both Docker images now copy `unimonitor/` before `pip install`: without the package hatchling
+  still exits 0 and writes an empty 5 KB wheel, so the old ordering only worked because the source
+  was copied in afterwards. `tests/unit/test_windows_build_assets.py` asserts the ordering.
+- New CI job `Bundled UI Serves` builds the frontend, stages it in `unimonitor/static`, then runs
+  `scripts/verify_bundled_ui.py`, which starts the real server and asserts the shell, hashed assets,
+  a deep link, the JSON health route, a 401 on a collection route and a 404 for unknown API paths.
+- The SPA fallback had to move out of routing: an `APIRoute` matching `/{path}` competes with
+  FastAPI's lazily included sub-routers and shadowed routes declared with an empty path
+  (`GET /api/v1/tenants`, `/findings`, `/reports`, `/assessments`, `/controls`). It is now ASGI
+  middleware (`SpaFallbackMiddleware`) that only rewrites 404s for navigation requests, so API
+  routes and trailing-slash redirects are untouched — covered by a parametrised regression test.
 - Verified the packaged UI end to end after the audit/workflow commit: nothing served the built SPA, so
   `/` was a 404 in the Docker image and in the Windows installer. `create_app()` now mounts
   `unimonitor/static` at `/` with an index fallback for client-side routes (API routes still win),

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import time
-from collections.abc import AsyncIterator, MutableMapping
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -13,9 +13,8 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from unimonitor.config import get_settings
 from unimonitor.exceptions import (
@@ -31,20 +30,78 @@ logger = structlog.get_logger(__name__)
 APP_VERSION = "1.0.0"
 
 
-class _SpaStaticFiles(StaticFiles):
-    """Serve the built single-page app, falling back to index.html.
+class SpaFallbackMiddleware:
+    """Serve the built frontend around the API.
 
-    Client-side routes (/clouds, /ciso, /findings …) have no file on disk, so a
-    plain StaticFiles mount answers 404 there and a browser refresh breaks.
+    Existing files under the build root are served directly; any other navigation
+    path gets index.html so client-side routes survive a refresh. API paths are
+    passed straight through, and a missing file (e.g. a stale hashed asset) is a
+    real 404 rather than the HTML shell.
+
+    This is middleware rather than a catch-all route because an APIRoute matching
+    `/{path}` competes with FastAPI's lazily included sub-routers and can shadow
+    legitimate endpoints such as `GET /api/v1/tenants`.
     """
 
-    async def get_response(self, path: str, scope: MutableMapping[str, Any]):
-        try:
-            return await super().get_response(path, scope)
-        except StarletteHTTPException as exc:
-            if exc.status_code == 404 and path != "index.html":
-                return await super().get_response("index.html", scope)
-            raise
+    _PASSTHROUGH = {"api", "static", "docs", "redoc", "openapi.json"}
+
+    def __init__(self, app: Any, static_dir: Path) -> None:
+        self.app = app
+        self.root = static_dir.resolve()
+        self.index = self.root / "index.html"
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        if scope["type"] != "http" or scope["method"] not in ("GET", "HEAD"):
+            await self.app(scope, receive, send)
+            return
+
+        path = scope["path"].lstrip("/")
+        if path.split("/", 1)[0] in self._PASSTHROUGH:
+            await self.app(scope, receive, send)
+            return
+
+        if path:
+            candidate = (self.root / path).resolve()
+            if candidate.is_file() and candidate.is_relative_to(self.root):
+                await FileResponse(candidate)(scope, receive, send)
+                return
+            # a missing asset must not be answered with the HTML shell
+            if "." in path.rsplit("/", 1)[-1]:
+                await self.app(scope, receive, send)
+                return
+
+        swallowed = False
+
+        async def relay(message: Any) -> None:
+            nonlocal swallowed
+            if message["type"] == "http.response.start":
+                if message["status"] == 404:
+                    swallowed = True
+                    return
+            elif swallowed:
+                return
+            await send(message)
+
+        await self.app(scope, receive, relay)
+        if swallowed:
+            await FileResponse(self.index)(scope, receive, send)
+
+
+def _spa_directory() -> Path | None:
+    """Locate the built frontend, if one was bundled.
+
+    CI and the installers copy the Vite output to `unimonitor/static`; Docker
+    images do the same. `UNIMONITOR_STATIC_DIR` overrides it for tests.
+    """
+    candidates: list[Path] = []
+    override = os.environ.get("UNIMONITOR_STATIC_DIR")
+    if override:
+        candidates.append(Path(override))
+    candidates.extend([Path(__file__).parent / "static", Path("static")])
+    for candidate in candidates:
+        if (candidate / "index.html").is_file():
+            return candidate
+    return None
 
 
 @asynccontextmanager
@@ -185,19 +242,13 @@ def create_app() -> FastAPI:
     app.include_router(api_v1_router, prefix=settings.API_V1_PREFIX)
 
     # ── Bundled single-page frontend ─────────────────────────
-    # The CI/installer builds copy the Vite output to unimonitor/static; Docker
-    # images use ./static. Mounted last so API routes always win.
-    candidates: list[Path] = []
-    override = os.environ.get("UNIMONITOR_STATIC_DIR")
-    if override:
-        candidates.append(Path(override))
-    candidates.extend([Path(__file__).parent / "static", Path("static")])
-
-    for spa_dir in candidates:
-        if (spa_dir / "index.html").is_file():
-            app.mount("/", _SpaStaticFiles(directory=str(spa_dir), html=True), name="spa")
-            logger.info("spa_served", directory=str(spa_dir))
-            break
+    # Assets are mounted under their real prefix; navigation is handled by a
+    # catch-all route. Mounting at "/" is deliberately avoided: a mount matches
+    # partial paths and answers 404/405 for API routes that live beneath it.
+    spa_dir = _spa_directory()
+    if spa_dir is not None:
+        app.add_middleware(SpaFallbackMiddleware, static_dir=spa_dir)
+        logger.info("spa_served", directory=str(spa_dir))
 
     return app
 
