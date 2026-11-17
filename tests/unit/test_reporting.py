@@ -265,6 +265,32 @@ class TestProviderBreakdown:
         assert gen._provider_breakdown() == []
 
 
+REPORT_TYPES = ["full", "executive", "compliance", "board", "audit", "operational"]
+
+
+def _pdf_text(path: str) -> str:
+    """Extract visible strings from a reportlab PDF.
+
+    ReportLab writes content streams as ``/ASCII85Decode /FlateDecode``, so each
+    stream is ASCII85-decoded and then inflated before the text operators show up.
+    """
+    import base64
+    import contextlib
+    import re
+    import zlib
+
+    raw = Path(path).read_bytes()
+    chunks: list[bytes] = []
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", raw, re.S):
+        data = match.group(1).strip()
+        with contextlib.suppress(ValueError):  # not every stream is ASCII85-encoded
+            data = base64.a85decode(data, adobe=True)
+        with contextlib.suppress(zlib.error):  # ...or Flate-compressed
+            data = zlib.decompress(data)
+        chunks.append(data)
+    return b"\n".join(chunks).decode("latin-1")
+
+
 class TestPdfProviderSections:
     def test_pdf_renders_with_multiple_providers(self, tmp_path: Path):
         import asyncio
@@ -274,6 +300,22 @@ class TestPdfProviderSections:
         path = asyncio.run(_generator(PdfReportGenerator, tmp_path).generate("full"))
         assert Path(path).exists()
         assert Path(path).stat().st_size > 1000
+
+    @pytest.mark.parametrize("report_type", REPORT_TYPES)
+    def test_per_cloud_sections_in_every_report_type(self, tmp_path: Path, report_type: str):
+        """The aggregate summary stays first, and cloud sections follow for any type."""
+        import asyncio
+
+        from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+        path = asyncio.run(_generator(PdfReportGenerator, tmp_path).generate(report_type))
+        text = _pdf_text(path)
+
+        assert "Executive Summary" in text
+        assert "Cloud Provider Coverage" in text
+        assert "Findings by Cloud Provider" in text
+        # provider sections come after the aggregate summary
+        assert text.index("Executive Summary") < text.index("Cloud Provider Coverage")
 
 
 class TestDocxGenerator:
@@ -299,8 +341,31 @@ class TestDocxGenerator:
         assert "Microsoft 365" in text
         assert "Amazon Web Services" in text
         assert "Google Cloud Platform" in text
-        # aggregate summary is retained for the single org
+        # aggregate summary is retained for the single org, and comes first
         assert "Executive Summary" in text
+        assert text.index("Executive Summary") < text.index("Cloud Provider Coverage")
+
+    @pytest.mark.parametrize("report_type", REPORT_TYPES)
+    def test_per_cloud_sections_in_every_report_type(self, tmp_path: Path, report_type: str):
+        pytest.importorskip("docx")
+        import asyncio
+
+        from docx import Document
+
+        from unimonitor.reporting.docx_generator import DocxReportGenerator
+
+        path = asyncio.run(_generator(DocxReportGenerator, tmp_path).generate(report_type))
+        doc = Document(path)
+        text = "\n".join(p.text for p in doc.paragraphs)
+        for table in doc.tables:
+            for row in table.rows:
+                text += "\n" + " | ".join(cell.text for cell in row.cells)
+
+        assert "Executive Summary" in text
+        assert "Cloud Provider Coverage" in text
+        assert "Findings by Cloud Provider" in text
+        assert "Amazon Web Services" in text
+        assert text.index("Executive Summary") < text.index("Cloud Provider Coverage")
 
     def test_docx_requires_python_docx(self, tmp_path: Path, monkeypatch):
         from unimonitor.reporting import docx_generator

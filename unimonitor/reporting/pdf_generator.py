@@ -130,17 +130,21 @@ class PdfReportGenerator(BaseReportGenerator):
         story.append(sev_table)
         story.append(Spacer(1, 0.8 * cm))
 
+        # Shared table layout for the per-cloud and detail sections
+        col_widths = [2.5 * cm, 7 * cm, 2.5 * cm, 4 * cm]
+        cell_style = ParagraphStyle("cell", fontSize=8, wordWrap="CJK")
+
         # ── Cloud provider breakdown (keeps the aggregate figures above) ──────
         providers = self._provider_breakdown()
         if providers:
             story.append(Paragraph("Cloud Provider Coverage", h2))
             story.append(Spacer(1, 0.3 * cm))
             provider_rows = [["Provider", "Findings", "Critical", "High", "Coverage", "Score"]]
-            cell_style = ParagraphStyle("provcell", fontSize=9, wordWrap="CJK")
+            prov_cell_style = ParagraphStyle("provcell", fontSize=9, wordWrap="CJK")
             for p in providers:
                 provider_rows.append(
                     [
-                        Paragraph(f"<b>{p['short_name']}</b> — {p['name']}", cell_style),
+                        Paragraph(f"<b>{p['short_name']}</b> — {p['name']}", prov_cell_style),
                         str(p["total"]),
                         str(p["severity_counts"]["CRITICAL"]),
                         str(p["severity_counts"]["HIGH"]),
@@ -170,7 +174,6 @@ class PdfReportGenerator(BaseReportGenerator):
             story.append(Paragraph("Findings Detail", h2))
             story.append(Spacer(1, 0.3 * cm))
 
-            col_widths = [2.5 * cm, 7 * cm, 2.5 * cm, 4 * cm]
             findings_data = [["Control ID", "Title", "Severity", "Status"]]
             sorted_findings = sorted(
                 self.findings,
@@ -178,7 +181,6 @@ class PdfReportGenerator(BaseReportGenerator):
                     (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5
                 ),
             )
-            cell_style = ParagraphStyle("cell", fontSize=8, wordWrap="CJK")
             for f in sorted_findings[:200]:  # cap at 200 rows
                 sev = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
                 state = self._get_finding_attr(f, "state", "not_implemented") or "not_implemented"
@@ -209,8 +211,8 @@ class PdfReportGenerator(BaseReportGenerator):
             findings_table.setStyle(TableStyle(f_style))
             story.append(findings_table)
 
-        # ── Per-provider sections ────────────────────────────────────────────
-        if report_type == "full" and providers:
+        # ── Per-provider sections (all report types) ─────────────────────────
+        if providers:
             story.append(Spacer(1, 0.8 * cm))
             story.append(Paragraph("Findings by Cloud Provider", h2))
             for p in providers:

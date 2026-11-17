@@ -945,10 +945,15 @@ async def dashboard_ciso(
         coverages = await compute_framework_coverage(db, tenant_id=tenant_id)
     except Exception:  # noqa: BLE001 - coverage must never break the CISO board
         coverages = {}
+
+    # Framework ids are slugged (iso27001-2022); show the display name instead.
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+
+    framework_names = {fw["id"]: fw["name"] for fw in SUPPORTED_FRAMEWORKS}
     framework_gaps = [
         FrameworkCoverage(
             framework_id=fw_id,
-            framework_name=fw_id.replace("-", " ").title(),
+            framework_name=framework_names.get(fw_id, fw_id.replace("-", " ").title()),
             coverage_pct=cov.get("coverage_pct", 0.0),
             controls_total=cov.get("controls_total", 0),
             controls_passed=cov.get("controls_passed", 0),

@@ -86,12 +86,14 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 - Fixed a latent bug: `compute_framework_coverage` was imported by the dashboard and GRC APIs but
   never existed, so framework coverage silently returned empty. It now exists, and it normalises the
   hyphenated API framework ids (`iso27001-2022`) against the underscored control-mapping keys.
-- Compliance reports break down by cloud: the aggregate single-org summary is unchanged, then a
-  colour-coded “Cloud Provider Coverage” table and one section per provider (own score, control
-  states, findings) follow. PDF and DOCX both do this; DOCX did not exist before (README claimed it),
-  so `reporting/docx_generator.py` was added with `python-docx`.
+- Compliance reports break down by cloud: the aggregate single-org summary is unchanged and comes
+  first, then a colour-coded “Cloud Provider Coverage” table and one section per provider (own score,
+  control states, findings) follow. PDF and DOCX emit these sections for **every** report type
+  (full, executive, compliance, board, audit, operational); DOCX did not exist before (README claimed
+  it), so `reporting/docx_generator.py` was added with `python-docx`.
 - CISO dashboard (`GET /dashboard/ciso`, `/ciso`): residual risk across every cloud, exposure table
-  per provider, top risks with provider labels, weakest frameworks and a 30-day posture trend.
+  per provider, top risks with provider labels, weakest frameworks (real framework display names, not
+  title-cased ids) and a 30-day posture trend.
 - Windows packaging repaired: `pyinstaller==6.10.0` pinned in README never existed for modern
   Pythons (now `>=6.16,<7`), the spec listed a removed `unimonitor.secrets.factory` hidden import and
   shipped without python-docx data, the PyInstaller hook crashed on production settings validation,

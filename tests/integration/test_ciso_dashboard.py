@@ -75,3 +75,16 @@ class TestCisoDashboard:
         coverage = [fw["coverage_pct"] for fw in r.json()["weakest_frameworks"]]
         assert coverage == sorted(coverage)
         assert len(coverage) <= 5
+
+    async def test_weakest_frameworks_use_display_names(self, client: AsyncClient, auth_headers: dict):
+        from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+
+        names = {fw["id"]: fw["name"] for fw in SUPPORTED_FRAMEWORKS}
+        r = await client.get("/api/v1/dashboard/ciso", headers=auth_headers)
+        frameworks = r.json()["weakest_frameworks"]
+
+        assert frameworks, "expected framework coverage from the control library"
+        for fw in frameworks:
+            assert fw["framework_name"] == names[fw["framework_id"]]
+        # a slugged id would have rendered as "Iso27001 2022" before the fix
+        assert any("-" in fw["framework_id"] for fw in frameworks)

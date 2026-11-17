@@ -110,8 +110,8 @@ class DocxReportGenerator(BaseReportGenerator):
                     run.font.bold = True
                     run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
-        # ── Per-provider sections ─────────────────────────────────────────────
-        if report_type == "full" and providers:
+        # ── Per-provider sections (every report type) ─────────────────────────
+        if providers:
             doc.add_heading("Findings by Cloud Provider", level=1)
             for p in providers:
                 heading = doc.add_heading(p["name"], level=2)
