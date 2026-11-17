@@ -94,6 +94,19 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 - CISO dashboard (`GET /dashboard/ciso`, `/ciso`): residual risk across every cloud, exposure table
   per provider, top risks with provider labels, weakest frameworks (real framework display names, not
   title-cased ids) and a 30-day posture trend.
+- Dependency audit repaired: the CI "Python Security Audit" job failed on python-jose 3.5.0
+  (PYSEC-2026-4298) and its `ecdsa` dependency (PYSEC-2026-1325), neither with an upstream fix.
+  JWT handling moved to PyJWT (already present via msal), python-jose removed from `pyproject.toml`,
+  and a clean `pip install -e .` now audits with no known vulnerabilities.
+- Added `.github/workflows/windows-installer.yml`: a dispatch-only workflow that builds the NSIS
+  `.exe` plus a portable zip on `windows-latest`, independent of the release pipeline.
+- Code review (2026-11-17) found three integration defects beyond the audit failure, all fixed with
+  tests: `unimonitor/worker/tasks/__init__.py` exported nothing, so every API report request hit the
+  “Celery unavailable” branch and the task never ran; `POST /reports/generate` required
+  `tenant_id`/`report_type`/`report_format` while the UI sends `run_id`/`formats` (422 on every
+  click), and it passed kwargs the worker task does not accept; the CISO severity tiles counted
+  implemented findings as open risk. Also cached the per-provider control library lookup, which was
+  re-reading all control YAML four times per dashboard request.
 - Windows packaging repaired: `pyinstaller==6.10.0` pinned in README never existed for modern
   Pythons (now `>=6.16,<7`), the spec listed a removed `unimonitor.secrets.factory` hidden import and
   shipped without python-docx data, the PyInstaller hook crashed on production settings validation,
@@ -134,7 +147,7 @@ None.
 3. Remaining frontend majors: `react` 18 → 19, `@vitejs/plugin-react` 4 → 6.
 4. ~~Control library depth~~ — closed 2026-11-16 (100 → 158 controls); the remaining need is
    collector data coverage for the new controls, not definitions. PIM depth stays thin (4 controls).
-5. `ecdsa` / `python-jose` CVEs — decide between accepting the risk and migrating to `pyjwt`.
+5. ~~`ecdsa` / `python-jose` CVEs~~ — closed 2026-11-17: migrated to PyJWT, both packages removed; `pip-audit` clean.
 6. `PROJECT_AUDIT.md` (L-001, deferred by owner decision).
 7. Test coverage re-measurement (last measurement 62% at `79dfb98`).
 

@@ -60,6 +60,10 @@ class TestCisoDashboard:
 
         assert data["open_findings"] == 1
         assert len(data["top_risks"]) == 1
+        # severity tiles count open risk only — the implemented GCP control is not exposure
+        assert data["severity_totals"]["critical"] == 1
+        assert data["severity_totals"]["high"] == 0
+        assert data["severity_totals"]["total"] == 1
         risk = data["top_risks"][0]
         assert risk["provider_id"] == "aws"
         assert risk["provider_name"] == "Amazon Web Services"

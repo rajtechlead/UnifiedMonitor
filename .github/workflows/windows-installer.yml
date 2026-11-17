@@ -1,0 +1,169 @@
+name: Windows Installer
+
+# Builds UniMonitor-Setup-<version>-x64.exe on a Windows runner.
+#
+# Dispatch-only on purpose: the release pipeline (release.yml) already builds the
+# installer on a version tag, and CI runs on every push — this gives a manual
+# "just build me the installer" path without burning extra Actions minutes on
+# every commit.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Installer version (e.g. 1.0.0)"
+        required: false
+        default: "1.0.0"
+
+env:
+  PYTHON_VER: "3.12"
+  NODE_VER: "20"
+
+jobs:
+  build-installer:
+    name: Build Windows Installer (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Python + build dependencies ────────────────────────────────────────
+      - name: Set up Python ${{ env.PYTHON_VER }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VER }}
+          cache: pip
+
+      - name: Install PyInstaller and app dependencies
+        shell: pwsh
+        run: |
+          python -m pip install --upgrade pip
+          # 6.15+ is required for Python 3.12/3.13/3.14
+          pip install "pyinstaller>=6.16.0,<7"
+          pip install -e "."
+
+      # ── Frontend (embedded into the bundle) ───────────────────────────────
+      - name: Set up Node.js ${{ env.NODE_VER }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VER }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build React frontend
+        shell: pwsh
+        run: |
+          cd frontend
+          npm ci
+          npm run build
+          if (!(Test-Path "../unimonitor/static")) { mkdir "../unimonitor/static" }
+          Copy-Item -Recurse -Force dist/* ../unimonitor/static/
+
+      # ── Freeze the application ────────────────────────────────────────────
+      - name: Build with PyInstaller
+        shell: pwsh
+        run: |
+          pyinstaller deploy/windows/unimonitor.spec --clean --noconfirm
+          if (!(Test-Path "dist/UniMonitor/UniMonitor.exe")) {
+            Write-Error "PyInstaller failed — UniMonitor.exe not found"
+            exit 1
+          }
+          Write-Host "Packaged files:" (Get-ChildItem dist/UniMonitor -Recurse | Measure-Object).Count
+
+      - name: Smoke-test packaged executable
+        shell: pwsh
+        run: |
+          $out = "exe-stdout.txt"
+          $err = "exe-stderr.txt"
+          $p = Start-Process -FilePath "dist/UniMonitor/UniMonitor.exe" `
+            -ArgumentList "--help" -NoNewWindow -PassThru `
+            -RedirectStandardOutput $out -RedirectStandardError $err
+          if (-not $p.WaitForExit(90000)) {
+            $p.Kill()
+            Write-Error "UniMonitor.exe --help did not exit within 90s"
+            exit 1
+          }
+          Get-Content $out, $err -ErrorAction SilentlyContinue | Select-Object -First 25
+          if ($p.ExitCode -ne 0) {
+            Write-Error "UniMonitor.exe --help exited with $($p.ExitCode)"
+            exit 1
+          }
+          if (-not (Select-String -Path $out -Pattern "Usage" -Quiet)) {
+            Write-Error "UniMonitor.exe --help produced no usage text"
+            exit 1
+          }
+
+      # ── Windows service helper + docs ─────────────────────────────────────
+      - name: Download NSSM (Windows Service helper)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile nssm.zip
+          Expand-Archive nssm.zip -DestinationPath nssm_tmp
+          Copy-Item nssm_tmp/nssm-2.24/win64/nssm.exe dist/UniMonitor/nssm.exe
+          Remove-Item -Recurse nssm.zip, nssm_tmp
+
+      - name: Copy INSTALL.md into bundle
+        shell: pwsh
+        run: |
+          if (Test-Path "INSTALL.md") { Copy-Item INSTALL.md dist/UniMonitor/INSTALL.md }
+
+      # ── NSIS wrapper ──────────────────────────────────────────────────────
+      - name: Resolve installer version
+        shell: pwsh
+        run: |
+          $version = "${{ github.event.inputs.version }}"
+          if (!$version) { $version = "1.0.0" }
+          $version = $version.TrimStart('v')
+          Write-Host "Building installer for version $version"
+          echo "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV
+
+      - name: Verify branding assets
+        shell: pwsh
+        run: |
+          # NSIS aborts if its icon is missing, so fail loudly with the fix.
+          if (!(Test-Path "branding/icon.ico")) {
+            Write-Error "branding/icon.ico is missing. Regenerate it with: python scripts/make_icon.py"
+            exit 1
+          }
+          Write-Host "Using branding/icon.ico" ((Get-Item branding/icon.ico).Length) "bytes"
+
+      - name: Install NSIS
+        shell: pwsh
+        run: |
+          choco install nsis --no-progress -y
+          makensis /VERSION
+
+      - name: Build NSIS installer
+        shell: pwsh
+        run: |
+          makensis `
+            /V4 `
+            "/DVERSION=${{ env.INSTALLER_VERSION }}" `
+            deploy/windows/install.nsi
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "makensis failed with exit code $LASTEXITCODE"
+            exit 1
+          }
+          $exe = "dist/UniMonitor-Setup-${{ env.INSTALLER_VERSION }}-x64.exe"
+          if (!(Test-Path $exe)) {
+            Write-Error "NSIS reported success but $exe is missing"
+            exit 1
+          }
+          $sizeMb = [math]::Round((Get-Item $exe).Length / 1MB, 1)
+          Write-Host "Installer created: $exe ($sizeMb MB)"
+
+      - name: Create portable zip
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/UniMonitor/* `
+            -DestinationPath "dist/UniMonitor-${{ env.INSTALLER_VERSION }}-x64-portable.zip"
+
+      # ── Artifacts ─────────────────────────────────────────────────────────
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-${{ env.INSTALLER_VERSION }}
+          retention-days: 30
+          path: |
+            dist/UniMonitor-Setup-*.exe
+            dist/UniMonitor-*-portable.zip
+          if-no-files-found: error

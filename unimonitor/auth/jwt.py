@@ -5,7 +5,11 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from jose import ExpiredSignatureError, JWTError, jwt
+# PyJWT is already a transitive dependency (via msal) and is maintained; python-jose
+# pulled in ecdsa, which has open advisories with no fixed release (PYSEC-2026-1325).
+import jwt
+from jwt import ExpiredSignatureError
+from jwt import InvalidTokenError as JWTError
 
 from unimonitor.config import get_settings
 from unimonitor.exceptions import InvalidTokenError, TokenExpiredError

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from functools import cache
 from typing import Annotated, Any
 
 import structlog
@@ -614,12 +615,22 @@ class CloudProviderDetailResponse(BaseModel):
     generated_at: datetime
 
 
-def _provider_controls(provider_id: str) -> list:
-    """Control definitions owned by one provider."""
+@cache
+def _provider_controls_cached(provider_id: str) -> tuple:
+    """Control definitions owned by one provider (loaded once per process).
+
+    The control YAML is static at runtime and every dashboard request asks for
+    all providers, so re-reading the library per provider was pure overhead.
+    """
     from unimonitor.grc.control_loader import ControlLoader
     from unimonitor.grc.providers import provider_for_service
 
-    return [c for c in ControlLoader().load_all() if (p := provider_for_service(c.service)) and p.id == provider_id]
+    return tuple(c for c in ControlLoader().load_all() if (p := provider_for_service(c.service)) and p.id == provider_id)
+
+
+def _provider_controls(provider_id: str) -> list:
+    """Control definitions owned by one provider (a copy callers may sort)."""
+    return list(_provider_controls_cached(provider_id))
 
 
 def _count_states(findings: list) -> tuple[FindingCounts, StateCounts, float, float, float]:
@@ -939,7 +950,16 @@ async def dashboard_ciso(
     risks.sort(key=lambda r: r.risk_score, reverse=True)
 
     _, state_totals, sec, comp, risk = _count_states(findings)
-    severity_totals, _, _, _, _ = _count_states(findings)
+    # Board-level severity must count *open* risk only; implemented controls and
+    # not-applicable findings are not exposure.
+    severity_totals = FindingCounts(
+        critical=sum(1 for r in risks if r.severity == "critical"),
+        high=sum(1 for r in risks if r.severity == "high"),
+        medium=sum(1 for r in risks if r.severity == "medium"),
+        low=sum(1 for r in risks if r.severity == "low"),
+        informational=sum(1 for r in risks if r.severity == "informational"),
+        total=len(risks),
+    )
 
     try:
         coverages = await compute_framework_coverage(db, tenant_id=tenant_id)

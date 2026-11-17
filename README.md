@@ -182,11 +182,12 @@ makensis /DVERSION=1.0.0 deploy\windows\install.nsi
 # Output: dist/UniMonitor-Setup-1.0.0-x64.exe
 ```
 
-You don't need a Windows machine: the [release workflow](.github/workflows/release.yml)
-builds the installer on `windows-latest` and uploads it as an artifact. It runs
-automatically on a `v*.*.*` tag, or on demand from **Actions → Release → Run
-workflow** (`workflow_dispatch`, with an optional version input). The NSIS
-wizard needs `branding/icon.ico`, which is checked in and regenerable with
+You don't need a Windows machine. **Actions → Windows Installer → Run workflow**
+([windows-installer.yml](.github/workflows/windows-installer.yml)) builds
+`UniMonitor-Setup-<version>-x64.exe` plus a portable zip on `windows-latest` and
+attaches them to the run. The [release workflow](.github/workflows/release.yml)
+does the same automatically on a `v*.*.*` tag, alongside the Docker image. The
+NSIS wizard needs `branding/icon.ico`, which is checked in and regenerable with
 `python scripts/make_icon.py`.
 
 ---

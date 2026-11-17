@@ -25,9 +25,18 @@ ReportFormat = Literal["pdf", "docx", "excel", "csv", "json"]
 
 
 class ReportGenerateRequest(BaseModel):
-    tenant_id: str
-    report_type: ReportType
-    report_format: ReportFormat
+    """Report request.
+
+    The UI selects an assessment run and one or more formats; the legacy
+    ``tenant_id`` / ``report_format`` fields are still accepted so existing
+    API clients keep working. ``tenant_id`` is derived from the run otherwise.
+    """
+
+    run_id: str | None = None
+    formats: list[ReportFormat] | None = None
+    tenant_id: str | None = None
+    report_type: ReportType = "executive"
+    report_format: ReportFormat | None = None
     title: str | None = None
     # Optional date range for filtering findings
     start_date: datetime | None = None
@@ -65,12 +74,38 @@ _reports_store: dict[str, dict] = {}
 # ── Endpoints ────────────────────────────────────────────────
 
 
+async def _tenant_for_run(run_id: str) -> str | None:
+    """Resolve the owning tenant for an assessment run (None when unknown)."""
+    try:
+        from sqlalchemy import select
+
+        from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun
+
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(Assessment.tenant_id).join(AssessmentRun, AssessmentRun.assessment_id == Assessment.id).where(AssessmentRun.id == run_id)
+            )
+            return result.scalar_one_or_none()
+    except Exception as exc:  # noqa: BLE001 - DB down means we cannot resolve the run
+        logger.warning("report_run_lookup_failed", run_id=run_id, error=str(exc))
+        return None
+
+
 @router.post("/generate", response_model=ReportStatusResponse, status_code=status.HTTP_202_ACCEPTED)
 async def generate_report(
     body: ReportGenerateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
 ) -> ReportStatusResponse:
-    """Queue a report generation task."""
+    """Queue a report generation task for one assessment run."""
+    if not body.run_id:
+        raise HTTPException(status_code=400, detail="run_id is required to generate a report")
+
+    formats = body.formats or ([body.report_format] if body.report_format else ["pdf"])
+    tenant_id = body.tenant_id or await _tenant_for_run(body.run_id)
+    if not tenant_id:
+        raise HTTPException(status_code=404, detail=f"Assessment run '{body.run_id}' not found")
+
     report_id = str(uuid.uuid4())
     title = body.title or f"{body.report_type.title()} Report"
     now = datetime.now(UTC)
@@ -80,8 +115,8 @@ async def generate_report(
         "task_id": None,
         "status": "pending",
         "report_type": body.report_type,
-        "report_format": body.report_format,
-        "tenant_id": body.tenant_id,
+        "report_format": formats[0],
+        "tenant_id": tenant_id,
         "title": title,
         "created_at": now,
         "completed_at": None,
@@ -91,24 +126,24 @@ async def generate_report(
         "config": body.model_dump(mode="json"),
     }
 
-    # Try Celery dispatch
+    # Dispatch to Celery (the worker owns file generation + report row updates)
     try:
         from unimonitor.worker.tasks import generate_report_task
 
         task = generate_report_task.delay(
             report_id=report_id,
+            tenant_id=tenant_id,
+            run_id=body.run_id,
+            formats=formats,
             report_type=body.report_type,
-            report_format=body.report_format,
-            tenant_id=body.tenant_id,
-            title=title,
-            config=body.model_dump(mode="json"),
+            requested_by=str(current_user.id),
         )
         report_record["task_id"] = task.id
         report_record["status"] = "queued"
     except Exception as exc:
         logger.warning("report_celery_unavailable", error=str(exc))
-        # Synchronous fallback
-        report_record["status"] = "queued"
+        report_record["status"] = "failed"
+        report_record["error_message"] = "Report queue unavailable; check the Celery worker"
 
     # Persist to DB if available, else in-memory
     try:

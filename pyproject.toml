@@ -59,7 +59,9 @@ dependencies = [
     "opentelemetry-instrumentation-sqlalchemy>=0.46b0",
 
     # Auth / security
-    "python-jose[cryptography]>=3.3.0",
+    # JWT: PyJWT (also required by msal). python-jose was dropped because its
+    # ecdsa dependency carries unfixed advisories (PYSEC-2026-1325, PYSEC-2026-4298).
+    "pyjwt[crypto]>=2.8.0",
     "bcrypt>=4.0.0",
     "cryptography>=42.0.0",
 

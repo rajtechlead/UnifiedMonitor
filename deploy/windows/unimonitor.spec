@@ -54,8 +54,9 @@ hiddenimports = [
     "bcrypt",
     # Cryptography
     "cryptography.hazmat.backends.openssl",
-    # JOSE JWT
-    "jose.jwt",
+    # JWT (PyJWT)
+    "jwt",
+    "jwt.algorithms",
     # Structlog
     "structlog._frames",
     # YAML

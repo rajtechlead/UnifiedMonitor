@@ -146,11 +146,13 @@ jobs:
           cache: pip
 
       - name: Install pip-audit
-        run: pip install pip-audit
+        # Upgrade pip itself: a runner's bundled pip can be older than the
+        # versions pip-audit flags, which would fail the gate for nothing.
+        run: python -m pip install --upgrade pip pip-audit
 
       - name: Audit dependencies
+        # A real gate now: the dependency tree audits clean (JWT moved to PyJWT).
         run: pip install -e . --quiet && pip-audit
-        continue-on-error: true  # informational; don't block merges for transitive CVEs
 
   # ── Docker build smoke-test ───────────────────────────────────────────────
   docker-build:

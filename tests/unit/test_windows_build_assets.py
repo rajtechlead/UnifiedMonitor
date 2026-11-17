@@ -18,6 +18,7 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / "deploy" / "windows" / "unimonitor.spec"
 NSI = ROOT / "deploy" / "windows" / "install.nsi"
 RELEASE = ROOT / ".github" / "workflows" / "release.yml"
+INSTALLER_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer.yml"
 
 
 def _spec_hiddenimports() -> list[str]:
@@ -81,3 +82,17 @@ def test_release_workflow_builds_installer_on_demand():
 @pytest.mark.parametrize("filename", ["unimonitor.spec", "install.nsi"])
 def test_windows_build_files_present(filename: str):
     assert (ROOT / "deploy" / "windows" / filename).exists()
+
+
+def test_standalone_installer_workflow_is_dispatchable():
+    workflow = yaml.safe_load(INSTALLER_WORKFLOW.read_text())
+    triggers = workflow.get("on", workflow.get(True))
+    assert "workflow_dispatch" in triggers, "manual installer build must not need a commit or tag"
+    assert "push" not in triggers, "keep installer builds manual so they don't burn Actions minutes"
+
+    text = INSTALLER_WORKFLOW.read_text()
+    assert "pyinstaller>=6.16.0,<7" in text
+    assert "if-no-files-found: error" in text
+    assert "branding/icon.ico" in text, "workflow must fail fast when the NSIS icon is missing"
+    assert "--help" in text, "workflow must smoke-test the frozen executable"
+    assert "makensis" in text and "UniMonitor-Setup-" in text

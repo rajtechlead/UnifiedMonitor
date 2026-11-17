@@ -430,10 +430,10 @@ NSIS must be on your `PATH`. After installing, verify:
 makensis /VERSION
 ```
 
-> **No Windows machine?** The `Release` GitHub workflow builds this same installer on
-> `windows-latest` — either on a `v*.*.*` tag, or manually via **Actions → Release →
-> Run workflow**. The finished `UniMonitor-Setup-<version>-x64.exe` is attached to the
-> workflow run and to the GitHub Release.
+> **No Windows machine?** Run **Actions → Windows Installer → Run workflow**. The
+> `windows-installer.yml` job builds this same installer on `windows-latest` and attaches
+> `UniMonitor-Setup-<version>-x64.exe` plus a portable zip to the run. The `Release`
+> workflow does the same automatically on a `v*.*.*` tag.
 
 ### Step-by-Step Build
 

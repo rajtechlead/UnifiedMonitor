@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 # Use in-memory SQLite for tests
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-testing-only-32chars")
+# Settings reads UNIMONITOR_SECRET_KEY; a >=32 byte value avoids PyJWT's
+# InsecureKeyLengthWarning for HS256 and mirrors a real deployment.
+os.environ.setdefault("UNIMONITOR_SECRET_KEY", "test-secret-key-for-testing-only-32chars")
 os.environ.setdefault("UNIMONITOR_ENV", "test")  # avoids production secret-key validation
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")

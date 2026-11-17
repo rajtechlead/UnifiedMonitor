@@ -52,7 +52,7 @@ UniMonitor enforces a zero-plaintext-secrets policy:
 
 ### Authentication & Authorisation
 
-- **JWT** (python-jose, RS256 or HS256) with configurable expiry (default 60 min access, 7 day refresh)
+- **JWT** (PyJWT, HS256 by default, algorithm pinned via `JWT_ALGORITHM`) with configurable expiry (default 60 min access, 7 day refresh)
 - **JWT blacklist**: revoked tokens stored in Redis with TTL = remaining token lifetime
 - **Entra ID SSO** (MSAL / OAuth 2.0 auth-code flow) for enterprise users
 - **Local login** (bcrypt, minimum cost factor 12) for installer / dev environments

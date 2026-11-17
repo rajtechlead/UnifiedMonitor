@@ -25,12 +25,14 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 536/536 | 60s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 555/555 | 56s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
 | CISO dashboard | ✅ API + UI | `/dashboard/ciso` and `/ciso` page; cloud exposure, top risks, framework gaps, trend |
-| Report exports | ✅ PDF + DOCX | per-cloud sections with provider colours; aggregate summary retained |
+| Report exports | ✅ PDF + DOCX | per-cloud sections in every report type; aggregate summary retained |
+| Dependency audit | ✅ Clean | python-jose/ecdsa removed (PyJWT); pip-audit reports no known vulnerabilities |
+| Installer workflow | ✅ On demand | `windows-installer.yml` dispatch builds the .exe + portable zip |
 | Windows installer | ✅ CI path repaired | PyInstaller pin, icon, hidden imports, NSIS plugin and fail-fast checks fixed |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
 | Ruff format | ✅ CLEAN | 132 files |
@@ -46,8 +48,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 466 | across 25 files |
-| Integration tests | ✅ PASS | 70 | health, e2e journeys, dashboard, cloud and CISO views |
+| Unit tests | ✅ PASS | 479 | across 25 files |
+| Integration tests | ✅ PASS | 76 | health, e2e journeys, dashboard, cloud, CISO and report APIs |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
@@ -107,10 +109,11 @@ crosswalk chart, executive scorecard export.
 
 | Package | Version | CVE | Fix Available |
 |---|---|---|---|
-| ecdsa | 0.19.2 | PYSEC-2026-1325 | No (latest affected) |
-| python-jose | 3.5.0 | PYSEC-2026-4298 | No (latest affected) |
+| ~~ecdsa~~ | 0.19.2 | PYSEC-2026-1325 | ✅ Removed with python-jose |
+| ~~python-jose~~ | 3.5.0 | PYSEC-2026-4298 | ✅ Replaced by PyJWT |
 
-Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjwt` (P7-008).
+Action: security debt closed (L-004, L-005) by migrating to PyJWT; `pip-audit` on a clean
+runtime install reports no known vulnerabilities (verified 2026-11-17).
 
 ## Production Readiness Score (revised 2026-11-16)
 
@@ -128,8 +131,8 @@ Action: security debt recorded (L-004, L-005); decide accept-vs-migrate to `pyjw
 
 - [x] Backend Build Passes
 - [x] Frontend Build Passes
-- [x] Unit Tests Pass (466)
-- [x] Integration Tests Pass (70)
+- [x] Unit Tests Pass (479)
+- [x] Integration Tests Pass (76)
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)

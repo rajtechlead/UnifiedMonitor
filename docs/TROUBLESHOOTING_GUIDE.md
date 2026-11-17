@@ -120,7 +120,7 @@ An admin must grant consent for the app's API permissions:
 
 ---
 
-### `python-jose` JWT decode error — `jose.exceptions.JWTError`
+### JWT decode error — `jwt.InvalidTokenError` (PyJWT)
 
 **Causes and fixes:**
 1. Token was issued by a different instance with a different `SECRET_KEY`

@@ -90,11 +90,11 @@ This document tracks the production readiness of UnifiedMonitor. Use it as a che
 ### Dependencies
 | Package | CVE | Status | Notes |
 |---|---|---|---|
-| `ecdsa 0.19.2` | PYSEC-2026-1325 | ⚠️ No fix | Latest version; monitor for patch |
-| `python-jose 3.5.0` | PYSEC-2026-4298 | ⚠️ No fix | Latest version; monitor for patch |
+| ~~`python-jose 3.5.0`~~ | PYSEC-2026-4298 | ✅ Resolved | Removed; JWT now uses PyJWT (already present via msal) |
+| ~~`ecdsa 0.19.2`~~ | PYSEC-2026-1325 | ✅ Resolved | Removed with its only consumer, python-jose |
 
-> **Action:** Subscribe to GitHub Dependabot alerts and the packages' release feeds.  
-> Neither CVE has an exploitable path in UniMonitor's usage pattern (jose is used for HS256 JWT internally only).
+> `pip-audit` on a clean `pip install -e .` now reports no known vulnerabilities.
+> Keep Dependabot alerts enabled for future advisories.
 
 ### Recommended Hardening Steps
 
@@ -132,7 +132,7 @@ Measured on a 2-core / 4 GB VM with 50 tenants and 500 controls per tenant:
 | No WebSocket support for real-time updates | Dashboard requires manual refresh | Polling interval configurable |
 | Celery beat single point of failure | Missed scheduled assessments if beat crashes | Run beat with supervision (systemd/supervisord) |
 | No multi-region failover | Downtime during region failure | Manual DNS failover |
-| `python-jose` CVE (no fix) | Informational | Monitor; no exploitable path in current usage |
+| JWT dependency CVEs (`python-jose`, `ecdsa`) | Resolved | Migrated to PyJWT; both packages removed from the dependency tree |
 
 ---
 

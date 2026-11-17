@@ -27,8 +27,8 @@ None
 |---|---|---|---|
 | L-001 | PROJECT_AUDIT.md not generated | — | ⬜ deferred by owner decision |
 | L-002 | Test coverage 62% (last measured `79dfb98`), not re-measured since | `tests/` | 🟡 P7-006 |
-| L-004 | ecdsa 0.19.2 CVE PYSEC-2026-1325 | pip deps | ℹ️ Informational — no fix upstream |
-| L-005 | python-jose 3.5.0 CVE PYSEC-2026-4298 | pip deps | ℹ️ Informational — no fix upstream |
+| L-011 | `pip-audit` gates CI, but the audit ignores the local `unimonitor` package (not on PyPI) — a vulnerability in our own code is caught by Bandit/review, not the audit | `.github/workflows/ci.yml` | ℹ️ expected limitation |
+| L-012 | Bandit flags `exec()` in the control evaluator (B102) and the `0.0.0.0` CLI default (B104); both are by design — controls are shipped YAML, and the server default binds all interfaces | `grc/control_loader.py`, `cli.py` | ℹ️ reviewed, accepted |
 | L-007 | Remaining frontend majors: react 18→19, @vitejs/plugin-react 4→6 | `frontend/` | ⬜ P7-007 |
 | L-008 | Ruff per-file ignores added for CLI `print` (T201 in `scripts/`) and dummy credentials in `tests/` (S105/S106/S108/B017) | `pyproject.toml` | ℹ️ By design — documented decision |
 | L-010 | Some new control keys still depend on the posture snapshot (Copilot Studio, LAPS policy, app blocklist, insider-risk connectors) because no Graph endpoint exposes them | `unimonitor/graph/collectors/snapshot.py` | 🟡 by design; documented in OPERATIONS |
@@ -44,6 +44,9 @@ None
 | M-017 | `ExecutiveDashboard` read `scores.security`, `severity_counts`, `trend` — none of which `/dashboard/executive` returns; page silently displayed hard-coded demo values | Mapped to `security_score`/`compliance_score`/`risk_score`, `score_trends`, `framework_coverage`, `top_risks`; demo fallbacks removed |
 | M-018 | `ComplianceDashboard` expected `{framework, score, implemented…}`; API returns `{framework_id, framework_name, coverage_pct, controls_total, controls_passed}` — framework list rendered empty | Aligned to the API contract |
 | M-019 | Risk, SOC and Audit dashboard views required by PROJECT_REQUIREMENTS had no UI (Risk/SOC had API only; Audit had no API) | Added `RiskDashboard`, `SocDashboard`, `AuditPage` + `GET /api/v1/dashboard/audit`, routes and nav |
+| M-031 | `POST /reports/generate` required `tenant_id`/`report_type`/`report_format` while the UI sends `run_id`/`formats`, and `unimonitor.worker.tasks` exported no task, so generation never ran | Endpoint accepts run+formats (legacy fields still work), resolves the tenant from the run, dispatches the worker with its real signature, and reports queue failures instead of claiming success |
+| M-032 | CISO severity tiles counted implemented findings as open risk | Severity totals now count open, non-suppressed findings only |
+| L-004/L-005 | `ecdsa` PYSEC-2026-1325 and `python-jose` PYSEC-2026-4298 had no upstream fix | Migrated JWT to PyJWT and removed python-jose (and ecdsa); `pip-audit` now clean, CI audit job green |
 | M-030 | DOCX export was documented but never implemented; PDF crashed on dict-shaped runs | Added `docx_generator.py`; PDF now uses the dict-safe accessors and emits per-cloud sections |
 | M-027 | Reports emitted one blended score with no cloud breakdown | PDF/DOCX now carry provider coverage + per-provider findings; aggregate summary retained |
 | M-025 | L-009 duplicate insider-risk title | CTRL-PUR-006 replaced with a departing-employee scenario control |

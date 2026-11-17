@@ -78,7 +78,7 @@ class TestCreateRefreshToken:
 
 class TestDecodeToken:
     def test_expired_raises_token_expired_error(self):
-        from jose import ExpiredSignatureError
+        from jwt import ExpiredSignatureError
 
         from unimonitor.auth.jwt import decode_token
         from unimonitor.exceptions import TokenExpiredError
@@ -88,7 +88,7 @@ class TestDecodeToken:
                 decode_token("some.token.here")
 
     def test_invalid_raises_invalid_token_error(self):
-        from jose import JWTError
+        from jwt import InvalidTokenError as JWTError
 
         from unimonitor.auth.jwt import decode_token
         from unimonitor.exceptions import InvalidTokenError

@@ -1,0 +1,99 @@
+"""Report generation API: run-based request contract and worker dispatch."""
+
+import pytest
+from httpx import AsyncClient
+
+pytestmark = pytest.mark.asyncio
+
+
+async def _make_run(db_session, tenant) -> str:
+    from unimonitor.db.models.assessment import Assessment, AssessmentRun
+
+    assessment = Assessment(tenant_id=tenant.id, name="Quarterly Assessment")
+    db_session.add(assessment)
+    await db_session.flush()
+
+    run = AssessmentRun(assessment_id=assessment.id, status="completed")
+    db_session.add(run)
+    await db_session.flush()
+    return run.id
+
+
+class TestGenerateReport:
+    async def test_requires_run_id(self, client: AsyncClient, auth_headers: dict):
+        r = await client.post("/api/v1/reports/generate", json={"formats": ["pdf"]}, headers=auth_headers)
+        assert r.status_code == 400
+        assert "run_id" in r.json()["detail"]
+
+    async def test_unknown_run_404(self, client: AsyncClient, auth_headers: dict):
+        r = await client.post(
+            "/api/v1/reports/generate",
+            json={"run_id": "does-not-exist", "formats": ["pdf"]},
+            headers=auth_headers,
+        )
+        assert r.status_code == 404
+
+    async def test_dispatch_passes_run_formats_and_tenant(self, client: AsyncClient, auth_headers: dict, db_session, tenant, monkeypatch):
+        run_id = await _make_run(db_session, tenant)
+        captured: dict = {}
+
+        import unimonitor.worker.tasks as tasks
+
+        class _Task:
+            id = "task-abc123"
+
+        def fake_delay(**kwargs):
+            captured.update(kwargs)
+            return _Task()
+
+        monkeypatch.setattr(tasks.generate_report_task, "delay", fake_delay)
+
+        r = await client.post(
+            "/api/v1/reports/generate",
+            json={"run_id": run_id, "formats": ["pdf", "docx"], "report_type": "board"},
+            headers=auth_headers,
+        )
+        assert r.status_code == 202, r.text
+        body = r.json()
+        assert body["report_format"] == "pdf"
+        assert body["task_id"] == "task-abc123"
+
+        assert captured["run_id"] == run_id
+        assert captured["formats"] == ["pdf", "docx"]
+        assert captured["tenant_id"] == tenant.id
+        assert captured["report_type"] == "board"
+
+    async def test_legacy_single_format_still_accepted(self, client: AsyncClient, auth_headers: dict, tenant, monkeypatch):
+        import unimonitor.worker.tasks as tasks
+
+        captured: dict = {}
+
+        class _Task:
+            id = "task-legacy"
+
+        monkeypatch.setattr(tasks.generate_report_task, "delay", lambda **kw: (captured.update(kw), _Task())[1])
+
+        r = await client.post(
+            "/api/v1/reports/generate",
+            json={"run_id": "run-1", "tenant_id": tenant.id, "report_format": "json"},
+            headers=auth_headers,
+        )
+        assert r.status_code == 202, r.text
+        assert captured["formats"] == ["json"]
+
+    async def test_queue_failure_is_reported_not_silently_queued(self, client: AsyncClient, auth_headers: dict, tenant, monkeypatch):
+        import unimonitor.worker.tasks as tasks
+
+        def boom(**kwargs):
+            raise RuntimeError("no broker")
+
+        monkeypatch.setattr(tasks.generate_report_task, "delay", boom)
+
+        r = await client.post(
+            "/api/v1/reports/generate",
+            json={"run_id": "run-1", "tenant_id": tenant.id},
+            headers=auth_headers,
+        )
+        assert r.status_code == 202
+        assert r.json()["status"] == "failed"
+        assert "queue" in r.json()["error_message"].lower()
