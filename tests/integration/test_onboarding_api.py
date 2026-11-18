@@ -363,12 +363,37 @@ class TestCertificateRotation:
             headers=headers,
         )
         assert r.status_code == 200, r.text
-        new_thumbprint = r.json()["certificate"]["thumbprint"]
+        new_thumbprint = r.json()["connection"]["config"]["certificate_thumbprint"]
         assert new_thumbprint and new_thumbprint != old.thumbprint
-        assert r.json()["connection"]["config"]["certificate_thumbprint"] == new_thumbprint
+        assert r.json()["connection"]["config"]["certificate_expires_at"]
 
         assert ("add", "obj-1", new_thumbprint) in calls
         assert ("remove", "obj-1", old.thumbprint) in calls, "the old key must stop working"
+
+    async def test_rotation_explains_a_registration_that_may_not_manage_itself(self, client: AsyncClient, monkeypatch):
+        """A hand-made app has neither the permission nor the ownership: say so."""
+        from unimonitor.onboarding.m365 import M365Error
+
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+        await self._connect_with_certificate(client, headers, monkeypatch)
+
+        async def fake_token(*_args, **_kwargs):
+            return "graph-token"
+
+        async def fake_app_id(*_args, **_kwargs):
+            return "obj-1"
+
+        async def forbidden(*_args, **_kwargs):
+            raise M365Error('Graph POST /applications/obj-1/addKey failed: 403 {"error":{"code":"Forbidden"}}')
+
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.client_credentials_token", fake_token)
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.find_app_object_id", fake_app_id)
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.add_certificate", forbidden)
+
+        r = await client.post("/api/v1/onboarding/microsoft/certificate/rotate", json={}, headers=headers)
+        assert r.status_code == 400
+        assert "Application.ReadWrite.OwnedBy" in r.json()["detail"]
 
     async def test_rotation_is_refused_for_a_client_secret_connection(self, client: AsyncClient, monkeypatch):
         async def fake_verify(*_args, **_kwargs):

@@ -26,7 +26,7 @@ import httpx
 
 from unimonitor.core.logging import get_logger
 from unimonitor.onboarding import certificates
-from unimonitor.onboarding.permissions import GRAPH_APP_ID, OPTIONAL, REQUIRED
+from unimonitor.onboarding.permissions import GRAPH_APP_ID, OPTIONAL, REQUIRED, SELF_MANAGEMENT
 
 logger = get_logger(__name__)
 
@@ -338,6 +338,7 @@ async def provision_app(
             else:
                 warnings.append(f"Graph has no app role '{perm.name}'; skipped.")
         optional_roles = [{"id": role_ids[p.name], "type": "Role"} for p in OPTIONAL if p.name in role_ids]
+        self_roles = [{"id": role_ids[p.name], "type": "Role"} for p in SELF_MANAGEMENT if p.name in role_ids]
 
         app = await _graph(
             http,
@@ -350,7 +351,7 @@ async def provision_app(
                 "requiredResourceAccess": [
                     {
                         "resourceAppId": GRAPH_APP_ID,
-                        "resourceAccess": required_roles + optional_roles,
+                        "resourceAccess": required_roles + optional_roles + self_roles,
                     }
                 ],
             },
@@ -369,7 +370,7 @@ async def provision_app(
 
         # Admin consent: assign each Graph app role to the new service principal.
         granted: list[str] = []
-        for perm in REQUIRED + OPTIONAL:
+        for perm in REQUIRED + OPTIONAL + SELF_MANAGEMENT:
             role_id = role_ids.get(perm.name)
             if not role_id:
                 continue
@@ -386,6 +387,22 @@ async def provision_app(
             except M365Error as exc:
                 # An optional role a tenant refuses must not abort the whole setup.
                 warnings.append(f"{perm.name} not granted: {exc}")
+
+        # Being an owner of its own registration is what lets the runtime rotate its
+        # certificate with Application.ReadWrite.OwnedBy — nothing wider, and pointless
+        # unless that role was granted.
+        if any(perm.name in granted for perm in SELF_MANAGEMENT):
+            try:
+                await _graph(
+                    http,
+                    "POST",
+                    f"/applications/{app_object_id}/owners/$ref",
+                    access_token,
+                    payload={"@odata.id": f"{GRAPH_BASE}/directoryObjects/{sp_id}"},
+                    retries=5,
+                )
+            except M365Error as exc:
+                warnings.append(f"Could not make the app an owner of itself (certificate rotation): {exc}")
 
         result = ProvisionResult(
             tenant_id=tenant_id,

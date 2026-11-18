@@ -108,7 +108,6 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
 }>) {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [notice, setNotice] = useState('')
   if (connection.config.auth_method !== 'certificate') return null
 
   const thumbprint = String(connection.config.certificate_thumbprint || '')
@@ -118,10 +117,9 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
   const soon = daysLeft !== null && daysLeft <= 30
 
   const rotate = async () => {
-    setError(''); setNotice(''); setBusy(true)
+    setError(''); setBusy(true)
     try {
-      const res = await api.post('/onboarding/microsoft/certificate/rotate', {})
-      setNotice(`New certificate ${res.data.certificate?.thumbprint || ''} is live.`)
+      await api.post('/onboarding/microsoft/certificate/rotate', {})
       onRotated()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -157,7 +155,6 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
       >
         <KeyRound size={11} /> {busy ? 'Rotating…' : 'Rotate certificate'}
       </button>
-      {notice && <div style={{ color: '#10B981', marginTop: 4 }}>{notice}</div>}
       {error && <div style={{ color: 'var(--color-high)', marginTop: 4 }}>{error}</div>}
     </div>
   )

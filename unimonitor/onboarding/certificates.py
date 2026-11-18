@@ -64,7 +64,7 @@ def thumbprint_b64(certificate_pem: str) -> str:
 
 def expiry(certificate_pem: str) -> datetime:
     """When an uploaded certificate stops being accepted."""
-    return x509.load_pem_x509_certificate(certificate_pem.strip().encode()).not_valid_after_utc
+    return x509.load_der_x509_certificate(_der_bytes(certificate_pem)).not_valid_after_utc
 
 
 @dataclass(frozen=True)

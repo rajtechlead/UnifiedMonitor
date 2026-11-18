@@ -38,7 +38,7 @@ Phase 7 — Requirement Completion 🟡 (opened 2026-11-16)
 | P9-011 One shared service account for the Google platforms | ✅ Done | `POST /connections/google-service-account` connects GCP + Workspace with one key |
 | P9-012 Sign-in client Entra preauthorizes (`AADSTS65002`) | ✅ Done | Graph PowerShell client + `ENTRA_SIGNIN_CLIENT_ID` override, actionable error text |
 | P9-013 Shared Google service account in Settings | ✅ Done | same connector offered by the Settings picker, not only the wizard |
-| P9-014 Certificate thumbprint/expiry/rotation in Settings | ✅ Done | `POST /microsoft/certificate/rotate`; warns within 30 days, retires the old key |
+| P9-014 Certificate thumbprint/expiry/rotation in Settings | ✅ Done | `POST /microsoft/certificate/rotate`; warns within 30 days, retires the old key; the wizard grants `Application.ReadWrite.OwnedBy` and makes the app an owner of itself so the runtime may rotate |
 | P9-015 SonarQube blockers and criticals | 🟡 Partial | notification dispatcher kwargs, CLI smoke-test call, CORS order, Fernet salt, k8s hardening fixed; the large cognitive-complexity refactors (report generators, notifications API) and the FastAPI `Annotated`/`response_model` style batch remain |
 | P9-016 Sign-in and rotation against a live tenant | ⬜ Open | `addKey`/`removeKey` and the device-code consent are covered by mocked Graph only |
 

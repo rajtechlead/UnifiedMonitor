@@ -146,11 +146,16 @@ still uploaded (or offered for download) once the app registration exists.
 
 **Symptom:** an amber warning in **Settings → Platform connections**.
 
-**Fix:** press **Rotate certificate**. UniMonitor generates a new certificate, uploads it with
-the application permissions the connection already holds, verifies it against Entra and
-removes the previous key. If the app registration id is unknown (an old manual connection) it
-looks the app up by client ID first; if application permissions were never granted, rotate in
-the Entra portal instead and re-enter the credential.
+**Fix:** press **Rotate certificate**. UniMonitor generates a new certificate, uploads it to the
+app registration, verifies it against Entra and removes the previous key. Rotation needs the app
+to hold `Application.ReadWrite.OwnedBy` and to be an **owner of its own registration**; the
+wizard grants and configures both, an app registered by hand usually has neither. In that case
+the row answers `403 Forbidden` with those two steps, or you can upload a new certificate in
+the Entra portal and reconnect the platform.
+
+**Log lines:** `microsoft certificate rotated thumbprint=… expires=…`, or
+`could not remove the previous certificate` when the new key works but the old one could not be
+retired (revoke it in the portal).
 
 ---
 

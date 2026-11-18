@@ -487,3 +487,111 @@ class TestGenerateReportTask:
             )
 
         assert "report_id" in result
+
+
+# ---------------------------------------------------------------------------
+# Notification dispatcher call signatures
+# ---------------------------------------------------------------------------
+
+
+class TestNotificationTaskArguments:
+    """The tasks must call the dispatcher with the parameter names it declares.
+
+    The blocker this guards against: the tasks passed `settings=`/`findings=` while
+    the dispatcher takes `settings_obj=`, so every digest and alert raised TypeError
+    inside the per-tenant `except` and no notification was ever sent. These fakes
+    declare keyword-only parameters, so a wrong name fails here instead of silently.
+    """
+
+    def _settings_row(self, tenant_id: str = "tenant-1") -> MagicMock:
+        row = MagicMock()
+        row.tenant_id = tenant_id
+        row.immediate_alerts = True
+        row.alert_severity_threshold = "HIGH"
+        return row
+
+    def test_daily_digest_passes_the_settings_object(self):
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
+        from unimonitor.worker.tasks.notifications import send_daily_digests
+
+        seen: list[object] = []
+        settings_row = self._settings_row()
+
+        async def fake_digest(self, *, settings_obj):
+            seen.append(settings_obj)
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = _db_result([settings_row])
+
+        with (
+            patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)),
+            patch.object(NotificationDispatcher, "send_daily_digest", fake_digest),
+        ):
+            result = send_daily_digests()
+
+        assert result == {"sent": 1, "failed": 0}
+        assert seen == [settings_row]
+
+    def test_weekly_digest_passes_the_settings_object(self):
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
+        from unimonitor.worker.tasks.notifications import send_weekly_digests
+
+        seen: list[object] = []
+        settings_row = self._settings_row()
+
+        async def fake_digest(self, *, settings_obj):
+            seen.append(settings_obj)
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = _db_result([settings_row])
+
+        with (
+            patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)),
+            patch.object(NotificationDispatcher, "send_weekly_digest", fake_digest),
+        ):
+            result = send_weekly_digests()
+
+        assert result == {"sent": 1, "failed": 0}
+        assert seen == [settings_row]
+
+    def test_finding_alert_passes_the_finding_and_the_settings_object(self):
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
+        from unimonitor.worker.tasks.notifications import dispatch_finding_alert
+
+        seen: list[tuple] = []
+        finding = MagicMock(id="finding-1")
+        settings_row = self._settings_row()
+
+        async def fake_alert(self, *, finding, settings_obj):
+            seen.append((finding, settings_obj))
+
+        mock_session = AsyncMock()
+        mock_session.execute.side_effect = [_db_result(finding), _db_result(settings_row)]
+
+        with (
+            patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)),
+            patch.object(NotificationDispatcher, "send_finding_alert", fake_alert),
+        ):
+            result = dispatch_finding_alert("finding-1", "tenant-1", "CRITICAL")
+
+        assert result == {"status": "sent", "finding_id": "finding-1"}
+        assert seen == [(finding, settings_row)]
+
+    def test_a_failed_send_is_counted_not_hidden(self):
+        """The per-tenant except is why the wrong names went unnoticed — prove it counts."""
+        from unimonitor.notifications.dispatcher import NotificationDispatcher
+        from unimonitor.worker.tasks.notifications import send_daily_digests
+
+        async def broken(self, *, settings_obj):
+            raise TypeError("dispatcher signature changed")
+
+        mock_session = AsyncMock()
+        mock_session.execute.return_value = _db_result([self._settings_row()])
+
+        with (
+            patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)),
+            patch.object(NotificationDispatcher, "send_daily_digest", broken),
+        ):
+            result = send_daily_digests()
+
+        assert result == {"sent": 0, "failed": 1}

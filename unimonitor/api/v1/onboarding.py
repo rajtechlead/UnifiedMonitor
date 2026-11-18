@@ -219,15 +219,8 @@ async def microsoft_rotate_certificate(
         row = await service.rotate_microsoft_certificate(db, validity_days=(body.validity_days if body else None))
     except (m365.M365Error, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    config = service.connection_dict(row)["config"]
-    return {
-        "status": "connected",
-        "connection": service.connection_dict(row),
-        "certificate": {
-            "thumbprint": config.get("certificate_thumbprint", ""),
-            "not_after": config.get("certificate_expires_at", ""),
-        },
-    }
+    # The new thumbprint and expiry travel in the connection's config; no second copy.
+    return {"status": "connected", "connection": service.connection_dict(row)}
 
 
 @router.post("/connections/google-service-account")

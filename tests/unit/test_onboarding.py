@@ -80,6 +80,8 @@ def _graph_mock(roles: list[dict]) -> tuple[httpx.AsyncClient, list[tuple[str, s
             return httpx.Response(200, json={"secretText": "s3cret~value"})
         if path.endswith("/addKey"):
             return httpx.Response(200, json={"keyId": "key-1"})
+        if path.endswith("/owners/$ref"):
+            return httpx.Response(204)
         if path.endswith("/servicePrincipals") and request.method == "POST":
             return httpx.Response(201, json={"id": "new-sp"})
         if path.endswith("/appRoleAssignedTo"):
@@ -128,6 +130,26 @@ class TestMicrosoftSetup:
         assert ("POST", "/v1.0/applications/obj-1/addKey") in calls
         assert not any(path.endswith("/addPassword") for _, path in calls)
         assert sum(1 for m, p in calls if p.endswith("/appRoleAssignedTo")) == len(roles)
+
+    async def test_the_app_is_made_an_owner_so_it_can_rotate_its_own_certificate(self):
+        """Rotation needs Application.ReadWrite.OwnedBy *and* ownership of itself."""
+        roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED + permissions.SELF_MANAGEMENT)]
+        client, calls = _graph_mock(roles)
+        async with client:
+            result = await m365.provision_app("graph-token", client=client)
+
+        assert "Application.ReadWrite.OwnedBy" in result.granted
+        assert ("POST", "/v1.0/applications/obj-1/owners/$ref") in calls
+        assert result.warnings == []
+
+    async def test_ownership_is_skipped_when_the_tenant_refuses_the_role(self):
+        roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED)]
+        client, calls = _graph_mock(roles)
+        async with client:
+            result = await m365.provision_app("graph-token", client=client)
+
+        assert not any(path.endswith("owners/$ref") for _, path in calls)
+        assert result.warnings == []
 
     async def test_a_client_secret_can_be_chosen_instead(self):
         roles = [{"id": f"role-{i}", "value": p.name} for i, p in enumerate(permissions.REQUIRED)]

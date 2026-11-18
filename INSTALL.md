@@ -340,7 +340,12 @@ you to continue to the next window.
 
 The certificate's thumbprint and expiry are shown in **Settings → Platform connections**.
 Within 30 days of expiry the row warns you, and **Rotate certificate** adds a new key to the
-app registration, proves it works and retires the old one — no portal visit needed.
+app registration, proves it works and retires the old one — no portal visit needed. The wizard
+makes this possible by granting the app `Application.ReadWrite.OwnedBy` and adding it as an
+**owner of its own registration**: that permission only reaches applications the app owns, so
+its scope is exactly "rotate my own certificate". An app registered by hand needs both before
+the button will work; otherwise the row explains what to grant and you can upload the new
+certificate in the portal instead.
 
 #### If the sign-in itself is refused (`AADSTS65002`)
 
@@ -402,6 +407,7 @@ Only needed when the wizard's automated registration is blocked by tenant policy
 | `AuditLog.Read.All` | Sign-in & audit logs |
 | `Reports.Read.All` | Usage and security reports |
 | `User.Read.All` | User profile and authentication methods |
+| `Application.ReadWrite.OwnedBy` | Optional: lets Settings rotate the app's own certificate. It only reaches applications this app owns, so add the app as an **owner of its own registration** (Owners → Add) as well; without both, rotate in the portal. |
 
 `Exchange.ManageAsApp` is an Exchange Online role, not a Graph permission: assign it in the
 Exchange admin center only if you collect Exchange settings.

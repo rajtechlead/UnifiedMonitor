@@ -44,6 +44,11 @@ OPTIONAL: tuple[GraphPermission, ...] = (
     GraphPermission("IdentityRiskyUser.Read.All", "Entra ID risky users"),
 )
 
+# Not read-only: `addKey`/`removeKey` on the app itself. It only reaches applications
+# this app owns, and the wizard makes it an owner of its own registration, so the
+# scope of the permission is exactly "rotate my own certificate".
+SELF_MANAGEMENT: tuple[GraphPermission, ...] = (GraphPermission("Application.ReadWrite.OwnedBy", "Rotate its own certificate from Settings"),)
+
 MANUAL_FOLLOW_UP = (
     "Exchange.ManageAsApp is an Exchange Online role and cannot be granted through Graph. "
     "Assign it in the Exchange admin center only if you collect Exchange settings.",

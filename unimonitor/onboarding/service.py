@@ -414,7 +414,18 @@ async def rotate_microsoft_certificate(session: AsyncSession, *, validity_days: 
     )
     object_id = config.get("app_object_id") or await m365.find_app_object_id(token, client_id)
     new_certificate = certificates.generate_client_certificate(row.display_name or "UniMonitor", validity_days)
-    await m365.add_certificate(token, object_id, new_certificate)
+    try:
+        await m365.add_certificate(token, object_id, new_certificate)
+    except m365.M365Error as exc:
+        if " 403 " not in str(exc):
+            raise
+        # A registration made by hand has neither the permission nor the ownership.
+        raise ValueError(
+            "Entra refused the new certificate: this app registration may not manage itself. "
+            "Grant the UniMonitor app the application permission Application.ReadWrite.OwnedBy and "
+            "add it as an owner of its own registration (Entra → App registrations → UniMonitor → "
+            "Owners → Add), or upload a new certificate in the portal and reconnect Microsoft 365."
+        ) from exc
     await m365.verify_client_credentials(
         row.account,
         client_id,
@@ -425,7 +436,6 @@ async def rotate_microsoft_certificate(session: AsyncSession, *, validity_days: 
     updated = {
         **config,
         "app_object_id": object_id,
-        "auth_method": "certificate",
         "certificate_thumbprint": new_certificate.thumbprint,
         "certificate_expires_at": new_certificate.not_after_iso,
     }
