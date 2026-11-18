@@ -216,9 +216,9 @@
     "semantic_hash": "3c4396bc42448a5680085dd88d566512"
   },
   "frontend/src/App.tsx": {
-    "mtime": 1795022524.22762,
-    "seen": 1795023205.17301,
-    "ast_hash": "578f68deb6ca9942434f1ca27e65b203",
+    "mtime": 1795024994.057831,
+    "seen": 1795025763.1957383,
+    "ast_hash": "bde555fa42492bb1f3d5a60c5b823390",
     "semantic_hash": ""
   },
   "frontend/src/components/ErrorBoundary.tsx": {
@@ -228,15 +228,15 @@
     "semantic_hash": "1db81e707691f6dd160c08da2240a4b1"
   },
   "frontend/src/components/Layout.tsx": {
-    "mtime": 1795022540.7289793,
-    "seen": 1795023205.1730154,
-    "ast_hash": "75504133fa4e10f852784151d31b648f",
+    "mtime": 1795024969.256286,
+    "seen": 1795025763.1957417,
+    "ast_hash": "1f57fe2d66ff03f83e9649ccfa19225b",
     "semantic_hash": ""
   },
   "frontend/src/hooks/useApi.ts": {
-    "mtime": 1795022414.4872768,
-    "seen": 1795023205.1730216,
-    "ast_hash": "7511f4fe26ba0307092ad28d6c0d44c4",
+    "mtime": 1795024577.9693246,
+    "seen": 1795025763.1957474,
+    "ast_hash": "fd641bed17d2449b89546c4f9656f464",
     "semantic_hash": ""
   },
   "frontend/src/main.tsx": {
@@ -252,10 +252,10 @@
     "semantic_hash": "d9ee08c4dab201944d45dc3dd5329c58"
   },
   "frontend/src/pages/AuditPage.tsx": {
-    "mtime": 1794834670.0,
-    "seen": 1794848210.6288266,
-    "ast_hash": "9c9289af24cfe556c40a8803f62f304a",
-    "semantic_hash": "9c9289af24cfe556c40a8803f62f304a"
+    "mtime": 1795025011.5721989,
+    "seen": 1795025763.1957545,
+    "ast_hash": "aa4b751258bfb3a8c88763d3a3f58454",
+    "semantic_hash": ""
   },
   "frontend/src/pages/ComplianceDashboard.tsx": {
     "mtime": 1794834662.0,
@@ -546,15 +546,15 @@
     "semantic_hash": "0afc239c7f1163a7a53daa48a9f6872c"
   },
   "unimonitor/api/v1/dashboard.py": {
-    "mtime": 1795022400.626699,
-    "seen": 1795023205.1732383,
-    "ast_hash": "eb6e9ddd5ad37498d3959b15415e1057",
+    "mtime": 1795024397.8601747,
+    "seen": 1795025763.195877,
+    "ast_hash": "77afbb1191012e1a11b205184d2d9dda",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/findings.py": {
-    "mtime": 1795022746.4808633,
-    "seen": 1795023205.1732407,
-    "ast_hash": "34fd9a203a96eaf6ce83d2645f3df547",
+    "mtime": 1795024459.992439,
+    "seen": 1795025763.1958787,
+    "ast_hash": "f5242bcc4e8207d5bc3c1235fafe10a0",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/grc.py": {
@@ -564,9 +564,9 @@
     "semantic_hash": "fd9b15a0100a5a6f306af57c2c18847d"
   },
   "unimonitor/api/v1/monitoring.py": {
-    "mtime": 1794853059.0,
-    "seen": 1794939184.2669318,
-    "ast_hash": "de8ae4e2868db8a1d36b7e7551a696aa",
+    "mtime": 1795025243.7571247,
+    "seen": 1795025763.1958818,
+    "ast_hash": "21fc97253686d262e28ba7e75b88a3c9",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/notifications.py": {
@@ -576,15 +576,15 @@
     "semantic_hash": "f8541c748d9162194b98b9c5ae960c89"
   },
   "unimonitor/api/v1/reports.py": {
-    "mtime": 1795022210.7082765,
-    "seen": 1795023205.1732526,
-    "ast_hash": "3dc528ffd4291bb5e1afe5965b2e2d09",
+    "mtime": 1795023416.1677213,
+    "seen": 1795025763.1958864,
+    "ast_hash": "50651fed4d4ce4f5aa53e796c6518cfd",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/router.py": {
-    "mtime": 1794953321.0,
-    "seen": 1795023205.1732547,
-    "ast_hash": "907f8a8e8ba909270d12a54a94f4b59c",
+    "mtime": 1795024394.9606752,
+    "seen": 1795025763.1958878,
+    "ast_hash": "fd11d96864045bca0ed3cea020c87386",
     "semantic_hash": ""
   },
   "unimonitor/api/v1/tenants.py": {
@@ -624,9 +624,9 @@
     "semantic_hash": ""
   },
   "unimonitor/config.py": {
-    "mtime": 1795022033.900833,
-    "seen": 1795023205.1732702,
-    "ast_hash": "1775a0883d42aec43162e97d06641654",
+    "mtime": 1795024070.2439477,
+    "seen": 1795025763.1959,
+    "ast_hash": "8c6a0b9510a9178e3b88570e2df2cbaf",
     "semantic_hash": ""
   },
   "unimonitor/core/__init__.py": {
@@ -666,9 +666,9 @@
     "semantic_hash": "95228fc8fdca71bfbc5917516853a25d"
   },
   "unimonitor/db/models/__init__.py": {
-    "mtime": 1794953128.0,
-    "seen": 1795023205.1732867,
-    "ast_hash": "9a35ea2f3847455fd36d404811dbe6d4",
+    "mtime": 1795024089.5074544,
+    "seen": 1795025763.195912,
+    "ast_hash": "c1da39ed4c4f885c8c443b2bc9ad0a37",
     "semantic_hash": ""
   },
   "unimonitor/db/models/assessment.py": {
@@ -678,10 +678,10 @@
     "semantic_hash": "18b3137f4d86f46aaafa07de227c8880"
   },
   "unimonitor/db/models/audit_log.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6290383,
-    "ast_hash": "1d95b2e98247100b2b34002e9c73c879",
-    "semantic_hash": "1d95b2e98247100b2b34002e9c73c879"
+    "mtime": 1795024092.91932,
+    "seen": 1795025763.195916,
+    "ast_hash": "7c47f77a55f9f6a94562eb664d8efad9",
+    "semantic_hash": ""
   },
   "unimonitor/db/models/control.py": {
     "mtime": 1794833357.0,
@@ -894,10 +894,10 @@
     "semantic_hash": "00a934e3584ae1e02a0a8f137783e4ca"
   },
   "unimonitor/notifications/dispatcher.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.629139,
-    "ast_hash": "32e1bc210b45808cd89672cf7a1743a6",
-    "semantic_hash": "32e1bc210b45808cd89672cf7a1743a6"
+    "mtime": 1795024162.1198976,
+    "seen": 1795025763.195978,
+    "ast_hash": "137812c8c28c5049c21223eb406c5fe9",
+    "semantic_hash": ""
   },
   "unimonitor/reporting/__init__.py": {
     "mtime": 1794833357.0,
@@ -1002,10 +1002,10 @@
     "semantic_hash": "72f7345023563b18185714e17cdda269"
   },
   "unimonitor/worker/celery_app.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6291864,
-    "ast_hash": "6821e9f2c2941f8c1ef3aaf3cbac06bd",
-    "semantic_hash": "6821e9f2c2941f8c1ef3aaf3cbac06bd"
+    "mtime": 1795025223.9740043,
+    "seen": 1795025763.1960227,
+    "ast_hash": "b991574fa49e946a52b458714c55a54f",
+    "semantic_hash": ""
   },
   "unimonitor/worker/tasks/__init__.py": {
     "mtime": 1794941275.0,
@@ -1014,10 +1014,10 @@
     "semantic_hash": ""
   },
   "unimonitor/worker/tasks/assessment.py": {
-    "mtime": 1794833357.0,
-    "seen": 1794848210.6291924,
-    "ast_hash": "096adbec2e515f2dc14feba5d0e9e7f5",
-    "semantic_hash": "096adbec2e515f2dc14feba5d0e9e7f5"
+    "mtime": 1795024429.8699615,
+    "seen": 1795025763.196027,
+    "ast_hash": "ebff1568fbab7149a17cbb6e10a0e7be",
+    "semantic_hash": ""
   },
   "unimonitor/worker/tasks/notifications.py": {
     "mtime": 1795016674.0929809,
@@ -1308,9 +1308,9 @@
     "semantic_hash": ""
   },
   "unimonitor/onboarding/permissions.py": {
-    "mtime": 1795019137.0790906,
-    "seen": 1795023205.1733923,
-    "ast_hash": "4f3c5d04d827a2d23fc786529a033ac4",
+    "mtime": 1795024423.5904613,
+    "seen": 1795025763.1959887,
+    "ast_hash": "93560546bda35d187c9122aa54df4997",
     "semantic_hash": ""
   },
   "unimonitor/onboarding/service.py": {
@@ -1338,9 +1338,9 @@
     "semantic_hash": ""
   },
   "tests/unit/test_merged_features.py": {
-    "mtime": 1795022598.8778539,
-    "seen": 1795023205.1731892,
-    "ast_hash": "81ca4f289222e931d192100a1d647f8d",
+    "mtime": 1795023374.5551147,
+    "seen": 1795025763.1958456,
+    "ast_hash": "93218815a4f77193eb9f34ed564568e2",
     "semantic_hash": ""
   },
   "unimonitor/grc/pillars.py": {
@@ -1356,9 +1356,93 @@
     "semantic_hash": ""
   },
   "Comparison.MD": {
-    "mtime": 1795022837.8509636,
-    "seen": 1795023205.1734455,
-    "ast_hash": "6170675ca6670a5a2f1502da99ab9a93",
+    "mtime": 1795025523.1162786,
+    "seen": 1795025763.1960316,
+    "ast_hash": "a8fa8675dd56defaa85ca0b30679713f",
+    "semantic_hash": ""
+  },
+  "alembic/versions/003_alerts_and_audit_chain.py": {
+    "mtime": 1795024118.2659752,
+    "seen": 1795025763.195659,
+    "ast_hash": "6f8a3f61ce2ebc7b233325c942e1e800",
+    "semantic_hash": ""
+  },
+  "frontend/src/components/SearchPalette.tsx": {
+    "mtime": 1795024950.7675729,
+    "seen": 1795025763.1957452,
+    "ast_hash": "91073145f5e3e4191523c4107f576077",
+    "semantic_hash": ""
+  },
+  "frontend/src/pages/AlertsPage.tsx": {
+    "mtime": 1795025736.0594776,
+    "seen": 1795025763.1957512,
+    "ast_hash": "da1f0d5d94a646225b67a21c05a48bdb",
+    "semantic_hash": ""
+  },
+  "frontend/src/pages/CollectionPage.tsx": {
+    "mtime": 1795024872.0998898,
+    "seen": 1795025763.1957624,
+    "ast_hash": "7956359f372c01117f213d7ea7ab504c",
+    "semantic_hash": ""
+  },
+  "frontend/src/pages/LicensesPage.tsx": {
+    "mtime": 1795024769.8832748,
+    "seen": 1795025763.195768,
+    "ast_hash": "593f140a9e6184b5066fb05eb4c7c40e",
+    "semantic_hash": ""
+  },
+  "frontend/src/pages/ServiceHealthPage.tsx": {
+    "mtime": 1795024854.963794,
+    "seen": 1795025763.1957753,
+    "ast_hash": "239c74da157dbb8357f93480bb74ad25",
+    "semantic_hash": ""
+  },
+  "tests/unit/test_alerts_and_collection.py": {
+    "mtime": 1795025073.6619651,
+    "seen": 1795025763.195821,
+    "ast_hash": "a960cedd6dda57cfc5cf9893d028c472",
+    "semantic_hash": ""
+  },
+  "unimonitor/alerts/__init__.py": {
+    "mtime": 1795024133.9236853,
+    "seen": 1795025763.1958654,
+    "ast_hash": "9a0ef2c27ce50781aa718c814e9c5c34",
+    "semantic_hash": ""
+  },
+  "unimonitor/alerts/engine.py": {
+    "mtime": 1795025128.0582511,
+    "seen": 1795025763.1958666,
+    "ast_hash": "d5852146745d4a535748b71a7efd526b",
+    "semantic_hash": ""
+  },
+  "unimonitor/api/v1/alerts.py": {
+    "mtime": 1795025189.206851,
+    "seen": 1795025763.1958709,
+    "ast_hash": "b842cfdb5234e1eb7f5b3d579a0b61eb",
+    "semantic_hash": ""
+  },
+  "unimonitor/api/v1/search.py": {
+    "mtime": 1795024429.8699615,
+    "seen": 1795025763.1958892,
+    "ast_hash": "914c249a9d417d3f0519d8a3a46c71b1",
+    "semantic_hash": ""
+  },
+  "unimonitor/core/audit.py": {
+    "mtime": 1795025138.1998525,
+    "seen": 1795025763.1959023,
+    "ast_hash": "c661d5f2a78f16aa3fb2fc2a85c33482",
+    "semantic_hash": ""
+  },
+  "unimonitor/db/models/alert.py": {
+    "mtime": 1795024429.8699615,
+    "seen": 1795025763.1959133,
+    "ast_hash": "aeb2db045095efe9dc3de8fe1bb2e970",
+    "semantic_hash": ""
+  },
+  "unimonitor/worker/tasks/alerts.py": {
+    "mtime": 1795024196.0371277,
+    "seen": 1795025763.1960256,
+    "ast_hash": "d1a3b9b2eb1f76ef41b10647480a953b",
     "semantic_hash": ""
   },
   "frontend/package-lock.json": {

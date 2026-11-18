@@ -42,6 +42,7 @@ REQUIRED: tuple[GraphPermission, ...] = (
 OPTIONAL: tuple[GraphPermission, ...] = (
     GraphPermission("SecurityAlert.Read.All", "Defender XDR alert detail"),
     GraphPermission("IdentityRiskyUser.Read.All", "Entra ID risky users"),
+    GraphPermission("ServiceHealth.Read.All", "Microsoft 365 service health and advisories"),
 )
 
 # Not read-only: `addKey`/`removeKey` on the app itself. It only reaches applications

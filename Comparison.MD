@@ -59,10 +59,11 @@ Legend: ✅ first-class · 🟡 partial / implicit · ❌ absent · **➡** merg
 | HTML report | ✅ | ❌ (scheduled CSV digest) | ✅ | ❌ | ✅ **➡** |
 | Other report formats | JSON | CSV attachment | JSON (workshop) | PDF, DOCX, Excel, CSV, JSON | + HTML |
 | Entity investigation timeline | ❌ | ✅ merged user/device timeline | ❌ | ❌ | ✅ per-finding timeline **➡** |
-| Global search palette | TUI filter | ✅ Ctrl+K | ❌ | Findings search only | Findings search only |
-| Licence posture / Copilot / Power Platform pages | ❌ (biz controls) | ✅ | ❌ | Copilot controls, no licence page | unchanged |
-| Service health page | ❌ | ✅ | 🟡 via assessments | ❌ | ❌ |
-| Tamper-evident audit log | ❌ | ✅ SHA-256 hash chain | ❌ | Audit log table + Audit page, no hash chain | unchanged |
+| Global search palette | TUI filter | ✅ Ctrl+K | ❌ | Findings search only | ✅ Ctrl+K across pages, findings, alerts, controls **➡** |
+| Licence posture / Copilot / Power Platform pages | ❌ (biz controls) | ✅ | ❌ | Copilot controls, no licence page | ✅ licence posture **➡**; Copilot/Power Platform controls only |
+| Service health page | ❌ | ✅ | 🟡 via assessments | ❌ | ✅ **➡** |
+| Tamper-evident audit log | ❌ | ✅ SHA-256 hash chain | ❌ | Audit log table + Audit page, no hash chain | ✅ hash chain + verify badge **➡** |
+| Scheduled collection with manual override | Manual CLI run | ✅ 15-min service | Manual run | Celery beat for assessments; tenants without an assessment were skipped | ✅ interval configurable, default assessment auto-created, manual runs **➡** |
 | Secret storage | Env vars | DPAPI / config | Certificate store | Key Vault / AWS Secrets Manager / encrypted local vault | unchanged |
 | Guided first-run setup | Config file | Windows wizard | PowerShell prompts | Web `/setup` wizard (cert default, AWS role, shared Google account) | unchanged |
 | Microsoft sign-in for the web UI | n/a | ✅ MSAL | n/a | 🟡 broken (wrong route, tokens discarded, no redirect URI) | ✅ fixed **➡** |
@@ -138,6 +139,11 @@ Legend: ✅ first-class · 🟡 partial / implicit · ❌ absent · **➡** merg
 | Vigil365 | Acknowledge / snooze / assign / resolve | `Finding.triage_status/assignee_id/snoozed_until`, `POST /findings/{id}/triage`, migration `002` |
 | Vigil365 | Entity investigation timeline | `GET /findings/{id}/timeline`, Findings detail panel |
 | Vigil365 | Operational queue view | Findings page triage column and filters |
+| Vigil365 | Metric/activity/anomaly alert policies and alert objects | `AlertPolicy`/`Alert`, `alerts/engine.py`, `/alerts`, Alert Center page |
+| Vigil365 | Licence posture and service health | `/monitoring/licensing`, `/monitoring/service-health`, two pages |
+| Vigil365 | Ctrl+K global search | `/search`, `SearchPalette` |
+| Vigil365 | Hash-chained audit trail | `core/audit.py`, migration 003, Audit page badge |
+| Vigil365 | Scheduled collection | `collect_all_tenants` beat task, Data Collection page |
 
 Everything else in UniMonitor — the setup wizard, dashboards, assessments, frameworks, reporting,
 secret management and multi-cloud collectors — is unchanged, by request.
@@ -149,7 +155,7 @@ secret management and multi-cloud collectors — is unchanged, by request.
 | Project | Still ahead of UniMonitor | Tracked as |
 |---|---|---|
 | M365 Sheppard | Interactive TUI for air-gapped triage; OSINT threat-intel controls | GAP-13, GAP-14 |
-| Vigil365 | Metric/activity/anomaly alert-policy engine with alert objects; licence posture; service health; Ctrl+K; hash-chained audit | GAP-06 … GAP-10 |
+| Vigil365 | Saved filter presets; per-staff tenant scoping | GAP-11, GAP-17 |
 | ZT Assessment | 364 Microsoft-authored checks with per-check Pester tests; workshop export; telemetry | GAP-12 |
 | UniMonitor | Multi-cloud coverage, 13 frameworks, AI remediation, certificate-first onboarding, per-tenant isolation, report breadth | — |
 

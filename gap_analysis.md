@@ -34,17 +34,17 @@ Dispositions:
 | GAP-03 | Vigil365 | Findings list usable end-to-end | Page sent `limit`/`offset`, filtered on states the API never returns, and rendered fields the API does not send | **High** | **Fixed** |
 | GAP-04 | Sheppard | ROI remediation ranking (impact ÷ effort) | Findings sortable by risk only; no effort model | Medium | **Merged** |
 | GAP-05 | Sheppard, ZT | Single-file HTML report | PDF/DOCX/Excel/CSV/JSON only | Medium | **Merged** |
-| GAP-06 | Vigil365 | Alert policy engine (metric, activity, anomaly rules with thresholds) | Notification severity threshold + digests only; no rule objects, no evaluation loop | High | **Deferred** |
+| GAP-06 | Vigil365 | Alert policy engine (metric, activity, anomaly rules with thresholds) | Notification severity threshold + digests only; no rule objects, no evaluation loop | High | **Merged** |
 | GAP-07 | Vigil365 | Alert lifecycle: acknowledge, snooze, assign, resolve, notes | Compliance state only (`implemented` …), no handler workflow | High | **Merged** |
 | GAP-08 | Vigil365 | Entity investigation timeline | Finding history endpoint existed; no merged timeline in the UI | Medium | **Merged** |
-| GAP-09 | Vigil365 | Licence posture page (paid-but-unused, needs-another-licence) | Copilot controls only; no `subscribedSkus` view | Medium | **Deferred** |
-| GAP-10 | Vigil365 | Service health and M365 connectivity pages | No `serviceHealth` collector or page | Medium | **Deferred** |
-| GAP-11 | Vigil365 | Global search palette (Ctrl+K) and saved filter presets | Findings text search only | Low | **Deferred** |
+| GAP-09 | Vigil365 | Licence posture page (paid-but-unused, needs-another-licence) | Copilot controls only; no `subscribedSkus` view | Medium | **Merged** |
+| GAP-10 | Vigil365 | Service health and M365 connectivity pages | No `serviceHealth` collector or page | Medium | **Merged** |
+| GAP-11 | Vigil365 | Global search palette (Ctrl+K) and saved filter presets | Findings text search only | Low | **Merged** (search; filter presets not built) |
 | GAP-12 | ZT Assessment | 364 Microsoft-authored assessment checks, seven pillars | 180 controls; Zero Trust mappings present but no pillar roll-up | High | **Partially merged** |
 | GAP-13 | Sheppard | Interactive terminal UI | Web UI only | Low | **Not applicable** |
 | GAP-14 | Sheppard | OSINT threat-intelligence controls (2) | No external feed ingestion | Low | **Deferred** |
 | GAP-15 | ZT Assessment | Pillar coverage view | No pillar view despite mappings existing | Medium | **Merged** |
-| GAP-16 | Vigil365 | Tamper-evident (SHA-256 hash-chained) audit trail | `audit_logs` table and Audit page, no chain | Medium | **Deferred** |
+| GAP-16 | Vigil365 | Tamper-evident (SHA-256 hash-chained) audit trail | `audit_logs` table and Audit page, no chain | Medium | **Merged** |
 | GAP-17 | Vigil365 | MSP staff scoping and per-client rollup | Tenant isolation and aggregate views exist; no per-staff scoping | Low | **Deferred** |
 | GAP-18 | Vigil365 | SQL Server **and** PostgreSQL providers | SQLAlchemy supports both; only SQLite/PostgreSQL are exercised | Low | **Not applicable** |
 | GAP-19 | Vigil365 | Auto-starting Windows service installer | Existing NSIS installer + optional service | — | **Already present** |
@@ -113,18 +113,20 @@ breakdown, findings sorted by severity. All interpolated values are HTML-escaped
 `<script>` title). Registered in the report API (`html` format, `text/html` download), the worker
 registry and the Reports page.
 
-### GAP-06 — Alert policy engine (deferred)
+### GAP-06 — Alert policy engine (merged)
 
-Vigil365's engine evaluates metric, activity and anomaly policies on a schedule and stores alert
-objects. UniMonitor has per-tenant notification settings with an immediate-alert severity
-threshold and daily/weekly digests, which covers "tell me about new critical findings" but not
-"alert me when MFA coverage drops 10% week over week".
+`AlertPolicy` carries a metric, comparator, threshold, window, severity and kind
+(`metric`, `activity`, `anomaly`); `Alert` is one triggered occurrence with assignee, notes, snooze
+and resolve timestamps. Six metrics are supported: unresolved critical/high/all findings, average
+finding risk, findings first seen in the window, and security-score drop over the window. Five
+ready-made templates (critical findings, high-findings spike, new findings, score drop, risk spike)
+are exposed by `GET /alerts/templates` and copyable with one call.
 
-Deferred because a correct implementation needs three new concepts (policy, evaluation window,
-alert object) plus a scheduler path and a UI, and half of it would be worse than the existing
-threshold behaviour. The triage workflow (GAP-07) is the part users act on, and that is merged.
-Recommended next: `AlertRule` (metric, comparator, threshold, window, channel) evaluated in the
-assessment task, reusing `NotificationDispatcher`.
+`unimonitor/alerts/engine.py` evaluates per tenant, does not raise a second alert for a policy that
+already has an unresolved alert inside its window, writes an audit entry and dispatches through the
+existing notification channels (`NotificationDispatcher.send_alert`). Evaluation runs from the beat
+schedule and on demand (`POST /alerts/evaluate`). The UI is the **Alerts** page: summary tiles,
+policy list with enable/delete, and Ack / Snooze / Resolve on each alert.
 
 ### GAP-07 — Triage workflow (merged)
 
@@ -161,11 +163,13 @@ Sheppard's two OSINT controls depend on external reputation feeds. UniMonitor ha
 ingestion contract, credentials or rate-limit handling; adding two YAML controls would produce
 findings that are always `not_implemented`. Deferred until a feed is chosen.
 
-### GAP-16 — Hash-chained audit (deferred)
+### GAP-16 — Hash-chained audit (merged)
 
-The audit table and Audit page exist, but only triage writes entries today. A chain hash with one
-writer would look tamper-evident without being a meaningful control. Recommended together with
-GAP-06, when assessment runs, logins and settings changes also write audit entries.
+`audit_logs` gained `prev_hash` and `entry_hash` (migration `003`). `unimonitor/core/audit.py`
+writes each entry as SHA-256 over the previous hash plus the row's content, and `verify_chain`
+recomputes the chain, reporting the first break while tolerating rows written before the chain
+existed. Writes now cover finding triage, alert trigger/status changes, policy creation and manual
+collection. `GET /dashboard/audit/verify` powers the verified/broken badge on the Audit page.
 
 ### GAP-13 — Terminal UI (not applicable)
 
@@ -184,6 +188,41 @@ with RBAC and tenant isolation; a TUI would duplicate the API without serving th
 
 ---
 
+### GAP-09 / GAP-10 / GAP-11 — Licence, service health, search (merged)
+
+- **Licence posture:** `GET /monitoring/licensing` reads `/subscribedSkus` and returns per-SKU
+  purchased/assigned/available seats, utilisation and a status (`healthy`, `unused`, `over`,
+  `suspended`). The **Licences** page shows the summary and the SKU table.
+- **Service health:** `GET /monitoring/service-health` reads `healthOverviews` and unresolved
+  `issues`; the **Service Health** page shows per-service status and open advisories. Requires the
+  new optional `ServiceHealth.Read.All` permission.
+- **Global search:** `GET /search?q=` returns findings, alerts and matching controls; the Ctrl+K
+  palette in the layout merges those with a static page index. Saved filter presets were not
+  built.
+
+Both live endpoints use the tenant's Graph client with a 5-minute cache and fail with an actionable
+message (missing permission vs unreachable tenant), not an empty page.
+
+### Automatic and manual collection
+
+`unimonitor.worker.tasks.assessment.collect_all_tenants` runs on the beat schedule at
+`COLLECTION_INTERVAL_MINUTES` (default 15) and is gated by `AUTO_COLLECTION`. It creates a default
+"Continuous monitoring" assessment for tenants that have none, so scheduling never silently does
+nothing, and it replaces the previous assessment-only beat entry (which skipped those tenants and
+would otherwise double-run). Manual paths are the **Data Collection** page (Collect now, per-collector
+Run), `POST /monitoring/collect`, and the existing per-collector endpoint.
+
+## 3.1 Still deferred after the second pass
+
+| Gap | Why |
+|---|---|
+| GAP-12 | 364 PowerShell checks not ported; pillar model merged and the YAML catalogue remains the single source of truth |
+| GAP-13 | Terminal UI conflicts with the multi-user web platform |
+| GAP-14 | OSINT controls need an external feed contract that does not exist |
+| GAP-17 | Per-staff tenant scoping needs a user↔tenant assignment model |
+| GAP-18 | SQL Server is untested, so it is not claimed |
+| Saved filter presets | UI sugar; global search covers lookup |
+
 ## 4. Implementation record
 
 | Area | Files |
@@ -193,7 +232,12 @@ with RBAC and tenant isolation; a TUI would duplicate the API without serving th
 | Zero Trust | `unimonitor/grc/pillars.py`, `unimonitor/api/v1/dashboard.py`, `frontend/src/pages/ZeroTrustPage.tsx`, `frontend/src/App.tsx`, `frontend/src/components/Layout.tsx` |
 | Triage | `unimonitor/db/models/finding.py`, `alembic/versions/002_finding_triage.py`, `unimonitor/api/v1/findings.py`, `unimonitor/db/repositories/finding_repo.py`, `frontend/src/pages/FindingsPage.tsx`, `frontend/src/hooks/useApi.ts` |
 | ROI | `unimonitor/grc/control_loader.py`, `unimonitor/api/v1/findings.py` |
-| Tests | `tests/unit/test_merged_features.py` |
+| Alerts | `unimonitor/db/models/alert.py`, `unimonitor/alerts/engine.py`, `unimonitor/api/v1/alerts.py`, `unimonitor/worker/tasks/alerts.py`, `frontend/src/pages/AlertsPage.tsx` |
+| Audit chain | `unimonitor/core/audit.py`, `unimonitor/db/models/audit_log.py`, `unimonitor/api/v1/dashboard.py`, `frontend/src/pages/AuditPage.tsx` |
+| Collection | `unimonitor/worker/tasks/assessment.py`, `unimonitor/worker/celery_app.py`, `unimonitor/api/v1/monitoring.py`, `frontend/src/pages/CollectionPage.tsx` |
+| Licence / health / search | `unimonitor/api/v1/monitoring.py`, `unimonitor/api/v1/search.py`, `frontend/src/pages/LicensesPage.tsx`, `frontend/src/pages/ServiceHealthPage.tsx`, `frontend/src/components/SearchPalette.tsx` |
+| Migrations | `alembic/versions/003_alerts_and_audit_chain.py` |
+| Tests | `tests/unit/test_merged_features.py`, `tests/unit/test_alerts_and_collection.py` |
 
 ## 5. Verification
 
@@ -201,10 +245,10 @@ Run on 2026-11-18:
 
 | Check | Result |
 |---|---|
-| `pytest -q` | **630 passed** (11 new merged-feature tests) |
+| `pytest -q` | **639 passed** (20 new tests across the two merge passes) |
 | `ruff check .` | clean |
-| `ruff format --check .` | clean (166 files) |
-| `mypy unimonitor` | clean (103 files) |
+| `ruff format --check .` | clean (176 files) |
+| `mypy unimonitor` | clean (110 files) |
 | `npm run build` (tsc + vite) | clean |
 | `eslint --max-warnings 0` | clean |
 
@@ -214,14 +258,19 @@ Not verified, and therefore not claimed:
   mocked Graph responses, not a real round-trip. The tenant must consent to the delegated scopes.
 - No browser click-through of the new Zero Trust page, Findings triage or HTML report.
 - No Windows installer rebuild; no Docker Compose run.
+- Licensing, service health and the alert metrics were tested against mocked Graph/DB data, not a
+  live tenant; `ServiceHealth.Read.All` must be consented for the health page to return data.
+- The beat schedule was imported and the collection task's logic unit-tested; no Celery beat
+  process was run here, so interval firing was not observed.
 - The migration `002` was exercised by SQLAlchemy `create_all` in tests, not by `alembic upgrade`
   against a populated database.
 
 ## 6. Recommended next steps
 
-1. `AlertRule` + evaluation loop (GAP-06), reusing the dispatcher and triage states.
-2. Licence posture (`subscribedSkus`) and service health collectors (GAP-09, GAP-10) — two
-   read-only Graph calls each, one page.
-3. Extend the audit trail to assessments, logins and settings, then add the hash chain (GAP-16).
-4. Set `impact`/`effort` on the highest-risk controls so the ROI queue reflects real effort
+1. Extend audit writes to assessments, logins and settings changes now that the chain exists.
+2. Set `impact`/`effort` on the highest-risk controls so the ROI queue reflects real effort
    rather than the effort-3 default.
+3. Import the Zero Trust checks that cover capabilities UniMonitor still lacks, as YAML controls
+   rather than a second PowerShell library.
+4. Live-tenant validation of the alert metrics (`security_score_drop` needs at least two runs in
+   the window) and of the licence/service-health permissions.

@@ -13,6 +13,10 @@ import CloudDashboard from './pages/CloudDashboard'
 import CisoDashboard from './pages/CisoDashboard'
 import CloudProviderPage from './pages/CloudProviderPage'
 import ZeroTrustPage from './pages/ZeroTrustPage'
+import AlertsPage from './pages/AlertsPage'
+import LicensesPage from './pages/LicensesPage'
+import ServiceHealthPage from './pages/ServiceHealthPage'
+import CollectionPage from './pages/CollectionPage'
 import AuditPage from './pages/AuditPage'
 import FindingsPage from './pages/FindingsPage'
 import AssessmentsPage from './pages/AssessmentsPage'
@@ -90,6 +94,10 @@ export default function App() {
             <Route path="soc" element={<RouteErrorBoundary><SocDashboard /></RouteErrorBoundary>} />
             <Route path="audit" element={<RouteErrorBoundary><AuditPage /></RouteErrorBoundary>} />
             <Route path="findings" element={<RouteErrorBoundary><FindingsPage /></RouteErrorBoundary>} />
+            <Route path="alerts" element={<RouteErrorBoundary><AlertsPage /></RouteErrorBoundary>} />
+            <Route path="licenses" element={<RouteErrorBoundary><LicensesPage /></RouteErrorBoundary>} />
+            <Route path="service-health" element={<RouteErrorBoundary><ServiceHealthPage /></RouteErrorBoundary>} />
+            <Route path="collection" element={<RouteErrorBoundary><CollectionPage /></RouteErrorBoundary>} />
             <Route path="assessments" element={<RouteErrorBoundary><AssessmentsPage /></RouteErrorBoundary>} />
             <Route path="reports" element={<RouteErrorBoundary><ReportsPage /></RouteErrorBoundary>} />
             <Route path="settings" element={<RouteErrorBoundary><SettingsPage /></RouteErrorBoundary>} />

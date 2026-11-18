@@ -432,6 +432,7 @@ Only needed when the wizard's automated registration is blocked by tenant policy
 | `Reports.Read.All` | Usage and security reports |
 | `User.Read.All` | User profile and authentication methods |
 | `Application.ReadWrite.OwnedBy` | Optional: lets Settings rotate the app's own certificate. It only reaches applications this app owns, so add the app as an **owner of its own registration** (Owners → Add) as well; without both, rotate in the portal. |
+| `ServiceHealth.Read.All` | Optional: the **Service Health** page (`/admin/serviceAnnouncement/*`). Without it that page reports that the permission is missing; nothing else is affected. |
 
 `Exchange.ManageAsApp` is an Exchange Online role, not a Graph permission: assign it in the
 Exchange admin center only if you collect Exchange settings.
@@ -442,6 +443,26 @@ secret**, and continue. The wizard validates the credential against Entra before
 surfaces immediately.
 
 ---
+
+### Automatic and manual data collection
+
+Collection runs on **Celery beat**: every active tenant's assessment is queued every
+`COLLECTION_INTERVAL_MINUTES` (default 15). A tenant without an explicit assessment gets a
+"Continuous monitoring" one, so automatic collection never silently does nothing.
+
+```bash
+AUTO_COLLECTION=true          # false = only on demand
+COLLECTION_INTERVAL_MINUTES=15
+```
+
+Start a beat process alongside the worker (`celery -A unimonitor.worker.celery_app beat`; the Docker
+Compose file already runs one). Manual runs do not need beat:
+
+- **Data Collection** page → **Collect now** (all collectors), or **Run** on a single collector
+- `POST /api/v1/monitoring/collect` and `POST /api/v1/monitoring/collectors/{name}/run`
+
+Alert policies are evaluated by the same beat schedule, so the Alert Center fills without opening
+the page; **Evaluate now** runs them immediately.
 
 ## 7. Starting & Stopping UniMonitor
 

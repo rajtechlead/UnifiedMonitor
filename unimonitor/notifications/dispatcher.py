@@ -52,6 +52,22 @@ class NotificationDispatcher:
         )
         await self._send_to_channels(subject, body, settings_obj)
 
+    async def send_alert(self, alert: Any, settings_obj: Any) -> None:
+        """Send an alert-policy notification through the configured channels."""
+        sev = (getattr(alert, "severity", "HIGH") or "HIGH").upper()
+        subject = f"[UniMonitor Alert] {sev}: {getattr(alert, 'title', 'Alert')}"
+        body = (
+            f"**Alert triggered**\n\n"
+            f"**{getattr(alert, 'title', 'Alert')}**\n\n"
+            f"**Severity:** {sev}\n"
+            f"**Status:** {getattr(alert, 'status', 'open')}\n"
+            f"**Metric:** {getattr(alert, 'metric', '')} = "
+            f"{getattr(alert, 'metric_value', '')} (threshold {getattr(alert, 'threshold', '')})\n\n"
+            f"{getattr(alert, 'detail', '') or ''}\n\n"
+            f"Open the Alert Center in UniMonitor to acknowledge or resolve it."
+        )
+        await self._send_to_channels(subject, body, settings_obj)
+
     # ── Channel dispatch ─────────────────────────────────────────────────────
 
     async def _send_to_channels(self, subject: str, body: str, settings_obj: Any) -> None:

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -11,9 +11,10 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 from unimonitor.db.base import get_session
-from unimonitor.db.models.assessment import AssessmentRun, AssessmentStatus
+from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
 from unimonitor.db.models.tenant import Tenant
 from unimonitor.db.models.user import User
 
@@ -248,22 +249,18 @@ async def get_platform_health(
     summary="Get collector status for a tenant",
 )
 async def get_collectors(
-    tenant_id: Annotated[str, Query(description="Tenant ID")],
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
 ) -> list[CollectorStatus]:
     """Return the status of all data collectors for a given tenant."""
-    # Verify tenant exists
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    tenant = await _resolve_tenant(db, tenant_id)
 
     # Get the last collection run per assessment
     result = await db.execute(
         select(AssessmentRun)
         .join(AssessmentRun.assessment)
-        .where(AssessmentRun.assessment.has(tenant_id=tenant_id))
+        .where(AssessmentRun.assessment.has(tenant_id=tenant.id))
         .order_by(desc(AssessmentRun.started_at))
         .limit(1)
     )
@@ -289,7 +286,7 @@ async def get_collectors(
                 last_run=last_run_time,
                 last_status=last_status,
                 last_duration_seconds=duration,
-                next_scheduled=None,
+                next_scheduled=(last_run_time + timedelta(minutes=max(1, get_settings().COLLECTION_INTERVAL_MINUTES)) if last_run_time else None),
                 enabled=True,
             )
         )
@@ -304,9 +301,9 @@ async def get_collectors(
 )
 async def run_collector(
     collector_name: str,
-    tenant_id: Annotated[str, Query(description="Tenant ID")],
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
 ) -> CollectorRunResponse:
     """Trigger a named collector to run immediately for a tenant."""
     valid_names = {d["name"] for d in COLLECTOR_DEFINITIONS}
@@ -316,16 +313,13 @@ async def run_collector(
             detail=f"Unknown collector '{collector_name}'. Valid: {sorted(valid_names)}",
         )
 
-    result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))
-    tenant = result.scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
+    tenant = await _resolve_tenant(db, tenant_id)
 
     try:
         from unimonitor.worker.tasks.assessment import run_single_collector_task
 
         task = run_single_collector_task.delay(
-            tenant_id=tenant_id,
+            tenant_id=tenant.id,
             collector_name=collector_name,
             triggered_by=str(current_user.id),
         )
@@ -352,18 +346,19 @@ async def run_collector(
     summary="Recent collection run history",
 )
 async def get_collection_history(
-    tenant_id: Annotated[str, Query(description="Tenant ID")],
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
+    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
 ) -> list[CollectionHistoryEntry]:
     """Return the last N assessment runs for a tenant."""
     from unimonitor.db.models.assessment import Assessment
 
+    tenant = await _resolve_tenant(db, tenant_id)
     result = await db.execute(
         select(AssessmentRun, Assessment)
         .join(Assessment, AssessmentRun.assessment_id == Assessment.id)
-        .where(Assessment.tenant_id == tenant_id)
+        .where(Assessment.tenant_id == tenant.id)
         .order_by(desc(AssessmentRun.started_at))
         .limit(limit)
     )
@@ -394,3 +389,299 @@ async def get_collection_history(
             )
         )
     return history
+
+
+# ── Collection schedule, licensing and service health ──────────────────────
+
+
+class CollectionScheduleResponse(BaseModel):
+    enabled: bool
+    interval_minutes: int
+    next_run: datetime
+    last_run: datetime | None
+    collectors: int
+
+
+class CollectNowResponse(BaseModel):
+    task_id: str | None
+    tenant_id: str
+    assessment_id: str
+    message: str
+
+
+class LicenceSku(BaseModel):
+    sku_id: str
+    sku_part_number: str
+    capability_status: str
+    consumed: int
+    prepaid: int
+    available: int
+    utilisation_pct: float
+    status: str  # "healthy" | "unused" | "over" | "suspended"
+
+
+class LicensingResponse(BaseModel):
+    skus: list[LicenceSku]
+    total_seats: int
+    consumed_seats: int
+    available_seats: int
+    utilisation_pct: float
+    unused_skus: int
+    source: str
+    generated_at: datetime
+
+
+class ServiceHealthItem(BaseModel):
+    service: str
+    status: str
+    classification: str | None = None
+
+
+class ServiceIssue(BaseModel):
+    id: str
+    title: str
+    severity: str
+    status: str
+    classification: str | None = None
+    service: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    is_resolved: bool
+    details: str | None = None
+
+
+class ServiceHealthResponse(BaseModel):
+    services: list[ServiceHealthItem]
+    active_issues: list[ServiceIssue]
+    degraded_services: int
+    generated_at: datetime
+
+
+async def _resolve_tenant(db: AsyncSession, tenant_id: str | None) -> Tenant:
+    stmt = select(Tenant).where(Tenant.id == tenant_id) if tenant_id else select(Tenant).where(Tenant.is_active)
+    tenant = (await db.execute(stmt.order_by(Tenant.created_at).limit(1))).scalar_one_or_none()
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+    return tenant
+
+
+async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
+    """GET one Graph collection for a tenant, raising an actionable error."""
+    from unimonitor.graph.client import GraphClient
+
+    try:
+        async with GraphClient(
+            tenant_id=tenant.entra_tenant_id,
+            client_id=tenant.client_id,
+            client_secret=tenant.client_secret,
+            cache_ttl=300,
+        ) as gc:
+            response = await gc.get(endpoint)
+    except Exception as exc:  # noqa: BLE001 - surface configuration errors to the page
+        raise HTTPException(status_code=502, detail=f"Graph request failed: {exc}") from exc
+    if not response.success:
+        raise HTTPException(status_code=502, detail=response.error_message or "Graph request failed")
+    return response.data if isinstance(response.data, dict) else {"value": response.data}
+
+
+@router.get("/schedule", response_model=CollectionScheduleResponse)
+async def get_collection_schedule(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None),
+) -> CollectionScheduleResponse:
+    """Automatic collection interval and the next expected run."""
+    from unimonitor.config import get_settings
+
+    settings = get_settings()
+    tenant = await _resolve_tenant(db, tenant_id)
+    interval = max(1, settings.COLLECTION_INTERVAL_MINUTES)
+    last_run = await db.scalar(
+        select(AssessmentRun.started_at)
+        .join(AssessmentRun.assessment)
+        .where(AssessmentRun.assessment.has(tenant_id=tenant.id))
+        .order_by(desc(AssessmentRun.started_at))
+        .limit(1)
+    )
+    base = last_run or datetime.now(UTC)
+    return CollectionScheduleResponse(
+        enabled=settings.AUTO_COLLECTION_ENABLED,
+        interval_minutes=interval,
+        next_run=base + timedelta(minutes=interval),
+        last_run=last_run,
+        collectors=len(COLLECTOR_DEFINITIONS),
+    )
+
+
+@router.post("/collect", response_model=CollectNowResponse, status_code=status.HTTP_202_ACCEPTED)
+async def collect_now(
+    current_user: Annotated[User, Depends(require_role("analyst"))],
+    db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None),
+) -> CollectNowResponse:
+    """Run a full collection immediately, creating a default assessment if needed."""
+    import uuid
+
+    from unimonitor.core.audit import write_audit
+
+    tenant = await _resolve_tenant(db, tenant_id)
+    assessment = (await db.execute(select(Assessment).where(Assessment.tenant_id == tenant.id, Assessment.is_active))).scalars().first()
+    if assessment is None:
+        assessment = Assessment(
+            id=str(uuid.uuid4()),
+            tenant_id=tenant.id,
+            name="Continuous monitoring",
+            description="Created automatically for manual collection",
+            frameworks="",
+            collectors="",
+        )
+        db.add(assessment)
+        await db.flush()
+
+    run = AssessmentRun(
+        id=str(uuid.uuid4()),
+        assessment_id=assessment.id,
+        trigger="manual",
+        triggered_by=current_user.id,
+        status=AssessmentStatus.PENDING.value,
+    )
+    db.add(run)
+    tenant.last_collection_at = datetime.now(UTC)
+    tenant.last_collection_status = "queued"
+    await write_audit(
+        db,
+        action="collection.started",
+        tenant_id=tenant.id,
+        user_id=current_user.id,
+        resource_type="assessment_run",
+        resource_id=run.id,
+        payload={"trigger": "manual"},
+    )
+    await db.flush()
+
+    task_id: str | None = None
+    try:
+        from unimonitor.worker.tasks.assessment import run_assessment_task
+
+        task = run_assessment_task.delay(
+            run_id=run.id,
+            tenant_id=tenant.id,
+            assessment_id=assessment.id,
+            frameworks=assessment.framework_list(),
+            collectors=assessment.collector_list() or None,
+            triggered_by=current_user.id,
+        )
+        task_id = task.id
+    except Exception as exc:  # noqa: BLE001 - the run row records the failure
+        run.status = AssessmentStatus.FAILED.value
+        run.error_message = f"Could not queue collection: {exc}"
+        tenant.last_collection_status = "failed"
+        tenant.last_collection_error = str(exc)[:500]
+        await db.flush()
+        raise HTTPException(status_code=503, detail="Could not queue collection; is a worker running?") from exc
+    await db.flush()
+
+    return CollectNowResponse(
+        task_id=task_id,
+        tenant_id=tenant.id,
+        assessment_id=assessment.id,
+        message="Full collection queued",
+    )
+
+
+@router.get("/licensing", response_model=LicensingResponse)
+async def get_licensing(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None),
+) -> LicensingResponse:
+    """Licence posture: seats bought, assigned, idle and suspended per SKU."""
+    tenant = await _resolve_tenant(db, tenant_id)
+    payload = await _graph_json(
+        tenant,
+        "/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,consumedUnits,prepaidUnits",
+    )
+    skus: list[LicenceSku] = []
+    for row in payload.get("value", []) or []:
+        prepaid = int((row.get("prepaidUnits") or {}).get("enabled", 0) or 0)
+        consumed = int(row.get("consumedUnits", 0) or 0)
+        available = max(0, prepaid - consumed)
+        utilisation = round(consumed / prepaid * 100, 1) if prepaid else 0.0
+        capability = row.get("capabilityStatus", "Enabled")
+        if capability != "Enabled":
+            sku_status = "suspended"
+        elif prepaid and available == prepaid:
+            sku_status = "unused"
+        elif prepaid and consumed > prepaid:
+            sku_status = "over"
+        else:
+            sku_status = "healthy"
+        skus.append(
+            LicenceSku(
+                sku_id=row.get("skuId", ""),
+                sku_part_number=row.get("skuPartNumber", ""),
+                capability_status=capability,
+                consumed=consumed,
+                prepaid=prepaid,
+                available=available,
+                utilisation_pct=utilisation,
+                status=sku_status,
+            )
+        )
+    skus.sort(key=lambda s: s.sku_part_number)
+    total = sum(s.prepaid for s in skus)
+    used = sum(s.consumed for s in skus)
+    return LicensingResponse(
+        skus=skus,
+        total_seats=total,
+        consumed_seats=used,
+        available_seats=max(0, total - used),
+        utilisation_pct=round(used / total * 100, 1) if total else 0.0,
+        unused_skus=sum(1 for s in skus if s.status == "unused"),
+        source="Microsoft Graph /subscribedSkus",
+        generated_at=datetime.now(UTC),
+    )
+
+
+@router.get("/service-health", response_model=ServiceHealthResponse)
+async def get_service_health(
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_session),
+    tenant_id: str | None = Query(default=None),
+) -> ServiceHealthResponse:
+    """Microsoft 365 service health and unresolved advisories."""
+    tenant = await _resolve_tenant(db, tenant_id)
+    health = await _graph_json(tenant, "/admin/serviceAnnouncement/healthOverviews")
+    issues_payload = await _graph_json(
+        tenant,
+        "/admin/serviceAnnouncement/issues?$filter=isResolved eq false&$top=50",
+    )
+
+    services = [
+        ServiceHealthItem(
+            service=row.get("service", "Unknown"),
+            status=row.get("status", "unknown"),
+        )
+        for row in health.get("value", []) or []
+    ]
+    issues = [
+        ServiceIssue(
+            id=row.get("id", ""),
+            title=row.get("title", ""),
+            severity=row.get("severity", ""),
+            status=row.get("status", ""),
+            classification=row.get("classification"),
+            service=row.get("service"),
+            start_time=row.get("startDateTime"),
+            end_time=row.get("endDateTime"),
+            is_resolved=bool(row.get("isResolved", False)),
+            details=row.get("impactDescription") or row.get("body", {}).get("content") if isinstance(row.get("body"), dict) else None,
+        )
+        for row in issues_payload.get("value", []) or []
+    ]
+    return ServiceHealthResponse(
+        services=services,
+        active_issues=issues,
+        degraded_services=sum(1 for s in services if s.status.lower() not in {"serviceoperational", "operational"}),
+        generated_at=datetime.now(UTC),
+    )

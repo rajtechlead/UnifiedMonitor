@@ -17,9 +17,13 @@ Last Updated: 2026-11-17 UTC
 | P10-007 ROI priority queue | ✅ Done | `GET /findings/priority`, `impact`/`effort` control keys |
 | P10-008 Findings page contract fix | ✅ Done | real params/fields, pagination, triage column |
 | P10-009 Entity timeline | ✅ Done | `GET /findings/{id}/timeline` |
-| P10-010 Alert policy engine | ⬜ Deferred | GAP-06; notification severity threshold only |
-| P10-011 Licence posture / service health | ⬜ Deferred | GAP-09/GAP-10; new collectors + pages |
-| P10-012 Hash-chained audit | ⬜ Deferred | GAP-16; needs more audit writers first |
+| P10-010 Alert policy engine | ✅ Done | `AlertPolicy`/`Alert`, six metrics, five templates, beat evaluation, Alert Center page |
+| P10-011 Licence posture / service health | ✅ Done | `/monitoring/licensing`, `/monitoring/service-health`, two pages; `ServiceHealth.Read.All` optional |
+| P10-012 Hash-chained audit | ✅ Done | migration 003, `core/audit.py`, verify endpoint + Audit page badge |
+| P10-013 Global search (Ctrl+K) | ✅ Done | `/search`, pages/findings/alerts/controls palette |
+| P10-014 Scheduled collection | ✅ Done | `collect_all_tenants` beat task, interval config, default assessment |
+| P10-015 Manual collection UI | ✅ Done | Data Collection page: Collect now + per-collector Run |
+| P10-016 Saved filter presets | ⬜ Deferred | UI sugar; global search covers lookup |
 
 ## Priority Execution Queue
 

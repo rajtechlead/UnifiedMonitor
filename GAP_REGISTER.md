@@ -53,6 +53,12 @@ None
 | GAP-08 | No merged investigation timeline | `GET /findings/{id}/timeline` + detail panel |
 | GAP-04 | No ROI ranking | `GET /findings/priority`, optional `impact`/`effort` in control YAML |
 | GAP-15 | No Zero Trust pillar roll-up | `GET /dashboard/zero-trust` + `ZeroTrustPage` |
+| GAP-06 | No alert-policy engine | `AlertPolicy`/`Alert` models, `alerts/engine.py`, `/alerts`, Alert Center page |
+| GAP-09 | No licence posture | `GET /monitoring/licensing` + Licences page |
+| GAP-10 | No service health | `GET /monitoring/service-health` + Service Health page; `ServiceHealth.Read.All` optional |
+| GAP-11 | No global search | `GET /search` + Ctrl+K palette |
+| GAP-16 | No tamper-evident audit | SHA-256 hash chain (migration 003), `/dashboard/audit/verify`, Audit page badge |
+| — | No automatic collection interval | `collect_all_tenants` beat task + `AUTO_COLLECTION` / `COLLECTION_INTERVAL_MINUTES`; Data Collection page for manual runs |
 
 ## Resolved This Session (2026-11-17)
 

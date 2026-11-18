@@ -1,5 +1,6 @@
 """ORM models package — import all models so Alembic sees them."""
 
+from unimonitor.db.models.alert import Alert, AlertPolicy, AlertStatus
 from unimonitor.db.models.assessment import Assessment, AssessmentRun
 from unimonitor.db.models.audit_log import AuditLog
 from unimonitor.db.models.cloud_connection import CloudConnection
@@ -31,4 +32,7 @@ __all__ = [
     "NotificationSetting",
     "Report",
     "CloudConnection",
+    "AlertPolicy",
+    "Alert",
+    "AlertStatus",
 ]

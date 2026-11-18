@@ -122,6 +122,10 @@ class Settings(BaseSettings):
 
     # ── Reporting ────────────────────────────────────────────
     REPORT_STORAGE_PATH: str = "./reports"
+    # Automatic collection: a Celery beat task runs every tenant's active
+    # assessment at this interval. Manual runs remain available in the UI.
+    AUTO_COLLECTION_ENABLED: bool = True
+    COLLECTION_INTERVAL_MINUTES: int = 15
     REPORT_LOGO_PATH: str = "./branding/logo.png"
 
     # ── AI Remediation ───────────────────────────────────────

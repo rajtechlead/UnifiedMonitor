@@ -161,7 +161,16 @@ class AuditEntry(BaseModel):
     resource_type: str | None
     resource_id: str | None
     actor: str | None
+    entry_hash: str | None = None
     created_at: datetime
+
+
+class AuditChainResponse(BaseModel):
+    valid: bool
+    checked: int
+    legacy: int
+    broken_at: str | None = None
+    reason: str | None = None
 
 
 class AuditViewResponse(BaseModel):
@@ -510,6 +519,7 @@ async def dashboard_audit(
                 resource_type=r.resource_type,
                 resource_id=r.resource_id,
                 actor=r.user_id,
+                entry_hash=r.entry_hash,
                 created_at=r.created_at,
             )
             for r in rows
@@ -518,6 +528,19 @@ async def dashboard_audit(
         actions_24h=actions_24h,
         generated_at=datetime.now(UTC),
     )
+
+
+@router.get("/audit/verify", response_model=AuditChainResponse)
+async def verify_audit_chain(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(default=5000, ge=1, le=50000),
+) -> AuditChainResponse:
+    """Recompute the audit hash chain and report the first break."""
+    from unimonitor.core.audit import verify_chain
+
+    result = await verify_chain(db, limit=limit)
+    return AuditChainResponse(**result)
 
 
 @router.get("/trends", response_model=TrendsResponse)

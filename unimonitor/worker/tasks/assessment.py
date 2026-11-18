@@ -185,6 +185,88 @@ def run_single_collector_task(
 
 
 @celery_app.task(
+    name="unimonitor.worker.tasks.assessment.collect_all_tenants",
+    queue="assessments",
+)
+def collect_all_tenants() -> dict:
+    """Scheduled collection: run every active tenant's assessment.
+
+    A tenant created without an explicit assessment still gets monitored — the
+    task creates a default "Continuous monitoring" assessment so automatic
+    collection never silently does nothing.
+    """
+    logger.info("Scheduled collection starting")
+
+    async def _run():
+        import uuid
+
+        from sqlalchemy import select
+
+        from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
+        from unimonitor.db.models.tenant import Tenant
+
+        queued = 0
+        async with async_session_factory() as db:
+            tenants = (await db.execute(select(Tenant).where(Tenant.is_active))).scalars().all()
+            for tenant in tenants:
+                assessment = (
+                    (
+                        await db.execute(
+                            select(Assessment).where(
+                                Assessment.tenant_id == tenant.id,
+                                Assessment.is_active,
+                            )
+                        )
+                    )
+                    .scalars()
+                    .first()
+                )
+                if assessment is None:
+                    assessment = Assessment(
+                        id=str(uuid.uuid4()),
+                        tenant_id=tenant.id,
+                        name="Continuous monitoring",
+                        description="Created automatically for scheduled collection",
+                        frameworks="",
+                        collectors="",
+                    )
+                    db.add(assessment)
+                    await db.flush()
+
+                run = AssessmentRun(
+                    id=str(uuid.uuid4()),
+                    assessment_id=assessment.id,
+                    trigger="scheduled",
+                    status=AssessmentStatus.PENDING.value,
+                )
+                db.add(run)
+                await db.flush()
+
+                tenant.last_collection_at = datetime.now(UTC)
+                tenant.last_collection_status = "queued"
+                tenant.last_collection_error = None
+
+                run_assessment_task.delay(
+                    run_id=run.id,
+                    tenant_id=tenant.id,
+                    assessment_id=assessment.id,
+                    frameworks=assessment.framework_list(),
+                    collectors=assessment.collector_list() or None,
+                )
+                queued += 1
+
+            await db.commit()
+        return {"tenants": queued, "runs": queued}
+
+    try:
+        return _run_async(_run())
+    except Exception as exc:
+        logger.error("Scheduled collection failed", extra={"error": str(exc)})
+        return {"tenants": 0, "runs": 0, "error": str(exc)[:300]}
+
+
+@celery_app.task(
     name="unimonitor.worker.tasks.assessment.cleanup_old_runs",
     queue="maintenance",
 )

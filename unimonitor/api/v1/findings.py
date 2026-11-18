@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
@@ -338,7 +337,7 @@ async def triage_finding(
     Separate from ``state`` (whether the control is implemented): this is the
     handler's queue status, and every change is written to the audit log.
     """
-    from unimonitor.db.models.audit_log import AuditLog
+    from unimonitor.core.audit import write_audit
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
     repo = FindingRepository(db)
@@ -365,17 +364,15 @@ async def triage_finding(
         changed_by=current_user.id,
         comment=body.note or f"Triage: {previous} → {body.status}",
     )
-    db.add(
-        AuditLog(
-            tenant_id=finding.tenant_id,
-            user_id=current_user.id,
-            action="finding.triaged",
-            resource_type="finding",
-            resource_id=finding_id,
-            payload=json.dumps({"from": previous, "to": body.status, "assignee_id": body.assignee_id, "note": body.note}),
-        )
+    await write_audit(
+        db,
+        action="finding.triaged",
+        tenant_id=finding.tenant_id,
+        user_id=current_user.id,
+        resource_type="finding",
+        resource_id=finding_id,
+        payload={"from": previous, "to": body.status, "assignee_id": body.assignee_id, "note": body.note},
     )
-    await db.flush()
 
     logger.info("finding_triaged", finding_id=finding_id, old=previous, new=body.status, by=current_user.id)
     return FindingResponse.model_validate(finding)

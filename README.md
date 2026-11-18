@@ -22,10 +22,16 @@ with a per-cloud view and an aggregate view across all of them.
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
 | **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
 | **Reporting** | PDF, DOCX, Excel, HTML, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
-| **Dashboards** | Executive, CISO, Zero Trust, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
+| **Dashboards** | Executive, CISO, Zero Trust, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Alerts, Assessments, Reports, Licences, Service Health, Data Collection |
 | **Zero Trust view** | Coverage per Microsoft Zero Trust pillar, grouped from each control's `zero_trust` mapping |
 | **Triage & ROI queue** | Acknowledge, snooze, assign and resolve findings; the highest impact-per-effort fixes are ranked first |
 | **Investigation timeline** | Per-finding history and collected evidence in one ordered list |
+| **Alert Center** | Metric, activity and anomaly policies over findings and score history, with acknowledge / snooze / assign / resolve; Teams, Slack, SMTP and webhook delivery |
+| **Licence posture** | Seats purchased, assigned and idle per SKU, read live from Microsoft Graph |
+| **Service health** | Microsoft 365 service status and unresolved advisories |
+| **Global search** | Ctrl+K across pages, findings, alerts and the control library |
+| **Tamper-evident audit** | SHA-256 hash-chained audit trail with a verified-chain badge |
+| **Scheduled collection** | Every tenant is collected automatically on a configurable interval, with per-collector manual runs |
 
 ---
 

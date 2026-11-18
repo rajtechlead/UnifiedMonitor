@@ -32,6 +32,9 @@ class AuditLog(Base):
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     correlation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    # Tamper-evidence: each row hashes the previous hash plus its own content.
+    prev_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    entry_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
 
     user: Mapped[AppUser | None] = relationship("AppUser", back_populates="audit_logs")

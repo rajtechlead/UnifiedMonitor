@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -17,6 +19,7 @@ celery_app = Celery(
         "unimonitor.worker.tasks.assessment",
         "unimonitor.worker.tasks.reporting",
         "unimonitor.worker.tasks.notifications",
+        "unimonitor.worker.tasks.alerts",
     ],
 )
 
@@ -38,11 +41,6 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
     # Beat schedule
     beat_schedule={
-        "scheduled-assessments-every-15min": {
-            "task": "unimonitor.worker.tasks.assessment.run_scheduled_assessments",
-            "schedule": crontab(minute="*/15"),
-            "options": {"queue": "assessments"},
-        },
         "daily-digest-08-00": {
             "task": "unimonitor.worker.tasks.notifications.send_daily_digests",
             "schedule": crontab(hour=8, minute=0),
@@ -58,11 +56,25 @@ celery_app.conf.update(
             "schedule": crontab(hour=2, minute=0),
             "options": {"queue": "maintenance"},
         },
+        "evaluate-alert-policies-every-15min": {
+            "task": "unimonitor.worker.tasks.alerts.evaluate_alert_policies",
+            "schedule": crontab(minute="*/15"),
+            "options": {"queue": "notifications"},
+        },
     },
-    # Queues
     task_routes={
         "unimonitor.worker.tasks.assessment.*": {"queue": "assessments"},
         "unimonitor.worker.tasks.reporting.*": {"queue": "reports"},
         "unimonitor.worker.tasks.notifications.*": {"queue": "notifications"},
+        "unimonitor.worker.tasks.alerts.*": {"queue": "notifications"},
     },
 )
+
+# Automatic collection interval is configuration, not a hard-coded crontab, so an
+# operator can change it with AUTO_COLLECTION and COLLECTION_INTERVAL_MINUTES.
+if settings.AUTO_COLLECTION_ENABLED:
+    celery_app.conf.beat_schedule["collect-all-tenants"] = {
+        "task": "unimonitor.worker.tasks.assessment.collect_all_tenants",
+        "schedule": timedelta(minutes=max(1, settings.COLLECTION_INTERVAL_MINUTES)),
+        "options": {"queue": "assessments"},
+    }

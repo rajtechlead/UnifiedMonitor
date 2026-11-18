@@ -1,10 +1,12 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   LayoutDashboard, Shield, CheckCircle, AlertTriangle,
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
   BarChart3, Activity, ScrollText, Cloud, ShieldAlert, ShieldCheck,
+  Bell, KeyRound, RefreshCw, Search,
 } from 'lucide-react'
+import SearchPalette from './SearchPalette'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 
@@ -19,8 +21,12 @@ const NAV_ITEMS = [
   { to: '/soc', icon: Activity, label: 'SOC' },
   { to: '/audit', icon: ScrollText, label: 'Audit' },
   { to: '/findings', icon: AlertTriangle, label: 'Findings' },
+  { to: '/alerts', icon: Bell, label: 'Alerts' },
   { to: '/assessments', icon: ClipboardList, label: 'Assessments' },
   { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/licenses', icon: KeyRound, label: 'Licences' },
+  { to: '/service-health', icon: Activity, label: 'Service Health' },
+  { to: '/collection', icon: RefreshCw, label: 'Data Collection' },
 ]
 
 export default function Layout() {
@@ -28,6 +34,18 @@ export default function Layout() {
   const { theme, toggleTheme } = useThemeStore()
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [searchOpen, setSearchOpen] = useState(false)
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setSearchOpen((open) => !open)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const handleLogout = () => {
     logout()
@@ -36,6 +54,7 @@ export default function Layout() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden' }}>
+      <SearchPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
       {/* Sidebar */}
       <aside style={{
         width: sidebarOpen ? '240px' : '64px',
@@ -125,6 +144,18 @@ export default function Layout() {
             <Settings size={18} style={{ flexShrink: 0 }} />
             {sidebarOpen && 'Settings'}
           </NavLink>
+          <button
+            onClick={() => setSearchOpen(true)}
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              width: '100%', padding: '10px 16px', background: 'none',
+              border: 'none', color: 'var(--color-text-secondary)',
+              cursor: 'pointer', fontSize: 14,
+            }}
+          >
+            <Search size={18} style={{ flexShrink: 0 }} />
+            {sidebarOpen && 'Search (Ctrl+K)'}
+          </button>
           <button
             onClick={toggleTheme}
             style={{

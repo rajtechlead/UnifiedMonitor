@@ -39,6 +39,7 @@ export const dashboardApi = {
   getClouds: () => api.get('/dashboard/clouds').then((r) => r.data),
   getCiso: () => api.get('/dashboard/ciso').then((r) => r.data),
   getZeroTrust: () => api.get('/dashboard/zero-trust').then((r) => r.data),
+  getAuditVerify: () => api.get('/dashboard/audit/verify').then((r) => r.data),
   getCloudProvider: (providerId: string) =>
     api.get(`/dashboard/clouds/${providerId}`).then((r) => r.data),
 }
@@ -87,4 +88,29 @@ export const monitoringApi = {
   collectors: () => api.get('/monitoring/collectors').then((r) => r.data),
   runCollector: (name: string) =>
     api.post(`/monitoring/collectors/${name}/run`).then((r) => r.data),
+  schedule: () => api.get('/monitoring/schedule').then((r) => r.data),
+  collect: () => api.post('/monitoring/collect').then((r) => r.data),
+  history: () => api.get('/monitoring/collection-history').then((r) => r.data),
+  licensing: () => api.get('/monitoring/licensing').then((r) => r.data),
+  serviceHealth: () => api.get('/monitoring/service-health').then((r) => r.data),
+}
+
+export const alertsApi = {
+  summary: () => api.get('/alerts/summary').then((r) => r.data),
+  list: (params?: Record<string, unknown>) => api.get('/alerts', { params }).then((r) => r.data),
+  policies: () => api.get('/alerts/policies').then((r) => r.data),
+  templates: () => api.get('/alerts/templates').then((r) => r.data),
+  createPolicy: (data: Record<string, unknown>) => api.post('/alerts/policies', data).then((r) => r.data),
+  fromTemplate: (templateKey: string) =>
+    api.post('/alerts/policies/from-template', { template_key: templateKey }).then((r) => r.data),
+  updatePolicy: (id: string, data: Record<string, unknown>) =>
+    api.put(`/alerts/policies/${id}`, data).then((r) => r.data),
+  deletePolicy: (id: string) => api.delete(`/alerts/policies/${id}`).then((r) => r.data),
+  evaluate: () => api.post('/alerts/evaluate').then((r) => r.data),
+  updateStatus: (id: string, data: Record<string, unknown>) =>
+    api.post(`/alerts/${id}/status`, data).then((r) => r.data),
+}
+
+export const searchApi = {
+  search: (q: string) => api.get('/search', { params: { q } }).then((r) => r.data),
 }

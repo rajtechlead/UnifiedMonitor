@@ -325,6 +325,20 @@ same-vendor upgrades within the approved stack, not substitutions.
   non-existent `ReportRepository` import made them fall through) — 630 tests.
 - Checks: 630 tests, ruff, ruff format, mypy 103 files, `tsc && vite build`, ESLint all clean.
 
+## 2026-11-18 — Deferred gaps closed
+
+- Alert Center: `AlertPolicy`/`Alert`, six metrics, five templates, beat evaluation, ack/snooze/
+  resolve, notification dispatch, policy CRUD.
+- Licence posture and service health pages backed by live Graph (`/monitoring/licensing`,
+  `/monitoring/service-health`); `ServiceHealth.Read.All` added to optional permissions.
+- Ctrl+K global search across pages, findings, alerts and controls.
+- Audit trail is now SHA-256 hash-chained with a verified badge; triage, alerts, policies and
+  manual collection write to it.
+- Automatic collection: `collect_all_tenants` beat task on `COLLECTION_INTERVAL_MINUTES`, creates a
+  default assessment when a tenant has none; Data Collection page adds manual full/collector runs.
+- Migrations: `003_alerts_and_audit_chain`. Checks: 639 tests, ruff, mypy 110 files, frontend
+  build + ESLint clean.
+
 ## Resume Instructions
 
 1. Read `SECTION_STATE.md`… i.e. this file, `NEXT_ACTIONS.md`, `GAP_REGISTER.md`,
