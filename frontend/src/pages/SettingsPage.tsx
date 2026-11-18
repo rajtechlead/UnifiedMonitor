@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
-import { Save, Bell, Mail, MessageSquare, Shield, Plug, Plus, Trash2 } from 'lucide-react'
-import PlatformConnector, { type Connection, type Platform } from '../components/PlatformConnector'
+import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound } from 'lucide-react'
+import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
+
+const GOOGLE_SHARED = '__google_shared'
 
 type NotificationSettings = {
   smtp_enabled: boolean
@@ -18,9 +20,9 @@ type NotificationSettings = {
   alert_severity_threshold: string
 }
 
-function Section({ icon: Icon, title, children }: {
+function Section({ icon: Icon, title, children }: Readonly<{
   icon: React.ElementType; title: string; children: React.ReactNode
-}) {
+}>) {
   return (
     <div style={{
       background: 'var(--color-surface)', border: '1px solid var(--color-border)',
@@ -40,9 +42,9 @@ function Section({ icon: Icon, title, children }: {
   )
 }
 
-function Toggle({ checked, onChange, label, description }: {
+function Toggle({ checked, onChange, label, description }: Readonly<{
   checked: boolean; onChange: (v: boolean) => void; label: string; description?: string
-}) {
+}>) {
   return (
     <div style={{
       display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -73,13 +75,15 @@ function Toggle({ checked, onChange, label, description }: {
   )
 }
 
-function FormField({ label, type = 'text', value, onChange, placeholder }: {
+function FormField({ label, type = 'text', value, onChange, placeholder }: Readonly<{
   label: string; type?: string; value: string; onChange: (v: string) => void; placeholder?: string
-}) {
+}>) {
+  const id = `field-${label.replace(/\W+/g, '-').toLowerCase()}`
   return (
     <div style={{ marginBottom: 14 }}>
-      <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{label}</label>
+      <label htmlFor={id} style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>{label}</label>
       <input
+        id={id}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -95,8 +99,74 @@ function FormField({ label, type = 'text', value, onChange, placeholder }: {
 }
 
 /**
+ * The Entra certificate a Microsoft connection signs in with: its thumbprint, when it
+ * expires, and a one-click rotation. A certificate that lapses silently is the most
+ * common reason a dashboard stops updating.
+ */
+function CertificateStatus({ connection, onRotated }: Readonly<{
+  connection: Connection; onRotated: () => void
+}>) {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  if (connection.config.auth_method !== 'certificate') return null
+
+  const thumbprint = String(connection.config.certificate_thumbprint || '')
+  const expires = String(connection.config.certificate_expires_at || '')
+  const daysLeft = expires ? Math.ceil((new Date(expires).getTime() - Date.now()) / 86_400_000) : null
+  const expired = daysLeft !== null && daysLeft <= 0
+  const soon = daysLeft !== null && daysLeft <= 30
+
+  const rotate = async () => {
+    setError(''); setNotice(''); setBusy(true)
+    try {
+      const res = await api.post('/onboarding/microsoft/certificate/rotate', {})
+      setNotice(`New certificate ${res.data.certificate?.thumbprint || ''} is live.`)
+      onRotated()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Could not rotate the certificate.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>
+      <div style={{ fontFamily: 'monospace' }}>
+        {thumbprint ? `Thumbprint ${thumbprint}` : 'Certificate'}
+        {expires ? ` · expires ${new Date(expires).toLocaleDateString()}` : ''}
+      </div>
+      {(soon || expired) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2, color: expired ? 'var(--color-high)' : '#D97706' }}>
+          <AlertTriangle size={12} />
+          {expired
+            ? 'This certificate has expired — collection has stopped. Rotate it now.'
+            : `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — rotate it before it lapses.`}
+        </div>
+      )}
+      <button
+        onClick={rotate}
+        disabled={busy}
+        style={{
+          marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px',
+          fontSize: 11, borderRadius: 6, border: '1px solid var(--color-border)',
+          background: 'var(--color-surface-2)', color: 'var(--color-text)',
+          cursor: busy ? 'default' : 'pointer',
+        }}
+      >
+        <KeyRound size={11} /> {busy ? 'Rotating…' : 'Rotate certificate'}
+      </button>
+      {notice && <div style={{ color: '#10B981', marginTop: 4 }}>{notice}</div>}
+      {error && <div style={{ color: 'var(--color-high)', marginTop: 4 }}>{error}</div>}
+    </div>
+  )
+}
+
+/**
  * Platforms connected during setup, plus a way to add another one later — the
- * "start with Microsoft 365, add AWS next quarter" path.
+ * "start with Microsoft 365, add AWS next quarter" path. The Google platforms can
+ * share one service account here too, not only in the first-run wizard.
  */
 function PlatformConnections() {
   const [connections, setConnections] = useState<Connection[]>([])
@@ -120,8 +190,9 @@ function PlatformConnections() {
     } catch { setError('Could not remove that connection.') }
   }
 
-  const connectedIds = connections.map((c) => c.provider)
-  const available = platforms.filter((p) => !connectedIds.includes(p.id))
+  const connectedIds = new Set(connections.map((c) => c.provider))
+  const available = platforms.filter((p) => !connectedIds.has(p.id))
+  const googleShared = ['gcp', 'google_workspace'].every((id) => available.some((p) => p.id === id))
   const addingPlatform = available.find((p) => p.id === adding)
 
   return (
@@ -131,14 +202,17 @@ function PlatformConnections() {
       )}
       {connections.map((c) => (
         <div key={c.id} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12,
           padding: '10px 0', borderBottom: '1px solid var(--color-border)',
         }}>
           <div>
             <div style={{ fontSize: 13, fontWeight: 500 }}>{c.display_name || c.provider}</div>
             <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
               {c.provider} · {c.account || 'configured'}
+              {c.config.shared_service_account ? ' · shared service account' : ''}
+              {c.status !== 'connected' ? ` · ${c.status.replace(/_/g, ' ')}` : ''}
             </div>
+            <CertificateStatus connection={c} onRotated={load} />
           </div>
           <button
             onClick={() => remove(c.provider)}
@@ -152,10 +226,11 @@ function PlatformConnections() {
 
       {available.length > 0 && (
         <div style={{ marginTop: 16 }}>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+          <label htmlFor="add-platform" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
             Connect another platform
           </label>
           <select
+            id="add-platform"
             value={adding || ''}
             onChange={(e) => setAdding(e.target.value || null)}
             style={{
@@ -166,6 +241,9 @@ function PlatformConnections() {
           >
             <option value="">Choose a platform…</option>
             {available.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            {googleShared && (
+              <option value={GOOGLE_SHARED}>Google Cloud + Workspace — one service account</option>
+            )}
           </select>
           {addingPlatform && (
             <div style={{ marginTop: 14 }}>
@@ -174,6 +252,11 @@ function PlatformConnections() {
                 connected={undefined}
                 onConnected={() => { setAdding(null); load() }}
               />
+            </div>
+          )}
+          {adding === GOOGLE_SHARED && googleShared && (
+            <div style={{ marginTop: 14 }}>
+              <GoogleSharedConnector onConnected={() => { setAdding(null); load() }} />
             </div>
           )}
         </div>
@@ -279,10 +362,11 @@ export default function SettingsPage() {
           description="Receive a weekly compliance and security summary"
         />
         <div style={{ marginTop: 16 }}>
-          <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+          <label htmlFor="severity-threshold" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
             Alert Severity Threshold
           </label>
           <select
+            id="severity-threshold"
             value={settings.alert_severity_threshold}
             onChange={e => updateSettings({ alert_severity_threshold: e.target.value })}
             style={{
@@ -316,11 +400,12 @@ export default function SettingsPage() {
                 placeholder="smtp.office365.com"
               />
               <div>
-                <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Port</label>
+                <label htmlFor="smtp-port" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Port</label>
                 <input
+                  id="smtp-port"
                   type="number"
                   value={settings.smtp_port || 587}
-                  onChange={e => updateSettings({ smtp_port: parseInt(e.target.value) })}
+                  onChange={e => updateSettings({ smtp_port: Number.parseInt(e.target.value, 10) })}
                   style={{
                     width: 80, padding: '9px 12px', fontSize: 13,
                     border: '1px solid var(--color-border)', borderRadius: 7,

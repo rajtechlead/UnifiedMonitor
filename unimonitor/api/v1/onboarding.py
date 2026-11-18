@@ -64,6 +64,10 @@ class CompleteRequest(BaseModel):
     certificate_validity_days: int | None = None
 
 
+class RotateCertificateRequest(BaseModel):
+    validity_days: int | None = None
+
+
 class GoogleServiceAccountRequest(BaseModel):
     project_id: str = ""
     admin_email: str = ""
@@ -202,6 +206,28 @@ async def microsoft_verify(
     except (m365.M365Error, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"status": "connected", "connection": service.connection_dict(row)}
+
+
+@router.post("/microsoft/certificate/rotate")
+async def microsoft_rotate_certificate(
+    body: RotateCertificateRequest | None = None,
+    db: AsyncSession = Depends(get_db),
+    _: None = Depends(require_setup_admin),
+) -> dict:
+    """Replace the stored certificate with a freshly generated one."""
+    try:
+        row = await service.rotate_microsoft_certificate(db, validity_days=(body.validity_days if body else None))
+    except (m365.M365Error, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    config = service.connection_dict(row)["config"]
+    return {
+        "status": "connected",
+        "connection": service.connection_dict(row),
+        "certificate": {
+            "thumbprint": config.get("certificate_thumbprint", ""),
+            "not_after": config.get("certificate_expires_at", ""),
+        },
+    }
 
 
 @router.post("/connections/google-service-account")

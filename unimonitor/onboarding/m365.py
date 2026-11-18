@@ -33,16 +33,27 @@ logger = get_logger(__name__)
 LOGIN_BASE = certificates.LOGIN_BASE
 GRAPH_BASE = "https://graph.microsoft.com/v1.0"
 
-# Azure CLI's first-party client: a public client that supports the device-code flow
-# and already holds delegated Application.ReadWrite.All, which is what lets the wizard
-# register an app before UniMonitor has any credentials of its own.
-PUBLIC_CLIENT_ID = "04b07795-8ddb-461a-bbee-02f9e1bf7b46"
+# Microsoft Graph PowerShell's first-party public client. The wizard needs a client that
+# Entra *preauthorizes* for app-registration work: Azure CLI's client (04b07795-…) is
+# only preauthorized for its own cmdlet surface and answers AADSTS65002 when asked for
+# Application.ReadWrite.All. Set ENTRA_SIGNIN_CLIENT_ID to use an app you registered.
+PUBLIC_CLIENT_ID = "14d82eec-204b-4c2f-b7e8-296a70dab67e"
 SCOPES = (
     "https://graph.microsoft.com/Application.ReadWrite.All "
     "https://graph.microsoft.com/AppRoleAssignment.ReadWrite.All "
     "https://graph.microsoft.com/Directory.Read.All "
     "offline_access openid profile"
 )
+
+# Shown when a tenant refuses a first-party sign-in client. An admin can always create
+# the registration by hand and either paste its credentials or point the wizard at it.
+SIGN_IN_BLOCKED_HINT = (
+    "Entra refused Microsoft's sign-in client for these Graph permissions. Register an app "
+    "yourself, grant it the delegated Application.ReadWrite.All and "
+    "AppRoleAssignment.ReadWrite.All permissions, then either set ENTRA_SIGNIN_CLIENT_ID to "
+    "its client ID and try again, or enter the app's credentials manually below."
+)
+_BLOCKED_CODES = ("AADSTS65002", "AADSTS65001", "AADSTS700016", "preauthorization")
 
 GRAPH_SCOPE = "https://graph.microsoft.com/.default"
 ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
@@ -60,6 +71,20 @@ MANUAL_CERTIFICATE_STEPS = (
 
 class M365Error(RuntimeError):
     """A step of the M365 onboarding failed; the message is shown to the administrator."""
+
+
+def sign_in_client_id() -> str:
+    """The client ID the device-code sign-in uses; overridable for locked-down tenants."""
+    from unimonitor.config import get_settings
+
+    return get_settings().ENTRA_SIGNIN_CLIENT_ID or PUBLIC_CLIENT_ID
+
+
+def _friendly(message: str) -> str:
+    """Add what the admin can do when Entra blocks Microsoft's own sign-in client."""
+    if any(code in message for code in _BLOCKED_CODES):
+        return f"{message.strip()} — {SIGN_IN_BLOCKED_HINT}"
+    return message
 
 
 @dataclass
@@ -132,10 +157,10 @@ async def start_device_flow(client: httpx.AsyncClient | None = None) -> DeviceCo
     try:
         resp = await http.post(
             f"{LOGIN_BASE}/organizations/oauth2/v2.0/devicecode",
-            data={"client_id": PUBLIC_CLIENT_ID, "scope": SCOPES},
+            data={"client_id": sign_in_client_id(), "scope": SCOPES},
         )
         if resp.status_code >= 400:
-            raise M365Error(f"Could not start Microsoft sign-in: {resp.text[:300]}")
+            raise M365Error(_friendly(f"Could not start Microsoft sign-in: {resp.text[:300]}"))
         data = resp.json()
         return DeviceCode(
             device_code=data["device_code"],
@@ -162,7 +187,7 @@ async def poll_device_flow(device_code: str, client: httpx.AsyncClient | None = 
             f"{LOGIN_BASE}/organizations/oauth2/v2.0/token",
             data={
                 "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
-                "client_id": PUBLIC_CLIENT_ID,
+                "client_id": sign_in_client_id(),
                 "device_code": device_code,
             },
         )
@@ -176,7 +201,7 @@ async def poll_device_flow(device_code: str, client: httpx.AsyncClient | None = 
             return {"status": "pending", "slow_down": "1"}
         if error in ("authorization_declined", "expired_token"):
             return {"status": "expired" if error == "expired_token" else "declined"}
-        raise M365Error(data.get("error_description", error or "Device sign-in failed"))
+        raise M365Error(_friendly(data.get("error_description", error or "Device sign-in failed")))
     finally:
         if owned:
             await http.aclose()
@@ -220,6 +245,63 @@ async def add_certificate(
             access_token,
             payload={"keyCredential": certificates.graph_key_credential(certificate)},
         )
+    finally:
+        if owned:
+            await http.aclose()
+
+
+async def find_app_object_id(
+    access_token: str,
+    client_id: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> str:
+    """Look up an app registration's object id from its client id."""
+    http, owned = _client(client)
+    try:
+        body = await _graph(
+            http,
+            "GET",
+            f"/applications?$filter=appId eq '{client_id}'&$select=id",
+            access_token,
+        )
+        items = body.get("value", [])
+        if not items:
+            raise M365Error("Entra has no app registration with that application (client) ID.")
+        return str(items[0]["id"])
+    finally:
+        if owned:
+            await http.aclose()
+
+
+async def remove_certificate(
+    access_token: str,
+    app_object_id: str,
+    certificate_pem: str,
+    *,
+    client: httpx.AsyncClient | None = None,
+) -> bool:
+    """Delete a certificate credential, so a rotated one cannot keep signing in."""
+    http, owned = _client(client)
+    try:
+        body = await _graph(
+            http,
+            "GET",
+            f"/applications/{app_object_id}?$select=keyCredentials",
+            access_token,
+        )
+        wanted = certificates.thumbprint_b64(certificate_pem)
+        for credential in body.get("keyCredentials") or []:
+            if credential.get("customKeyIdentifier") == wanted:
+                await _graph(
+                    http,
+                    "POST",
+                    f"/applications/{app_object_id}/removeKey",
+                    access_token,
+                    payload={"keyId": credential["keyId"]},
+                )
+                return True
+        return False
     finally:
         if owned:
             await http.aclose()
@@ -352,7 +434,7 @@ async def provision_app(
             await http.aclose()
 
 
-async def verify_client_credentials(
+async def client_credentials_token(
     tenant_id: str,
     client_id: str,
     client_secret: str = "",
@@ -361,11 +443,10 @@ async def verify_client_credentials(
     private_key_pem: str = "",
     client: httpx.AsyncClient | None = None,
 ) -> str:
-    """Prove the saved credentials work; returns the tenant display name.
+    """Mint an app-only Graph token from a client secret or a certificate + key.
 
-    Accepts a client secret or a certificate + private key, so both the automated and
-    the manual path (and the manual-upload fallback) are checked the same way — a typo
-    surfaces during setup instead of as an empty dashboard.
+    One function for both credential types keeps the wizard, the fallback check and
+    certificate rotation proving the same thing: Entra accepts what we stored.
     """
     if not (certificate_pem and private_key_pem) and not client_secret:
         raise M365Error("Supply a client secret or a certificate with its private key.")
@@ -392,6 +473,32 @@ async def verify_client_credentials(
         if not token:
             detail = body.get("error_description") or body.get("error") or f"HTTP {resp.status_code}"
             raise M365Error(f"Entra rejected the credentials: {detail}")
+        return str(token)
+    finally:
+        if owned:
+            await http.aclose()
+
+
+async def verify_client_credentials(
+    tenant_id: str,
+    client_id: str,
+    client_secret: str = "",
+    *,
+    certificate_pem: str = "",
+    private_key_pem: str = "",
+    client: httpx.AsyncClient | None = None,
+) -> str:
+    """Prove the saved credentials work; returns the tenant display name."""
+    http, owned = _client(client)
+    try:
+        token = await client_credentials_token(
+            tenant_id,
+            client_id,
+            client_secret,
+            certificate_pem=certificate_pem,
+            private_key_pem=private_key_pem,
+            client=http,
+        )
         name = ""
         try:
             _, name = await _tenant_info(http, token)

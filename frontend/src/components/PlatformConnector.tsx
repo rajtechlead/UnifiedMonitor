@@ -57,9 +57,9 @@ const inputStyle: React.CSSProperties = {
   color: 'var(--color-text)', outline: 'none',
 }
 
-function Field({ field, value, onChange }: {
+function Field({ field, value, onChange }: Readonly<{
   field: PlatformField; value: string; onChange: (v: string) => void
-}) {
+}>) {
   return (
     <label style={{ display: 'block', marginBottom: 10 }}>
       <span style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4 }}>
@@ -86,9 +86,9 @@ function Field({ field, value, onChange }: {
   )
 }
 
-function AuthMethodPicker({ methods, value, onChange }: {
+function AuthMethodPicker({ methods, value, onChange }: Readonly<{
   methods: PlatformAuthMethod[]; value: string; onChange: (id: string) => void
-}) {
+}>) {
   // `shared_service_account` is offered by the wizard's combined Google connector,
   // not by a single platform's form.
   methods = methods.filter((m) => m.id !== 'shared_service_account')
@@ -132,11 +132,11 @@ function saveFile(name: string, content: string, type = 'text/plain') {
  * a generated certificate unless the administrator asks for a client secret. AWS can
  * assume a role instead of using keys, and both Google platforms can share one key.
  */
-export default function PlatformConnector({ platform, connected, onConnected }: {
+export default function PlatformConnector({ platform, connected, onConnected }: Readonly<{
   platform: Platform
   connected?: Connection
   onConnected: (connection: Connection) => void
-}) {
+}>) {
   const [values, setValues] = useState<Record<string, string>>({})
   const [authMethod, setAuthMethod] = useState(platform.auth_methods[0]?.id || '')
   const [validityDays, setValidityDays] = useState('365')
@@ -395,9 +395,9 @@ export default function PlatformConnector({ platform, connected, onConnected }: 
  * and domain-wide delegation, and pastes one key — instead of maintaining a separate
  * identity (and a separate key to rotate) for Google Cloud and Workspace.
  */
-export function GoogleSharedConnector({ onConnected }: {
+export function GoogleSharedConnector({ onConnected }: Readonly<{
   onConnected: (connection: Connection) => void
-}) {
+}>) {
   const [values, setValues] = useState<Record<string, string>>({ customer_id: 'my_customer' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')

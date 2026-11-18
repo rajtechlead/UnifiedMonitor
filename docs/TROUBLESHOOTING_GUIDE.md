@@ -120,6 +120,40 @@ An admin must grant consent for the app's API permissions:
 
 ---
 
+### Setup wizard sign-in fails — `AADSTS65002: ... must be configured via preauthorization`
+
+**Symptom:** entering the device code at microsoft.com/devicelogin shows the error instead of
+the consent screen.
+
+**Meaning:** the tenant refuses to let Microsoft's own sign-in client request
+`Application.ReadWrite.All` / `AppRoleAssignment.ReadWrite.All` for Microsoft Graph. The
+wizard uses Microsoft Graph PowerShell's client for this reason; a locked-down tenant can
+still refuse it.
+
+**Fix (either):**
+1. Register an app, add the **delegated** Graph permissions `Application.ReadWrite.All` and
+   `AppRoleAssignment.ReadWrite.All`, grant admin consent, then set `ENTRA_SIGNIN_CLIENT_ID`
+   to its client ID and restart UniMonitor. The wizard signs in with that app.
+2. Follow INSTALL.md §6 *Step 2 (alternative)* and use **I already have an app registration —
+   enter credentials manually** in the wizard.
+
+The connection itself is unaffected: certificate authentication is still the default and
+still uploaded (or offered for download) once the app registration exists.
+
+---
+
+### Entra certificate is close to expiry
+
+**Symptom:** an amber warning in **Settings → Platform connections**.
+
+**Fix:** press **Rotate certificate**. UniMonitor generates a new certificate, uploads it with
+the application permissions the connection already holds, verifies it against Entra and
+removes the previous key. If the app registration id is unknown (an old manual connection) it
+looks the app up by client ID first; if application permissions were never granted, rotate in
+the Entra portal instead and re-enter the credential.
+
+---
+
 ### JWT decode error — `jwt.InvalidTokenError` (PyJWT)
 
 **Causes and fixes:**

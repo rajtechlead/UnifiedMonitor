@@ -14,7 +14,8 @@ BASE_URL = os.getenv("UNIMONITOR_URL", "http://localhost:8000")
 ADMIN_EMAIL = os.getenv("UNIMONITOR_ADMIN_EMAIL", "admin@unimonitor.local")
 ADMIN_PASSWORD = os.getenv("UNIMONITOR_ADMIN_PASSWORD", "")
 
-PASS = "\033[92m✓\033[0m"  # noqa: S105 — ANSI colour code, not a password
+# ANSI colour codes, not credentials.
+PASS = "\033[92m✓\033[0m"  # noqa: S105
 FAIL = "\033[91m✗\033[0m"
 
 
@@ -89,7 +90,7 @@ async def test_static_assets(client: httpx.AsyncClient) -> bool:
         return False
 
 
-async def main() -> None:
+async def main() -> bool:
     print("=" * 60)
     print("  UniMonitor Smoke Test")
     print(f"  Target: {BASE_URL}")
@@ -122,16 +123,18 @@ async def main() -> None:
     print("=" * 60)
     if all_pass:
         print("  \033[92mAll tests passed! UniMonitor is healthy.\033[0m")
-        sys.exit(0)
     else:
         print("  \033[91mSome tests FAILED. Check the output above.\033[0m")
-        sys.exit(1)
+    return all_pass
+
+
+def run_smoke_tests(base_url: str = "") -> bool:
+    """Entry point callable from unimonitor CLI; the URL overrides the environment."""
+    global BASE_URL
+    if base_url:
+        BASE_URL = base_url.rstrip("/")
+    return asyncio.run(main())
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
-
-
-def run_smoke_tests() -> None:
-    """Entry point callable from unimonitor CLI."""
-    asyncio.run(main())
+    sys.exit(0 if run_smoke_tests() else 1)

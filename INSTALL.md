@@ -275,6 +275,7 @@ SECRETS_PROVIDER=local             # local | azure_key_vault | aws_secrets_manag
 # ENTRA_CLIENT_CERTIFICATE=   (stored in the secret provider — never in .env)
 # ENTRA_CLIENT_PRIVATE_KEY=   (stored in the secret provider — never in .env)
 # ENTRA_CLIENT_SECRET=        (only for client-secret authentication)
+# ENTRA_SIGNIN_CLIENT_ID=     (optional: your own app for the wizard's sign-in, see §6)
 
 # ── AI Remediation (optional) ─────────────────────────────────────────────────
 # AZURE_OPENAI_ENDPOINT=https://my-openai.openai.azure.com/
@@ -337,6 +338,29 @@ creation) the wizard does **not** fail. It offers the certificate files for down
 Only after that check succeeds does the connection count as configured and the wizard allow
 you to continue to the next window.
 
+The certificate's thumbprint and expiry are shown in **Settings → Platform connections**.
+Within 30 days of expiry the row warns you, and **Rotate certificate** adds a new key to the
+app registration, proves it works and retires the old one — no portal visit needed.
+
+#### If the sign-in itself is refused (`AADSTS65002`)
+
+The wizard signs in with Microsoft Graph PowerShell's own public client, which Entra
+preauthorizes for app-registration work. Some tenants still block Microsoft's first-party
+clients from requesting these permissions and answer:
+
+> AADSTS65002: Consent between first party application … must be configured via
+> preauthorization
+
+Nothing is broken on your side; use one of these:
+
+1. **Your own sign-in app** — register an app, add the *delegated* permission
+   `Application.ReadWrite.All` and `AppRoleAssignment.ReadWrite.All` for Microsoft Graph,
+   grant admin consent, then set `ENTRA_SIGNIN_CLIENT_ID` to that app's client ID in `.env`
+   and restart. The wizard uses it for the device-code sign-in.
+2. **Register by hand** — see *Step 2 (alternative)* below, then choose
+   **I already have an app registration — enter credentials manually** in the wizard.
+   Everything after the credential is unchanged.
+
 #### One service account for every platform (SSO)
 
 An administrator who would rather not hand out long-lived keys can connect the clouds with a
@@ -349,7 +373,9 @@ single identity per platform:
 | **Google Cloud or Workspace alone** | Use the platform's own **Service-account key** method. |
 
 Platforms can be added or removed later from **Settings → Platform connections**, so a business
-that starts with Microsoft 365 alone can connect AWS or Google Cloud when it needs them.
+that starts with Microsoft 365 alone can connect AWS or Google Cloud when it needs them. The
+Settings picker offers the same **Google Cloud + Workspace — one service account** connector as
+the wizard, and shows each Microsoft connection's certificate thumbprint and expiry.
 
 ### Step 2 (alternative) — Register the app by hand
 

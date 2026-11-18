@@ -347,6 +347,7 @@ async def connect_microsoft(
     config: dict[str, Any] = {"client_id": client_id, "auth_method": auth_method, "granted_permissions": granted or []}
     if certificate_pem:
         config["certificate_thumbprint"] = certificates.thumbprint(certificate_pem)
+        config["certificate_expires_at"] = certificates.expiry(certificate_pem).replace(microsecond=0).isoformat()
     return await upsert_connection(
         session,
         tenant_id=tenant_id,
@@ -385,6 +386,74 @@ async def verify_microsoft_connection(session: AsyncSession) -> CloudConnection:
     row.last_checked_at = datetime.now(UTC)
     await session.flush()
     logger.info("microsoft connection verified", provider="microsoft", auth=auth_method)
+    return row
+
+
+async def rotate_microsoft_certificate(session: AsyncSession, *, validity_days: int | None = None) -> CloudConnection:
+    """Add a fresh certificate to the app registration and drop the old one.
+
+    The runtime app already holds Application.ReadWrite.All, so rotation needs no new
+    sign-in: mint an app-only token with the stored certificate, add the new key, prove
+    it works, then retire the old key so a leaked copy stops being useful.
+    """
+    row = (await session.execute(select(CloudConnection).where(CloudConnection.provider == "microsoft"))).scalars().first()
+    if row is None:
+        raise ValueError("No Microsoft 365 connection to rotate.")
+    config = _loads(row.config)
+    client_id = config.get("client_id", "")
+    old_certificate = await _stored_secret(session, "microsoft", "certificate_pem")
+    old_key = await _stored_secret(session, "microsoft", "private_key_pem")
+    if config.get("auth_method") != "certificate" or not (client_id and old_certificate and old_key):
+        raise ValueError("This connection does not use a certificate; rotate the client secret in the Entra portal.")
+
+    token = await m365.client_credentials_token(
+        row.account,
+        client_id,
+        certificate_pem=old_certificate,
+        private_key_pem=old_key,
+    )
+    object_id = config.get("app_object_id") or await m365.find_app_object_id(token, client_id)
+    new_certificate = certificates.generate_client_certificate(row.display_name or "UniMonitor", validity_days)
+    await m365.add_certificate(token, object_id, new_certificate)
+    await m365.verify_client_credentials(
+        row.account,
+        client_id,
+        certificate_pem=new_certificate.certificate_pem,
+        private_key_pem=new_certificate.private_key_pem,
+    )
+
+    updated = {
+        **config,
+        "app_object_id": object_id,
+        "auth_method": "certificate",
+        "certificate_thumbprint": new_certificate.thumbprint,
+        "certificate_expires_at": new_certificate.not_after_iso,
+    }
+    row = await upsert_connection(
+        session,
+        tenant_id=row.tenant_id,
+        provider="microsoft",
+        account=row.account,
+        display_name=row.display_name,
+        config=updated,
+        secrets={"certificate_pem": new_certificate.certificate_pem, "private_key_pem": new_certificate.private_key_pem},
+    )
+
+    # Collectors read the settings singleton, so the new key must land there now.
+    settings = get_settings()
+    settings.ENTRA_CLIENT_CERTIFICATE = new_certificate.certificate_pem
+    settings.ENTRA_CLIENT_PRIVATE_KEY = new_certificate.private_key_pem
+    settings.ENTRA_CLIENT_SECRET = ""
+
+    try:
+        removed = await m365.remove_certificate(token, object_id, old_certificate)
+        if not removed:
+            logger.warning("previous certificate not found in Entra", provider="microsoft")
+    except m365.M365Error as exc:
+        # The new certificate works; a stale one is worth a warning, not a failed rotation.
+        logger.warning("could not remove the previous certificate", error=str(exc))
+
+    logger.info("microsoft certificate rotated", thumbprint=new_certificate.thumbprint, expires=new_certificate.not_after_iso)
     return row
 
 

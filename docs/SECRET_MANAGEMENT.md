@@ -127,9 +127,11 @@ the portal steps, and only marks the connection usable once **Check certificate 
 succeeds. AWS can likewise run as an assumed IAM role instead of stored keys, and Google Cloud
 and Workspace can share one service-account key.
 
-Certificates are listed under `Certificates & secrets → Certificates` in Entra. Rotate one by
-re-running the Microsoft 365 connector from **Settings → Platform connections**: the wizard
-generates and uploads a new certificate and replaces the stored private key.
+Certificates are listed under `Certificates & secrets → Certificates` in Entra. **Settings →
+Platform connections** shows the thumbprint and expiry of the certificate in use and warns
+within 30 days of expiry. **Rotate certificate** mints a new key pair, uploads it with the
+application permissions the connection already holds, verifies it and removes the previous key
+from the app registration, then replaces the stored vault entries.
 
 ---
 

@@ -300,3 +300,84 @@ def _rsa_key() -> str:
             serialization.NoEncryption(),
         ).decode()
     return _private_key_cache
+
+
+class TestSignInClient:
+    """The device-code sign-in must use a client Entra preauthorizes for app registration."""
+
+    def test_default_client_is_not_the_azure_cli_client(self):
+        assert m365.PUBLIC_CLIENT_ID == "14d82eec-204b-4c2f-b7e8-296a70dab67e"
+
+    def test_tenant_can_point_the_wizard_at_its_own_app(self, monkeypatch):
+        from unimonitor.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "ENTRA_SIGNIN_CLIENT_ID", "my-own-client")
+        assert m365.sign_in_client_id() == "my-own-client"
+
+    async def test_device_code_request_uses_the_configured_client(self):
+        seen: dict[str, str] = {}
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            seen["body"] = request.content.decode()
+            return httpx.Response(
+                200,
+                json={
+                    "device_code": "dc",
+                    "user_code": "CODE",
+                    "verification_uri": "https://microsoft.com/devicelogin",
+                    "expires_in": 900,
+                    "interval": 5,
+                },
+            )
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            await m365.start_device_flow(client)
+
+        assert m365.PUBLIC_CLIENT_ID in seen["body"]
+
+    def test_a_blocked_first_party_client_explains_the_way_out(self):
+        message = m365._friendly("AADSTS65002: Consent between first party application ...")
+        assert "ENTRA_SIGNIN_CLIENT_ID" in message
+        assert "manually" in message
+
+    def test_other_errors_are_passed_through(self):
+        assert m365._friendly("network down") == "network down"
+
+
+class TestCertificateHousekeeping:
+    async def test_remove_certificate_deletes_the_matching_key(self):
+        cert = certificates.generate_client_certificate("UniMonitor", 1)
+        removed: list[str] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            if request.method == "GET":
+                return httpx.Response(
+                    200,
+                    json={
+                        "keyCredentials": [
+                            {"keyId": "keep", "customKeyIdentifier": "other"},
+                            {"keyId": "drop", "customKeyIdentifier": certificates.thumbprint_b64(cert.certificate_pem)},
+                        ]
+                    },
+                )
+            removed.append(json.loads(request.content)["keyId"])
+            return httpx.Response(204)
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            assert await m365.remove_certificate("token", "obj-1", cert.certificate_pem, client=client) is True
+
+        assert removed == ["drop"]
+
+    async def test_remove_certificate_is_a_no_op_when_the_key_is_gone(self):
+        cert = certificates.generate_client_certificate("UniMonitor", 1)
+
+        def handler(_request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"keyCredentials": []})
+
+        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+            assert await m365.remove_certificate("token", "obj-1", cert.certificate_pem, client=client) is False
+
+    def test_expiry_is_readable_from_the_certificate(self):
+        cert = certificates.generate_client_certificate("UniMonitor", 10)
+        remaining = (certificates.expiry(cert.certificate_pem) - datetime.now(UTC)).days
+        assert 8 <= remaining <= 10

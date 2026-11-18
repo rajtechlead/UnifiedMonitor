@@ -266,18 +266,16 @@ class TestGRCJourney:
         from unimonitor.grc.control_loader import ControlLoader
 
         controls = ControlLoader().load_all()
+        allowed = ("implemented", "partially_implemented", "not_implemented", "not_applicable")
         broken = []
         for c in controls:
             try:
                 result = c.run_evaluate({})
-                assert result in (
-                    "implemented",
-                    "partially_implemented",
-                    "not_implemented",
-                    "not_applicable",
-                ), f"{c.id}: unexpected result '{result}'"
             except Exception as exc:
                 broken.append(f"{c.id}: {exc}")
+                continue
+            if result not in allowed:
+                broken.append(f"{c.id}: unexpected result '{result}'")
         assert not broken, "Controls with broken evaluate:\n" + "\n".join(broken)
 
     async def test_framework_crosswalk_finds_nist_controls(self):

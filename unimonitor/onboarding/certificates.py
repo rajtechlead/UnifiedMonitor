@@ -48,12 +48,23 @@ def _der_bytes(certificate_pem: str) -> bytes:
 
 def _sha1_digest(data: bytes) -> bytes:
     """SHA-1 digest — the certificate-thumbprint format Entra and JWT `x5t` require."""
-    return hashlib.sha1(data).digest()  # noqa: S324 — protocol-defined, not a security choice
+    # SHA-1 is fixed by the protocol (Entra thumbprint, JWT x5t), not a security choice.
+    return hashlib.sha1(data).digest()  # noqa: S324  # NOSONAR
 
 
 def thumbprint(certificate_pem: str) -> str:
     """SHA-1 thumbprint as Entra shows it (uppercase hex)."""
     return _sha1_digest(_der_bytes(certificate_pem)).hex().upper()
+
+
+def thumbprint_b64(certificate_pem: str) -> str:
+    """The same digest as Graph returns it in `keyCredentials.customKeyIdentifier`."""
+    return base64.b64encode(_sha1_digest(_der_bytes(certificate_pem))).decode()
+
+
+def expiry(certificate_pem: str) -> datetime:
+    """When an uploaded certificate stops being accepted."""
+    return x509.load_pem_x509_certificate(certificate_pem.strip().encode()).not_valid_after_utc
 
 
 @dataclass(frozen=True)

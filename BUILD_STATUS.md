@@ -25,10 +25,10 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 601/601 | 60s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 612/612 | 67s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
-| First-run onboarding | ✅ 34 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account |
+| First-run onboarding | ✅ 45 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account; sign-in client override; certificate expiry + rotation |
 | Bundled UI | ✅ verify_bundled_ui.py | shell, hashed asset, `/setup` deep link, API precedence, 401/404 |
 | Multi-cloud dashboards | ✅ API + UI | aggregate `/clouds` and per-provider `/clouds/{id}`; React `tsc` + vite build clean |
 | CISO dashboard | ✅ API + UI | `/dashboard/ciso` and `/ciso` page; cloud exposure, top risks, framework gaps, trend |
@@ -50,8 +50,8 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 503 | across 25 files |
-| Integration tests | ✅ PASS | 98 | health, e2e journeys, dashboard, cloud, CISO, onboarding, report and SPA serving |
+| Unit tests | ✅ PASS | 511 | across 25 files |
+| Integration tests | ✅ PASS | 101 | health, e2e journeys, dashboard, cloud, CISO, onboarding, report and SPA serving |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |

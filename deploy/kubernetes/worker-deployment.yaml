@@ -19,6 +19,7 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       serviceAccountName: unimonitor
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -45,9 +46,11 @@ spec:
             requests:
               cpu: "500m"
               memory: "1Gi"
+              ephemeral-storage: "1Gi"
             limits:
               cpu: "2000m"
               memory: "2Gi"
+              ephemeral-storage: "4Gi"
           livenessProbe:
             exec:
               command:
@@ -94,6 +97,7 @@ spec:
         app.kubernetes.io/component: beat
     spec:
       serviceAccountName: unimonitor
+      automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
         runAsUser: 1000
@@ -119,9 +123,11 @@ spec:
             requests:
               cpu: "100m"
               memory: "256Mi"
+              ephemeral-storage: "512Mi"
             limits:
               cpu: "250m"
               memory: "512Mi"
+              ephemeral-storage: "1Gi"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: false
@@ -145,6 +151,7 @@ spec:
       labels:
         app: unimonitor-redis
     spec:
+      automountServiceAccountToken: false
       containers:
         - name: redis
           image: redis:7-alpine
@@ -154,9 +161,11 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
+              ephemeral-storage: "512Mi"
             limits:
               cpu: "250m"
               memory: "512Mi"
+              ephemeral-storage: "1Gi"
           volumeMounts:
             - name: data
               mountPath: /data

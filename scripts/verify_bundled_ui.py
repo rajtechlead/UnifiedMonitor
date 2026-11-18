@@ -22,6 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = ROOT / "unimonitor" / "static"
+ROOT_ELEMENT = '<div id="root">'
 STARTUP_TIMEOUT = 45
 failures: list[str] = []
 
@@ -35,7 +36,8 @@ def check(name: str, condition: bool, detail: str = "") -> None:
 
 def fetch(url: str) -> tuple[int, str, bytes]:
     try:
-        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310 - localhost only
+        # Localhost only.
+        with urllib.request.urlopen(url, timeout=10) as response:  # noqa: S310
             return response.status, response.headers.get("content-type", ""), response.read()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.headers.get("content-type", ""), exc.read()
@@ -55,11 +57,12 @@ def main() -> int:
         return 1
 
     html = index.read_text()
-    check("index.html ships the React root", '<div id="root">' in html)
+    check("index.html ships the React root", ROOT_ELEMENT in html)
 
     port = free_port()
     env = {**os.environ, "UNIMONITOR_ENV": "test"}
-    server = subprocess.Popen(  # noqa: S603 - fixed argv, no shell, local-only server
+    # Fixed argv, no shell, local-only server.
+    server = subprocess.Popen(  # noqa: S603
         [sys.executable, "-m", "uvicorn", "unimonitor.main:app", "--host", "127.0.0.1", "--port", str(port)],
         cwd=ROOT,
         env=env,
@@ -89,7 +92,7 @@ def main() -> int:
 
         status, ctype, body = fetch(f"{base}/")
         check("GET / returns the app shell", status == 200 and "text/html" in ctype, f"{status} {ctype}")
-        check("GET / renders index.html", '<div id="root">' in body.decode(errors="replace"))
+        check("GET / renders index.html", ROOT_ELEMENT in body.decode(errors="replace"))
 
         asset = re.search(r"/assets/[\w.\-]+\.js", html)
         check("index.html references a hashed asset", asset is not None)
@@ -100,7 +103,7 @@ def main() -> int:
         status, ctype, body = fetch(f"{base}/clouds")
         check(
             "deep link /clouds falls back to the SPA",
-            status == 200 and '<div id="root">' in body.decode(errors="replace"),
+            status == 200 and ROOT_ELEMENT in body.decode(errors="replace"),
             f"{status} {ctype}",
         )
 

@@ -22,6 +22,8 @@ None
 | M-034 | Google Cloud / Workspace credentials stored by setup are minted into tokens on demand; a service-account key whose domain-wide delegation scopes are wrong fails at collection, not at connect | `unimonitor/onboarding/google_auth.py` | 🟡 connect-time validation covers reads only |
 | M-037 | Certificate generation, `addKey` upload and the manual-upload verification path have only run against mocked Graph responses; a tenant that blocks certificate credentials is untested against Entra | `unimonitor/onboarding/certificates.py`, `unimonitor/onboarding/m365.py` | ⬜ P9-009 — live tenant required |
 | M-038 | AWS IAM-role (SSO) connection and role assumption are covered by mocked STS calls; no AWS account exercised the trust policy | `unimonitor/onboarding/clouds.py` | ⬜ P8-004 — AWS account required |
+| M-039 | One tenant refused the device-code sign-in (`AADSTS65002`) because the sign-in client lacks preauthorization; the Graph PowerShell client is the documented replacement but no live sign-in has confirmed it on that tenant yet. `ENTRA_SIGNIN_CLIENT_ID` and the manual path are the escape hatches | `unimonitor/onboarding/m365.py` | ⬜ P9-016 — live tenant required |
+| M-040 | SonarQube: remaining style findings (large cognitive-complexity refactors in the report generators and notifications API, FastAPI `Annotated`/`response_model` batch) were not addressed; the blockers, critical security item and inaccurate suppression comments were | see `NEXT_ACTIONS.md` P9-015 | 🟡 deliberately deferred |
 
 ## Low — Active
 

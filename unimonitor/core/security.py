@@ -3,28 +3,22 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import os
 
 from cryptography.fernet import Fernet
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 from unimonitor.config import get_settings
 
 
 def _get_fernet() -> Fernet:
-    """Return a Fernet instance keyed from the application secret."""
-    settings = get_settings()
-    secret = settings.UNIMONITOR_SECRET_KEY.encode()
-    # Derive a 32-byte key from the secret
-    kdf = PBKDF2HMAC(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=b"unimonitor_v1",
-        iterations=100_000,
-    )
-    key = base64.urlsafe_b64encode(kdf.derive(secret))
-    return Fernet(key)
+    """Return a Fernet instance keyed from the application secret.
+
+    The secret is already a random 256-bit key, so a hash with a fixed domain prefix
+    is enough — stretching a high-entropy key (and its fixed salt) added nothing.
+    """
+    secret = get_settings().UNIMONITOR_SECRET_KEY.encode()
+    return Fernet(base64.urlsafe_b64encode(hashlib.sha256(b"unimonitor-fernet-v1" + secret).digest()))
 
 
 def encrypt_secret(plaintext: str) -> str:

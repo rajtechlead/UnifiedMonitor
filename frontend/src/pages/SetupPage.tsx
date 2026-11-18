@@ -24,13 +24,30 @@ const input: React.CSSProperties = {
   color: 'var(--color-text)', outline: 'none',
 }
 
-function StepHeader({ n, title, active, done }: { n: number; title: string; active: boolean; done: boolean }) {
+function AlreadyConfigured({ status, onGo }: Readonly<{ status: SetupStatus; onGo: () => void }>) {
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+      <div style={card}>
+        <ShieldCheck size={28} color="var(--color-brand)" />
+        <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>UniMonitor is already set up</h2>
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+          {status.connections.map((c) => c.display_name).join(', ')} connected. Add more platforms from
+          Settings → Platform connections.
+        </p>
+        <button onClick={onGo} style={primaryBtn}>Go to the dashboard</button>
+      </div>
+    </div>
+  )
+}
+
+function StepHeader({ n, title, active, done }: Readonly<{ n: number; title: string; active: boolean; done: boolean }>) {
+  const badgeBackground = done ? '#22c55e' : active ? 'var(--color-brand)' : 'var(--color-surface-2)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
       <div style={{
         width: 26, height: 26, borderRadius: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontSize: 12, fontWeight: 700,
-        background: done ? '#22c55e' : active ? 'var(--color-brand)' : 'var(--color-surface-2)',
+        background: badgeBackground,
         color: done || active ? '#fff' : 'var(--color-text-muted)',
       }}>
         {done ? <CheckCircle size={15} /> : n}
@@ -110,19 +127,7 @@ export default function SetupPage() {
 
   // Setup finished earlier: no reason to show the wizard again.
   if (status.configured && step !== 4) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
-        <div style={card}>
-          <ShieldCheck size={28} color="var(--color-brand)" />
-          <h2 style={{ margin: '12px 0 6px', fontSize: 18 }}>UniMonitor is already set up</h2>
-          <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            {status.connections.map((c) => c.display_name).join(', ')} connected. Add more platforms from
-            Settings → Platform connections.
-          </p>
-          <button onClick={() => navigate('/')} style={primaryBtn}>Go to the dashboard</button>
-        </div>
-      </div>
-    )
+    return <AlreadyConfigured status={status} onGo={() => navigate('/')} />
   }
 
   return (
@@ -143,14 +148,14 @@ export default function SetupPage() {
               <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 14 }}>
                 <Database size={13} /> The database is created automatically. This account signs in to this install.
               </p>
-              <label style={label}>Email</label>
-              <input style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" />
+              <label htmlFor="admin-email" style={label}>Email</label>
+              <input id="admin-email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" />
               <div style={{ height: 10 }} />
-              <label style={label}>Password (at least 12 characters)</label>
-              <input style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+              <label htmlFor="admin-password" style={label}>Password (at least 12 characters)</label>
+              <input id="admin-password" style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
               <div style={{ height: 10 }} />
-              <label style={label}>Organisation (optional)</label>
-              <input style={input} value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Contoso Ltd" />
+              <label htmlFor="admin-organisation" style={label}>Organisation (optional)</label>
+              <input id="admin-organisation" style={input} value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Contoso Ltd" />
               {error && <p style={{ color: 'var(--color-high)', fontSize: 13, marginTop: 12 }}>{error}</p>}
               <button onClick={createAdmin} disabled={busy || !email || password.length < 12} style={primaryBtn}>
                 <UserPlus size={15} /> {busy ? 'Creating…' : 'Create administrator'}

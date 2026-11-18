@@ -92,6 +92,9 @@ class Settings(BaseSettings):
     # take precedence over ENTRA_CLIENT_SECRET.
     ENTRA_CLIENT_PRIVATE_KEY: str = ""
     ENTRA_CLIENT_CERTIFICATE: str = ""
+    # Optional: the public client the setup wizard signs in with. Tenants that block
+    # Microsoft's first-party clients (AADSTS65002) put their own app registration here.
+    ENTRA_SIGNIN_CLIENT_ID: str = ""
     ENTRA_AUTHORITY: str = "https://login.microsoftonline.com"
     ENTRA_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
     GRAPH_API_VERSION: str = "v1.0"

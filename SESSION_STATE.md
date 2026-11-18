@@ -2,9 +2,41 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-17 UTC
+Last Updated: 2026-11-18 UTC
 
-## Current Session Commits (2026-11-17)
+## Current Session Commits (2026-11-18)
+
+- `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
+
+### Session 2026-11-18 — sign-in fix, Settings parity, SonarQube blockers
+
+A real tenant answered `AADSTS65002` at the device-code sign-in: Azure CLI's client is only
+preauthorized for its own cmdlet surface, so the wizard could not request
+`Application.ReadWrite.All`.
+
+- `m365.PUBLIC_CLIENT_ID` is now Microsoft Graph PowerShell (`14d82eec-…`), which Entra
+  preauthorizes for app-registration work. `ENTRA_SIGNIN_CLIENT_ID` lets a locked-down tenant
+  point the wizard at its own app; `_friendly()` appends that instruction whenever Entra answers
+  `AADSTS65002`/`65001`/`700016`.
+- `client_credentials_token()` is the one token-minting path shared by verification and rotation.
+- Settings → Platform connections now offers the **Google Cloud + Workspace — one service
+  account** connector (`POST /connections/google-service-account`), so the option is no longer
+  wizard-only.
+- Certificate lifecycle in Settings: `connect_microsoft` records `certificate_expires_at`;
+  the row shows thumbprint + expiry and warns within 30 days; **Rotate certificate** calls
+  `POST /microsoft/certificate/rotate` → `service.rotate_microsoft_certificate()` (app-only token
+  → `addKey` → verify → `removeKey` of the previous key → new vault entries → settings hydrated).
+  `m365.find_app_object_id()` fills in the object id for connections made by hand.
+- SonarQube blockers fixed: notification tasks were calling the dispatcher with `settings=`/
+  `findings=` names that do not exist (`settings_obj=`), so no digest or alert was ever sent;
+  `cli smoke-test` passed `base_url` to a function that took no arguments; CORS middleware is
+  added last so it wraps error responses; `scripts/smoke_test.py` gained a `base_url` argument and
+  a real exit status; the Fernet key is a domain-separated SHA-256 of the install secret instead
+  of PBKDF2 over a literal salt; the e2e control test no longer asserts inside its own
+  `except`; Kubernetes manifests disable the unused service-account token mount and set
+  ephemeral-storage requests/limits; suppression comments no longer carry prose after the rule id.
+
+## Previous Commits (2026-11-17)
 
 - `feat: certificate credentials for the Entra app and shared cloud service accounts`
 - `feat: first-run setup wizard that asks which platforms to monitor`

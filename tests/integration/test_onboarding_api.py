@@ -293,3 +293,97 @@ class TestMicrosoftCertificateFallback:
         status = (await client.get("/api/v1/onboarding/status")).json()
         assert status["configured"] is True
         assert status["connected_providers"] == ["microsoft"]
+
+
+class TestCertificateRotation:
+    """Settings → Platform connections: surfacing and rotating the Entra certificate."""
+
+    async def _connect_with_certificate(self, client: AsyncClient, headers: dict, monkeypatch):
+        from unimonitor.onboarding import certificates
+
+        async def fake_verify(*_args, **_kwargs):
+            return "Contoso"
+
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.verify_client_credentials", fake_verify)
+        certificate = certificates.generate_client_certificate("UniMonitor", 30)
+        r = await client.post(
+            "/api/v1/onboarding/connections/microsoft",
+            json={
+                "tenant": "tenant-1",
+                "client_id": "app-1",
+                "auth_method": "certificate",
+                "certificate_pem": certificate.certificate_pem,
+                "private_key_pem": certificate.private_key_pem,
+            },
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        return certificate
+
+    async def test_connection_reports_thumbprint_and_expiry(self, client: AsyncClient, monkeypatch):
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+        certificate = await self._connect_with_certificate(client, headers, monkeypatch)
+
+        status = (await client.get("/api/v1/onboarding/status")).json()
+        config = status["connections"][0]["config"]
+        assert config["certificate_thumbprint"] == certificate.thumbprint
+        assert config["certificate_expires_at"], "the UI needs an expiry to warn on"
+
+    async def test_rotation_adds_a_new_key_and_retires_the_old_one(self, client: AsyncClient, monkeypatch):
+        from unimonitor.onboarding import certificates
+
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+        old = await self._connect_with_certificate(client, headers, monkeypatch)
+
+        calls: list[tuple] = []
+
+        async def fake_token(*_args, **_kwargs):
+            return "graph-token"
+
+        async def fake_app_id(*_args, **_kwargs):
+            return "obj-1"
+
+        async def fake_add(_token, object_id, certificate):
+            calls.append(("add", object_id, certificate.thumbprint))
+
+        async def fake_remove(_token, object_id, certificate_pem):
+            calls.append(("remove", object_id, certificates.thumbprint(certificate_pem)))
+            return True
+
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.client_credentials_token", fake_token)
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.find_app_object_id", fake_app_id)
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.add_certificate", fake_add)
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.remove_certificate", fake_remove)
+
+        r = await client.post(
+            "/api/v1/onboarding/microsoft/certificate/rotate",
+            json={"validity_days": 90},
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        new_thumbprint = r.json()["certificate"]["thumbprint"]
+        assert new_thumbprint and new_thumbprint != old.thumbprint
+        assert r.json()["connection"]["config"]["certificate_thumbprint"] == new_thumbprint
+
+        assert ("add", "obj-1", new_thumbprint) in calls
+        assert ("remove", "obj-1", old.thumbprint) in calls, "the old key must stop working"
+
+    async def test_rotation_is_refused_for_a_client_secret_connection(self, client: AsyncClient, monkeypatch):
+        async def fake_verify(*_args, **_kwargs):
+            return "Contoso"
+
+        admin = await _bootstrap(client)
+        headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
+        monkeypatch.setattr("unimonitor.onboarding.service.m365.verify_client_credentials", fake_verify)
+        connected = await client.post(
+            "/api/v1/onboarding/connections/microsoft",
+            json={"tenant": "tenant-1", "client_id": "app-1", "auth_method": "client_secret", "client_secret": "s3cret"},
+            headers=headers,
+        )
+        assert connected.status_code == 200, connected.text
+
+        r = await client.post("/api/v1/onboarding/microsoft/certificate/rotate", json={}, headers=headers)
+        assert r.status_code == 400
+        assert "client secret" in r.json()["detail"]

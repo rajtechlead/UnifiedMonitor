@@ -56,8 +56,11 @@ no findings, so its controls report *not implemented* rather than passing.
 
 Microsoft 365 registers its own Entra app after a Global Administrator sign-in, using a generated
 **certificate** by default (client secret optional). AWS can attach through an assumed IAM role,
-and Google Cloud and Workspace can share a single service account — see
-[INSTALL.md §6](INSTALL.md#6-microsoft-365-app-registration).
+and Google Cloud and Workspace can share a single service account. **Settings → Platform
+connections** adds platforms later, shows the certificate's thumbprint and expiry (warning 30 days
+out) with one-click rotation, and offers the same shared-Google connector — see
+[INSTALL.md §6](INSTALL.md#6-microsoft-365-app-registration). Tenants that block Microsoft's own
+sign-in clients (`AADSTS65002`) set `ENTRA_SIGNIN_CLIENT_ID` to their own app.
 
 See **[INSTALL.md](INSTALL.md)** for the full step-by-step guide.
 

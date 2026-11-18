@@ -44,7 +44,7 @@ def send_daily_digests() -> dict:
             for settings in settings_list:
                 try:
                     dispatcher = NotificationDispatcher(db=db, tenant_id=settings.tenant_id)
-                    await dispatcher.send_daily_digest(settings=settings)
+                    await dispatcher.send_daily_digest(settings_obj=settings)
                     sent += 1
                 except Exception as exc:
                     logger.error(
@@ -83,7 +83,7 @@ def send_weekly_digests() -> dict:
             for settings in settings_list:
                 try:
                     dispatcher = NotificationDispatcher(db=db, tenant_id=settings.tenant_id)
-                    await dispatcher.send_weekly_digest(settings=settings)
+                    await dispatcher.send_weekly_digest(settings_obj=settings)
                     sent += 1
                 except Exception as exc:
                     logger.error(
@@ -133,7 +133,7 @@ def dispatch_finding_alert(
                 return {"status": "skipped", "reason": "below threshold"}
 
             dispatcher = NotificationDispatcher(db=db, tenant_id=tenant_id)
-            await dispatcher.send_finding_alert(finding=finding, settings=settings)
+            await dispatcher.send_finding_alert(finding=finding, settings_obj=settings)
             return {"status": "sent", "finding_id": finding_id}
 
     return _run_async(_run())

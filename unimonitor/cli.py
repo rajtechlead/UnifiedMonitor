@@ -83,13 +83,10 @@ def migrate() -> None:
 @click.option("--url", default="http://localhost:8000", show_default=True, help="Base URL to test")
 def smoke_test(url: str) -> None:
     """Run smoke tests against a running UniMonitor instance."""
-    import asyncio
-
     try:
         from scripts.smoke_test import run_smoke_tests
 
-        success = asyncio.run(run_smoke_tests(base_url=url))
-        sys.exit(0 if success else 1)
+        sys.exit(0 if run_smoke_tests(base_url=url) else 1)
     except ImportError:
         click.echo("Smoke test script not found.", err=True)
         sys.exit(1)

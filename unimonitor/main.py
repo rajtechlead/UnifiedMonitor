@@ -190,14 +190,6 @@ def create_app() -> FastAPI:
     if settings.UNIMONITOR_ALLOWED_HOSTS != ["*"]:
         app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.UNIMONITOR_ALLOWED_HOSTS)
 
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.UNIMONITOR_CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     @app.middleware("http")
     async def access_log_middleware(request: Request, call_next) -> Response:
         start = time.perf_counter()
@@ -212,6 +204,15 @@ def create_app() -> FastAPI:
             client=request.client.host if request.client else "unknown",
         )
         return response
+
+    # Added last, so CORS also wraps error responses from the handlers below.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.UNIMONITOR_CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     # ── Exception handlers ───────────────────────────────────
     @app.exception_handler(GraphAPIError)
