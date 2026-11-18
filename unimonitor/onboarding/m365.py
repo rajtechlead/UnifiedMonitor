@@ -160,6 +160,7 @@ async def start_device_flow(client: httpx.AsyncClient | None = None) -> DeviceCo
             data={"client_id": sign_in_client_id(), "scope": SCOPES},
         )
         if resp.status_code >= 400:
+            logger.warning("microsoft sign-in could not start", detail=resp.text[:300])
             raise M365Error(_friendly(f"Could not start Microsoft sign-in: {resp.text[:300]}"))
         data = resp.json()
         return DeviceCode(
@@ -201,7 +202,10 @@ async def poll_device_flow(device_code: str, client: httpx.AsyncClient | None = 
             return {"status": "pending", "slow_down": "1"}
         if error in ("authorization_declined", "expired_token"):
             return {"status": "expired" if error == "expired_token" else "declined"}
-        raise M365Error(_friendly(data.get("error_description", error or "Device sign-in failed")))
+        detail = data.get("error_description", error or "Device sign-in failed")
+        # The browser shows this; the log keeps it for support after the code expires.
+        logger.warning("microsoft device sign-in failed", detail=detail[:300])
+        raise M365Error(_friendly(detail))
     finally:
         if owned:
             await http.aclose()
