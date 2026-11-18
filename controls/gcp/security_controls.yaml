@@ -10,6 +10,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "identity.least_privilege"
       iso27001_2022:
         - "A.5.15"
         - "A.8.2"
@@ -36,6 +38,12 @@ controls:
       if not offenders:
           return "implemented"
       return "partially_implemented"
+    remediation:
+      summary: "Remove primitive Owner and Editor bindings from project IAM."
+      steps:
+        - action: "List bindings: gcloud projects get-iam-policy <project> --format=json."
+        - action: "Replace roles/owner and roles/editor with predefined roles scoped to the task."
+        - action: "Enforce with the constraint iam.allowedPolicyMemberDomains and org policy iam.disableServiceAccountKeyCreation where possible."
 
   - id: CTRL-GCP-002
     title: "User-Managed Service Account Keys Avoided"
@@ -46,6 +54,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "identity.credentials"
       iso27001_2022:
         - "A.8.5"
       nist_csf_2:
@@ -63,6 +73,12 @@ controls:
       if not keys:
           return "implemented"
       return "partially_implemented" if len(keys) <= 2 else "not_implemented"
+    remediation:
+      summary: "Stop issuing user-managed service account keys."
+      steps:
+        - action: "List keys: gcloud iam service-accounts keys list --iam-account=<sa> --managed-by=user."
+        - action: "Migrate workloads to Workload Identity Federation or attached service accounts."
+        - action: "Delete unused keys and set an organisation policy to block new ones."
 
   - id: CTRL-GCP-003
     title: "No Firewall Rule Exposes Management Ports to the Internet"
@@ -72,6 +88,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "network.segmentation"
       iso27001_2022:
         - "A.8.20"
       nist_csf_2:
@@ -101,6 +119,12 @@ controls:
           if ports & management:
               exposed.append(rule.get("name", "unknown"))
       return "implemented" if not exposed else "not_implemented"
+    remediation:
+      summary: "Restrict firewall rules that expose management ports to the internet."
+      steps:
+        - action: "List rules: gcloud compute firewall-rules list --format=json."
+        - action: "Remove 0.0.0.0/0 sources on 22, 3389, 5432, 3306 and 1433, or scope them to Identity-Aware Proxy ranges."
+        - action: "Prefer IAP TCP forwarding or a bastion over public management ports."
 
   - id: CTRL-GCP-004
     title: "Audit Log Sink Exported to Central Destination"
@@ -111,6 +135,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "secops.logging"
       iso27001_2022:
         - "A.8.15"
       nist_csf_2:
@@ -127,6 +153,12 @@ controls:
           return "not_applicable"
       exporting = [s for s in sinks if s.get("destination")]
       return "implemented" if exporting else "not_implemented"
+    remediation:
+      summary: "Export audit logs to a central, retained destination."
+      steps:
+        - action: "Create an aggregated sink at the organisation level with includeChildren."
+        - action: "Send to a log bucket with retention and to the SIEM; restrict who can modify the sink."
+        - action: "Enable Data Access audit logs for the services that hold sensitive data."
 
   - id: CTRL-GCP-005
     title: "Cloud Storage Buckets Use Uniform Access and CMEK"
@@ -137,6 +169,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "data.protection"
       iso27001_2022:
         - "A.8.12"
       nist_csf_2:
@@ -163,6 +197,12 @@ controls:
       if compliant == len(buckets):
           return "implemented"
       return "partially_implemented" if compliant else "not_implemented"
+    remediation:
+      summary: "Apply uniform bucket-level access and customer-managed encryption."
+      steps:
+        - action: "Enable uniform bucket-level access on every bucket and remove legacy ACLs."
+        - action: "Set a Cloud KMS key as the default encryption key for sensitive buckets."
+        - action: "Review public IAM bindings (allUsers, allAuthenticatedUsers) and remove them."
 
   - id: CTRL-GCP-006
     title: "KMS Key Rotation Within 90 Days"
@@ -172,6 +212,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "data.encryption"
       iso27001_2022:
         - "A.8.24"
       nist_csf_2:
@@ -200,6 +242,12 @@ controls:
       if compliant == len(keys):
           return "implemented"
       return "partially_implemented" if compliant else "not_implemented"
+    remediation:
+      summary: "Rotate Cloud KMS keys within 90 days."
+      steps:
+        - action: "Set a rotation schedule: gcloud kms keys update <key> --rotation-period=90d --next-rotation-time=<date>."
+        - action: "Grant only roles/cloudkms.cryptoKeyEncrypterDecrypter to workloads."
+        - action: "Alert on key version destruction and on rotation failures."
 
   - id: CTRL-GCP-007
     title: "Organisation Policy Constraints Enforced"
@@ -210,6 +258,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "infrastructure.policy"
       iso27001_2022:
         - "A.8.9"
       nist_csf_2:
@@ -225,6 +275,12 @@ controls:
       if policies is None:
           return "not_applicable"
       return "implemented" if policies else "not_implemented"
+    remediation:
+      summary: "Enforce the organisation policies that back this baseline."
+      steps:
+        - action: "Apply constraints such as compute.vmExternalIpAccess, storage.publicAccessPrevention and iam.disableServiceAccountKeyCreation."
+        - action: "Apply at the organisation or folder so new projects inherit them."
+        - action: "Track exceptions explicitly rather than by leaving policies unenforced."
 
   - id: CTRL-GCP-008
     title: "VPC Flow Logs Enabled on Subnetworks"
@@ -235,6 +291,8 @@ controls:
     category: cloud_security
     service: gcp
     compliance_mapping:
+      zero_trust:
+        - "network.visibility"
       iso27001_2022:
         - "A.8.16"
       nist_csf_2:
@@ -260,3 +318,10 @@ controls:
               else:
                   return "partially_implemented" if enabled else "not_implemented"
       return "implemented" if enabled else "not_implemented"
+    remediation:
+      summary: "Enable VPC flow logs on every subnetwork."
+      steps:
+        - action: "Update each subnetwork: gcloud compute networks subnets update <subnet> --enable-flow-logs."
+        - action: "Set a sampling rate and aggregation interval that match the retention budget."
+        - action: "Export flow logs to the central logging project."
+

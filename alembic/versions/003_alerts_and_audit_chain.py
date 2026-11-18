@@ -68,15 +68,45 @@ def upgrade() -> None:
     op.create_index("ix_alerts_assigned_to", "alerts", ["assigned_to"])
     op.create_index("ix_alerts_triggered_at", "alerts", ["triggered_at"])
 
-    with op.batch_alter_table("audit_logs") as batch:
-        batch.add_column(sa.Column("prev_hash", sa.String(64), nullable=True))
-        batch.add_column(sa.Column("entry_hash", sa.String(64), nullable=True))
+    # audit_logs is created by the app's metadata on existing deployments; a fresh
+    # `alembic upgrade head` never saw it, so create it when it is missing.
+    inspector = sa.inspect(op.get_bind())
+    if "audit_logs" not in inspector.get_table_names():
+        op.create_table(
+            "audit_logs",
+            sa.Column("id", sa.String(36), primary_key=True),
+            sa.Column("tenant_id", sa.String(36), sa.ForeignKey("tenants.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("user_id", sa.String(36), sa.ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True),
+            sa.Column("action", sa.String(128), nullable=False),
+            sa.Column("resource_type", sa.String(64), nullable=True),
+            sa.Column("resource_id", sa.String(36), nullable=True),
+            sa.Column("payload", sa.Text, nullable=True),
+            sa.Column("ip_address", sa.String(45), nullable=True),
+            sa.Column("user_agent", sa.String(512), nullable=True),
+            sa.Column("correlation_id", sa.String(36), nullable=True),
+            sa.Column("prev_hash", sa.String(64), nullable=True),
+            sa.Column("entry_hash", sa.String(64), nullable=True),
+            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
+        )
+        op.create_index("ix_audit_logs_tenant_id", "audit_logs", ["tenant_id"])
+        op.create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
+        op.create_index("ix_audit_logs_action", "audit_logs", ["action"])
+        op.create_index("ix_audit_logs_correlation_id", "audit_logs", ["correlation_id"])
+        op.create_index("ix_audit_logs_created_at", "audit_logs", ["created_at"])
+    else:
+        with op.batch_alter_table("audit_logs") as batch:
+            batch.add_column(sa.Column("prev_hash", sa.String(64), nullable=True))
+            batch.add_column(sa.Column("entry_hash", sa.String(64), nullable=True))
 
 
 def downgrade() -> None:
-    with op.batch_alter_table("audit_logs") as batch:
-        batch.drop_column("entry_hash")
-        batch.drop_column("prev_hash")
+    if "audit_logs" in sa.inspect(op.get_bind()).get_table_names():
+        columns = {column["name"] for column in sa.inspect(op.get_bind()).get_columns("audit_logs")}
+        with op.batch_alter_table("audit_logs") as batch:
+            if "entry_hash" in columns:
+                batch.drop_column("entry_hash")
+            if "prev_hash" in columns:
+                batch.drop_column("prev_hash")
 
     for index in (
         "ix_alerts_triggered_at",

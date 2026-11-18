@@ -464,6 +464,38 @@ Compose file already runs one). Manual runs do not need beat:
 Alert policies are evaluated by the same beat schedule, so the Alert Center fills without opening
 the page; **Evaluate now** runs them immediately.
 
+### Zero Trust Assessment
+
+Microsoft's Zero Trust Assessment is a PowerShell module that signs in to a tenant and runs 364
+checks. It needs an interactive Windows session and a Global Reader (Global Administrator for the
+first consent), so it runs on an administrator's workstation and UniMonitor imports the report:
+
+```powershell
+# PowerShell 7, as an administrator
+.\scripts\zerotrust\Invoke-UniMonitorZeroTrust.ps1 -Tenant contoso.onmicrosoft.com `
+    -UniMonitorUrl https://unimonitor.contoso.com
+```
+
+The script installs `ZeroTrustAssessment` if needed, runs `Invoke-ZtAssessment`, and posts
+`ZeroTrustAssessmentReport.json` to `/api/v1/zerotrust/import`. Without `-UniMonitorUrl` it only
+writes the report, which you can upload with **Import ZeroTrustAssessmentReport.json** on the
+**ZT Assessment** page. The same page can be downloaded from that page and ships inside the
+Windows installer.
+
+AWS, Google Cloud and Google Workspace appear on the same page; **Evaluate now** scores their
+controls from the latest collected evidence and shows the remediation text from each control's
+YAML.
+
+### Certificate authentication
+
+Microsoft connections default to certificate authentication: the setup wizard generates a
+self-signed certificate, uploads it to the app registration and keeps the private key in the
+vault. The lifetime is selectable at setup and on rotation, 1–1095 days, default 365. Rotate from
+**Settings → Microsoft connection → Rotate certificate**; the new certificate is added to the app
+registration before the old one is removed, so collection keeps running. The app registration must
+list itself as an owner for that to work (`Application.ReadWrite.OwnedBy` + Owners → Add), and
+the certificate is then the only thing that has to be protected.
+
 ## 7. Starting & Stopping UniMonitor
 
 ### Windows Service

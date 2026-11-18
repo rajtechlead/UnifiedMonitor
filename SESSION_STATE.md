@@ -339,6 +339,24 @@ same-vendor upgrades within the approved stack, not substitutions.
 - Migrations: `003_alerts_and_audit_chain`. Checks: 639 tests, ruff, mypy 110 files, frontend
   build + ESLint clean.
 
+## 2026-11-18 — Zero Trust Assessment and multi-cloud remediation
+
+- New **ZT Assessment** page (`/zero-trust/assessment`, side nav): imports Microsoft's
+  `ZeroTrustAssessmentReport.json`, scores it per pillar, filters by status/pillar/text, and
+  expands each check to Microsoft's remediation steps.
+- `POST /zerotrust/import` (normaliser accepts list / pillar sections / id-keyed / nested),
+  `POST /zerotrust/run` (AWS, GCP, Google Workspace from latest findings), `/summary`, `/runs`,
+  `/checks`, `/script`. New tables `zerotrust_runs` / `zerotrust_checks` (migration `004`).
+- All 22 AWS/GCP/Workspace controls now carry `remediation.summary` + steps; `ControlLoader`
+  parses them into `remediation_summary` / `remediation_steps`.
+- `scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1` installs/connects/runs the module and posts
+  the report; bundled by the PyInstaller spec, downloadable from the page, parsed in the Windows
+  installer and release workflows.
+- Certificate rotation from Settings now asks for the lifetime (1–1095 days, default 365).
+- API stays at v1: every new endpoint is additive, so a v2 would duplicate routes with no
+  contract change.
+- Checks: 656 tests, ruff, mypy 115 files, frontend build + ESLint clean.
+
 ## Resume Instructions
 
 1. Read `SECTION_STATE.md`… i.e. this file, `NEXT_ACTIONS.md`, `GAP_REGISTER.md`,

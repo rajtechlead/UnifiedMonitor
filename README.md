@@ -22,8 +22,10 @@ with a per-cloud view and an aggregate view across all of them.
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
 | **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
 | **Reporting** | PDF, DOCX, Excel, HTML, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
-| **Dashboards** | Executive, CISO, Zero Trust, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Alerts, Assessments, Reports, Licences, Service Health, Data Collection |
+| **Dashboards** | Executive, CISO, Zero Trust, Zero Trust Assessment, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Alerts, Assessments, Reports, Licences, Service Health, Data Collection |
 | **Zero Trust view** | Coverage per Microsoft Zero Trust pillar, grouped from each control's `zero_trust` mapping |
+| **Zero Trust Assessment** | Microsoft's 364 PowerShell checks imported from `ZeroTrustAssessmentReport.json`, plus AWS, Google Cloud and Google Workspace controls, with per-result remediation and pillar scores for all four platforms |
+| **Cloud remediation** | Every AWS, GCP and Google Workspace control carries the remediation summary and steps the assessment page shows |
 | **Triage & ROI queue** | Acknowledge, snooze, assign and resolve findings; the highest impact-per-effort fixes are ranked first |
 | **Investigation timeline** | Per-finding history and collected evidence in one ordered list |
 | **Alert Center** | Metric, activity and anomaly policies over findings and score history, with acknowledge / snooze / assign / resolve; Teams, Slack, SMTP and webhook delivery |

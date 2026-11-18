@@ -40,7 +40,7 @@ Dispositions:
 | GAP-09 | Vigil365 | Licence posture page (paid-but-unused, needs-another-licence) | Copilot controls only; no `subscribedSkus` view | Medium | **Merged** |
 | GAP-10 | Vigil365 | Service health and M365 connectivity pages | No `serviceHealth` collector or page | Medium | **Merged** |
 | GAP-11 | Vigil365 | Global search palette (Ctrl+K) and saved filter presets | Findings text search only | Low | **Merged** (search; filter presets not built) |
-| GAP-12 | ZT Assessment | 364 Microsoft-authored assessment checks, seven pillars | 180 controls; Zero Trust mappings present but no pillar roll-up | High | **Partially merged** |
+| GAP-12 | ZT Assessment | 364 Microsoft-authored assessment checks, seven pillars | Import path for the PowerShell export, pillar scores, per-check remediation; AWS/GCP/Workspace checks with remediation | High | **Merged** |
 | GAP-13 | Sheppard | Interactive terminal UI | Web UI only | Low | **Not applicable** |
 | GAP-14 | Sheppard | OSINT threat-intelligence controls (2) | No external feed ingestion | Low | **Deferred** |
 | GAP-15 | ZT Assessment | Pillar coverage view | No pillar view despite mappings existing | Medium | **Merged** |
@@ -143,7 +143,28 @@ filter.
 time-ordered list; the Findings detail panel renders it. UniMonitor has no user/device entity
 graph, so the timeline is per finding rather than Vigil365's per identity.
 
-### GAP-12 / GAP-15 — Zero Trust model (pillar view merged, checks not ported)
+### GAP-12 — Zero Trust Assessment import (merged)
+
+Microsoft's 364 checks run as a PowerShell module on an administrator's Windows
+workstation (interactive sign-in, hours on a large tenant) and write
+`ZeroTrustAssessmentReport.json`. Re-implementing them server-side would fork
+Microsoft's logic, so the report is imported instead:
+
+- **Zero Trust Assessment** page (`/zero-trust/assessment`): imports the JSON (file picker),
+  shows a score card per platform, pillar chips, filters and a per-check row that expands to
+  Microsoft's remediation steps.
+- `POST /zerotrust/import` normalises the report. The parser accepts a list, pillar sections,
+  an id-keyed object, and walks the tree for test rows, because the export shape has changed
+  between module releases; statuses map `Passed`/`Failed`/`Investigate`/`Skipped` and an
+  unknown result is `not_run`, never a pass.
+- `scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1` installs/connects/runs the module and posts
+  the report to UniMonitor, or writes it locally for manual upload. It is offered for download
+  from the page and bundled in the Windows installer.
+- The same page covers **AWS, Google Cloud and Google Workspace**: `POST /zerotrust/run` scores
+  those controls from the latest findings and shows the control's own remediation text, so all
+  four platforms report in one shape.
+
+### GAP-15 — Zero Trust pillar view (merged)
 
 Every UniMonitor control already declares `compliance_mapping.zero_trust` values such as
 `identity.verify_explicitly` and `endpoints.threat_protection`. `unimonitor/grc/pillars.py` maps
@@ -152,10 +173,8 @@ pillars, and `GET /dashboard/zero-trust` computes coverage from persisted findin
 with no mapped control report `uncovered` rather than a misleading 100%. The new Zero Trust page
 shows all seven.
 
-The 364 PowerShell checks were **not** copied. They duplicate control logic already expressed in
-YAML for Microsoft services, are Microsoft-only, and importing them would create two competing
-sources of truth with no test parity. Where the ZT checks cover a capability UniMonitor lacks
-(licence posture, service health), that is tracked separately as GAP-09/GAP-10.
+The 364 PowerShell checks are **imported, not copied** into YAML: they stay Microsoft-authored and
+UniMonitor stores their results, so there is still one source of truth for each check.
 
 ### GAP-14 — OSINT controls (deferred)
 
@@ -216,7 +235,7 @@ Run), `POST /monitoring/collect`, and the existing per-collector endpoint.
 
 | Gap | Why |
 |---|---|
-| GAP-12 | 364 PowerShell checks not ported; pillar model merged and the YAML catalogue remains the single source of truth |
+| GAP-12 follow-up | Microsoft's checks are imported, not executed in-app: the module needs an interactive Windows session |
 | GAP-13 | Terminal UI conflicts with the multi-user web platform |
 | GAP-14 | OSINT controls need an external feed contract that does not exist |
 | GAP-17 | Per-staff tenant scoping needs a user↔tenant assignment model |
@@ -237,7 +256,8 @@ Run), `POST /monitoring/collect`, and the existing per-collector endpoint.
 | Collection | `unimonitor/worker/tasks/assessment.py`, `unimonitor/worker/celery_app.py`, `unimonitor/api/v1/monitoring.py`, `frontend/src/pages/CollectionPage.tsx` |
 | Licence / health / search | `unimonitor/api/v1/monitoring.py`, `unimonitor/api/v1/search.py`, `frontend/src/pages/LicensesPage.tsx`, `frontend/src/pages/ServiceHealthPage.tsx`, `frontend/src/components/SearchPalette.tsx` |
 | Migrations | `alembic/versions/003_alerts_and_audit_chain.py` |
-| Tests | `tests/unit/test_merged_features.py`, `tests/unit/test_alerts_and_collection.py` |
+| Zero Trust Assessment | `unimonitor/zerotrust/normalise.py`, `unimonitor/zerotrust/service.py`, `unimonitor/api/v1/zerotrust.py`, `frontend/src/pages/ZeroTrustAssessmentPage.tsx`, `scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1` |
+| Tests | `tests/unit/test_merged_features.py`, `tests/unit/test_alerts_and_collection.py`, `tests/unit/test_zerotrust.py` |
 
 ## 5. Verification
 
@@ -245,10 +265,10 @@ Run on 2026-11-18:
 
 | Check | Result |
 |---|---|
-| `pytest -q` | **639 passed** (20 new tests across the two merge passes) |
+| `pytest -q` | **656 passed** (37 new tests across three merge passes) |
 | `ruff check .` | clean |
-| `ruff format --check .` | clean (176 files) |
-| `mypy unimonitor` | clean (110 files) |
+| `ruff format --check .` | clean (184 files) |
+| `mypy unimonitor` | clean (115 files) |
 | `npm run build` (tsc + vite) | clean |
 | `eslint --max-warnings 0` | clean |
 
@@ -262,6 +282,10 @@ Not verified, and therefore not claimed:
   live tenant; `ServiceHealth.Read.All` must be consented for the health page to return data.
 - The beat schedule was imported and the collection task's logic unit-tested; no Celery beat
   process was run here, so interval firing was not observed.
+- The Zero Trust import was tested against representative report shapes, not against a live
+  `Invoke-ZtAssessment` run: that needs a Windows admin session with a real tenant.
+- The PowerShell runner is syntax-checked by the installer workflow, but it was not executed in
+  this environment, and the installer itself was not built here.
 - The migration `002` was exercised by SQLAlchemy `create_all` in tests, not by `alembic upgrade`
   against a populated database.
 

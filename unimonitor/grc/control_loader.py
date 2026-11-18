@@ -48,6 +48,10 @@ class ControlDefinition:
     # Optional; findings fall back to the severity weight and an effort of 3.
     impact: int = 0
     effort: int = 3
+    # Remediation carried by the control itself, shown in the Zero Trust assessment
+    # and the control library. Empty when the YAML has no ``remediation`` block.
+    remediation_summary: str = ""
+    remediation_steps: list[str] = field(default_factory=list)
     _evaluate_code: str = field(default="", repr=False)
 
     def run_evaluate(self, data: dict) -> str:
@@ -153,6 +157,8 @@ def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
     else:
         _evaluate_code = "def evaluate(data): return 'not_implemented'"
 
+    remediation_summary, remediation_steps = _parse_remediation(ctrl.get("remediation"))
+
     return ControlDefinition(
         id=ctrl_id,
         title=ctrl.get("title", ctrl_id),
@@ -164,8 +170,28 @@ def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
         data_path=ctrl.get("data_path", ""),
         impact=int(ctrl.get("impact", 0) or 0),
         effort=int(ctrl.get("effort", 3) or 3),
+        remediation_summary=remediation_summary,
+        remediation_steps=remediation_steps,
         _evaluate_code=_evaluate_code,
     )
+
+
+def _parse_remediation(raw: object) -> tuple[str, list[str]]:
+    """Read a ``remediation`` block written either as text or as summary/steps."""
+    if isinstance(raw, str):
+        return raw.strip(), []
+    if not isinstance(raw, dict):
+        return "", []
+    summary = str(raw.get("summary", "") or "")
+    steps: list[str] = []
+    for step in raw.get("steps", []) or []:
+        if isinstance(step, dict):
+            action = str(step.get("action", "") or "")
+            if action:
+                steps.append(action)
+        elif step:
+            steps.append(str(step))
+    return summary, steps
 
 
 def _parse_legacy_format(raw: dict, path: Path) -> ControlDefinition | None:

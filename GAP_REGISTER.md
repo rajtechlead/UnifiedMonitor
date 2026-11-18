@@ -58,6 +58,10 @@ None
 | GAP-10 | No service health | `GET /monitoring/service-health` + Service Health page; `ServiceHealth.Read.All` optional |
 | GAP-11 | No global search | `GET /search` + Ctrl+K palette |
 | GAP-16 | No tamper-evident audit | SHA-256 hash chain (migration 003), `/dashboard/audit/verify`, Audit page badge |
+| GAP-12 | Microsoft ZT checks not available in app | `ZeroTrustAssessmentReport.json` import, ZT Assessment page, PowerShell runner bundled in the installer |
+| — | AWS/GCP/Workspace checks had no remediation | `remediation` blocks in the three cloud control files, read by `ControlLoader`, shown on the ZT page |
+| — | No interactive ZT dashboard | `/zero-trust/assessment` nav page: platform scores, pillar chips, filters, expandable remediation |
+| — | Certificate lifetime not selectable on rotation | Rotate dialog asks for 1–1095 days (default 365); setup already accepted `certificate_validity_days` |
 | — | No automatic collection interval | `collect_all_tenants` beat task + `AUTO_COLLECTION` / `COLLECTION_INTERVAL_MINUTES`; Data Collection page for manual runs |
 
 ## Resolved This Session (2026-11-17)

@@ -11,6 +11,7 @@ from unimonitor.db.models.report import Report
 from unimonitor.db.models.risk import RiskItem, RiskScore
 from unimonitor.db.models.tenant import Tenant, TenantConfig
 from unimonitor.db.models.user import AppUser, User, UserRole
+from unimonitor.db.models.zerotrust import ZeroTrustCheck, ZeroTrustRun
 
 __all__ = [
     "Tenant",
@@ -35,4 +36,6 @@ __all__ = [
     "AlertPolicy",
     "Alert",
     "AlertStatus",
+    "ZeroTrustRun",
+    "ZeroTrustCheck",
 ]

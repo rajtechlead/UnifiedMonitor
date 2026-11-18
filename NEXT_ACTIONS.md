@@ -24,6 +24,11 @@ Last Updated: 2026-11-17 UTC
 | P10-014 Scheduled collection | ✅ Done | `collect_all_tenants` beat task, interval config, default assessment |
 | P10-015 Manual collection UI | ✅ Done | Data Collection page: Collect now + per-collector Run |
 | P10-016 Saved filter presets | ⬜ Deferred | UI sugar; global search covers lookup |
+| P10-017 Zero Trust Assessment page | ✅ Done | Import Microsoft report, pillar scores, filters, remediation; `/zero-trust/assessment` |
+| P10-018 Multi-cloud ZT coverage | ✅ Done | `/zerotrust/run` scores AWS/GCP/Workspace controls with remediation |
+| P10-019 Cloud remediation text | ✅ Done | `remediation` blocks on all 22 cloud controls, parsed by the loader |
+| P10-020 PowerShell runner | ✅ Done | `scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1`, bundled, parsed in CI |
+| P10-021 Certificate rotation duration | ✅ Done | Rotate dialog takes 1–1095 days, default 365 |
 
 ## Priority Execution Queue
 

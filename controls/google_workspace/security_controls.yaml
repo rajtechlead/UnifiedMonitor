@@ -10,6 +10,8 @@ controls:
     category: identity
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "identity.mfa"
       iso27001_2022:
         - "A.8.5"
       nist_csf_2:
@@ -29,6 +31,12 @@ controls:
       if state.get("enforced") is True:
           return "implemented"
       return "partially_implemented" if (state.get("enrollmentPct") or 0) >= 50 else "not_implemented"
+    remediation:
+      summary: "Enforce two-step verification for the whole organisation."
+      steps:
+        - action: "Admin console > Security > Authentication > 2-step verification: turn on enforcement for all users."
+        - action: "Allow only phishing-resistant methods for admins (security keys or passkeys)."
+        - action: "Track enrolment and generate a report for users who have not enrolled."
 
   - id: CTRL-GWS-002
     title: "Super Admin Count Limited to Four"
@@ -39,6 +47,8 @@ controls:
     category: identity
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "identity.least_privilege"
       iso27001_2022:
         - "A.8.2"
       nist_csf_2:
@@ -59,6 +69,12 @@ controls:
       if count <= 4:
           return "implemented"
       return "partially_implemented" if count <= 8 else "not_implemented"
+    remediation:
+      summary: "Reduce the number of super admins to four or fewer."
+      steps:
+        - action: "Review Admin console > Account > Admin roles > Super Admin members."
+        - action: "Give day-to-day administrators delegated roles instead of Super Admin."
+        - action: "Require security keys and alert on Super Admin sign-ins."
 
   - id: CTRL-GWS-003
     title: "Custom Admin Roles Follow Least Privilege"
@@ -69,6 +85,8 @@ controls:
     category: identity
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "identity.least_privilege"
       iso27001_2022:
         - "A.8.2"
       nist_csf_2:
@@ -87,6 +105,12 @@ controls:
       if not excessive:
           return "implemented"
       return "partially_implemented" if len(excessive) < len(roles) else "not_implemented"
+    remediation:
+      summary: "Scope custom admin roles to the privileges they actually need."
+      steps:
+        - action: "Review custom roles and remove privileges not used in the last 90 days."
+        - action: "Prefer predefined roles over broad custom roles with org-wide scope."
+        - action: "Re-certify role assignments quarterly with the role holders' managers."
 
   - id: CTRL-GWS-004
     title: "Third-Party OAuth Tokens Reviewed"
@@ -97,6 +121,8 @@ controls:
     category: identity
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "identity.app_consent"
       iso27001_2022:
         - "A.5.15"
         - "A.8.19"
@@ -120,6 +146,12 @@ controls:
       if not high_risk:
           return "implemented"
       return "partially_implemented" if len(high_risk) <= 3 else "not_implemented"
+    remediation:
+      summary: "Review and revoke unnecessary third-party OAuth grants."
+      steps:
+        - action: "Admin console > Security > API controls > App access control: review granted apps."
+        - action: "Block apps that are not approved; revoke tokens for leavers."
+        - action: "Set app access control to trust only verified internal apps by default."
 
   - id: CTRL-GWS-005
     title: "External File Sharing Restricted"
@@ -130,6 +162,8 @@ controls:
     category: data_protection
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "data.sharing"
       iso27001_2022:
         - "A.8.12"
       nist_csf_2:
@@ -149,6 +183,12 @@ controls:
       if settings.get("allowAnyone") is True or settings.get("allowExternalSharing") is True:
           return "not_implemented"
       return "implemented"
+    remediation:
+      summary: "Restrict external sharing in Drive and Docs."
+      steps:
+        - action: "Admin console > Apps > Google Workspace > Drive and Docs > Sharing settings: limit external sharing by domain."
+        - action: "Disable public link sharing or restrict it to approved organisational units."
+        - action: "Alert on high-volume external sharing via the Drive audit log."
 
   - id: CTRL-GWS-006
     title: "Mobile Device Access Restricted to Approved Devices"
@@ -159,6 +199,8 @@ controls:
     category: devices
     service: google_workspace
     compliance_mapping:
+      zero_trust:
+        - "devices.compliance"
       iso27001_2022:
         - "A.8.1"
       nist_csf_2:
@@ -182,3 +224,10 @@ controls:
       if not unapproved:
           return "implemented"
       return "partially_implemented" if len(unapproved) < len(devices) else "not_implemented"
+    remediation:
+      summary: "Limit mobile access to approved, managed devices."
+      steps:
+        - action: "Admin console > Devices > Mobile and endpoints: require approval and basic or advanced management."
+        - action: "Block access from devices that fail the management policy."
+        - action: "Review the mobile device inventory for unmanaged or stale devices."
+

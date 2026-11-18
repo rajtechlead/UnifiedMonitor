@@ -15,6 +15,7 @@ type Hit = {
 
 const PAGES: Hit[] = [
   ['Executive', '/executive'], ['CISO', '/ciso'], ['Clouds', '/clouds'], ['Zero Trust', '/zero-trust'],
+  ['Zero Trust Assessment', '/zero-trust/assessment'],
   ['Security', '/security'], ['Compliance', '/compliance'], ['Risk', '/risk'], ['SOC', '/soc'],
   ['Audit', '/audit'], ['Findings', '/findings'], ['Alerts', '/alerts'], ['Assessments', '/assessments'],
   ['Reports', '/reports'], ['Licences', '/licenses'], ['Service Health', '/service-health'],

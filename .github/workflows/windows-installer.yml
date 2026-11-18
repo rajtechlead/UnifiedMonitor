@@ -26,6 +26,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The Zero Trust runner is bundled as a download in the app; a syntax error
+      # would only surface on a customer's workstation, so parse it here.
+      - name: Validate the Zero Trust Assessment runner
+        shell: pwsh
+        run: |
+          $path = "scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1"
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path $path), [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Error $_.Message }
+            exit 1
+          }
+          Write-Host "$path parses cleanly"
+
       # ── Python + build dependencies ────────────────────────────────────────
       - name: Set up Python ${{ env.PYTHON_VER }}
         uses: actions/setup-python@v5
@@ -69,6 +85,11 @@ jobs:
             exit 1
           }
           Write-Host "Packaged files:" (Get-ChildItem dist/UniMonitor -Recurse | Measure-Object).Count
+          # The Zero Trust page downloads this from the bundle; fail if it is missing.
+          if (!(Test-Path "dist/UniMonitor/scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1")) {
+            Write-Error "PyInstaller did not bundle scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1"
+            exit 1
+          }
 
       - name: Smoke-test packaged executable
         shell: pwsh

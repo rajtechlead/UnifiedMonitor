@@ -27,6 +27,8 @@ datas = [
     (str(ROOT / "branding"), "branding"),
     # Windows-specific scripts
     (str(ROOT / "deploy" / "windows" / "scripts"), "scripts"),
+    # Zero Trust Assessment PowerShell runner (offered for download in the app)
+    (str(ROOT / "scripts" / "zerotrust"), "scripts/zerotrust"),
 ]
 
 # python-docx ships a default.docx template it opens at runtime, and the bundled
@@ -91,6 +93,10 @@ hiddenimports = [
     "botocore",
     "unimonitor.secrets.provider",
     "unimonitor.secrets.resolver",
+    "unimonitor.zerotrust",
+    "unimonitor.zerotrust.normalise",
+    "unimonitor.zerotrust.service",
+    "unimonitor.api.v1.zerotrust",
     # DOCX reporting (python-docx imports its parts lazily)
     "docx",
     "docx.shared",

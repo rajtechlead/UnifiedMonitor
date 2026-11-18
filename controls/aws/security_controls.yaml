@@ -10,6 +10,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "identity.mfa"
       iso27001_2022:
         - "A.8.5"
       nist_csf_2:
@@ -27,6 +29,12 @@ controls:
       if enabled is None:
           return "not_applicable"
       return "implemented" if enabled else "not_implemented"
+    remediation:
+      summary: "Enable MFA on the root user and stop using it for day-to-day work."
+      steps:
+        - action: "Sign in as the root user, open IAM > Security credentials, and assign a hardware or virtual MFA device."
+        - action: "Create an IAM Identity Center or IAM role for administrative work and delete root access keys."
+        - action: "Enable an AWS Config rule or Security Hub control to alert if root MFA is removed."
 
   - id: CTRL-AWS-002
     title: "IAM Password Policy Enforces Complexity"
@@ -37,6 +45,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "identity.authentication"
       iso27001_2022:
         - "A.8.5"
       nist_csf_2:
@@ -63,6 +73,12 @@ controls:
       if passed == len(checks):
           return "implemented"
       return "partially_implemented" if passed >= 4 else "not_implemented"
+    remediation:
+      summary: "Raise the account password policy to the baseline in the control description."
+      steps:
+        - action: "IAM > Account settings > Password policy: 14+ characters, upper/lower/numbers/symbols, reuse prevention 24."
+        - action: "Apply with: aws iam update-account-password-policy --minimum-password-length 14 --require-symbols --require-numbers --require-uppercase-characters --require-lowercase-characters --password-reuse-prevention 24."
+        - action: "Prefer federation (IAM Identity Center) so humans never hold IAM passwords."
 
   - id: CTRL-AWS-003
     title: "IAM Access Keys Rotated Within 90 Days"
@@ -73,6 +89,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "identity.credentials"
       iso27001_2022:
         - "A.8.5"
       nist_csf_2:
@@ -106,6 +124,12 @@ controls:
       if stale == 0:
           return "implemented"
       return "partially_implemented" if stale < len(active) else "not_implemented"
+    remediation:
+      summary: "Rotate or remove long-lived IAM access keys."
+      steps:
+        - action: "List keys with age: aws iam list-users, then aws iam list-access-keys for each user."
+        - action: "Create a replacement key, deploy it, then deactivate and delete the old key."
+        - action: "Move workloads to IAM roles or OIDC federation so keys are not needed at all."
 
   - id: CTRL-AWS-004
     title: "S3 Buckets Block Public Access and Encrypt at Rest"
@@ -116,6 +140,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "data.protection"
       iso27001_2022:
         - "A.8.12"
       nist_csf_2:
@@ -152,6 +178,12 @@ controls:
       if not failures:
           return "implemented"
       return "partially_implemented" if len(failures) < len(buckets) else "not_implemented"
+    remediation:
+      summary: "Block public S3 access and turn on default encryption for every bucket."
+      steps:
+        - action: "Enable Block Public Access at the account level: aws s3control put-public-access-block --account-id <id> --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true."
+        - action: "Turn on default encryption (SSE-S3 or SSE-KMS) per bucket and in the account-level default."
+        - action: "Re-check bucket policies and ACLs that were granting public read before the block."
 
   - id: CTRL-AWS-005
     title: "CloudTrail Multi-Region Logging Enabled"
@@ -162,6 +194,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "infrastructure.logging"
       iso27001_2022:
         - "A.8.15"
       nist_csf_2:
@@ -185,6 +219,12 @@ controls:
       if active:
           return "implemented"
       return "partially_implemented" if trails else "not_implemented"
+    remediation:
+      summary: "Run a multi-region CloudTrail trail with log-file validation."
+      steps:
+        - action: "Create or update a trail with IsMultiRegionTrail and EnableLogFileValidation set to true."
+        - action: "Deliver logs to a dedicated, restricted S3 bucket with object lock and lifecycle retention."
+        - action: "Turn on CloudTrail insights and alarms for StopLogging and DeleteTrail events."
 
   - id: CTRL-AWS-006
     title: "GuardDuty Threat Detection Enabled"
@@ -195,6 +235,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "secops.detection"
       iso27001_2022:
         - "A.8.16"
       nist_csf_2:
@@ -211,6 +253,12 @@ controls:
           return "not_applicable"
       enabled = [d for d in detectors if str(d.get("Status", "")).upper() == "ENABLED"]
       return "implemented" if enabled else "not_implemented"
+    remediation:
+      summary: "Enable GuardDuty in every region and route findings to a responder."
+      steps:
+        - action: "Enable GuardDuty per region (Organizations can auto-enable for new accounts)."
+        - action: "Export findings to Security Hub or EventBridge and page on High/Critical."
+        - action: "Add S3, EKS and malware protection plans where the account uses those services."
 
   - id: CTRL-AWS-007
     title: "AWS Config Recording Enabled"
@@ -221,6 +269,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "infrastructure.configuration"
       iso27001_2022:
         - "A.8.9"
       nist_csf_2:
@@ -237,6 +287,12 @@ controls:
           return "not_applicable"
       recording = [r for r in recorders if r.get("recording") is True]
       return "implemented" if recording else "not_implemented"
+    remediation:
+      summary: "Enable AWS Config recording with the conformance packs that matter."
+      steps:
+        - action: "Create a configuration recorder and delivery channel in each region."
+        - action: "Apply the CIS or FSBP conformance pack, and remediate non-compliant resources."
+        - action: "Aggregate to an organisation aggregator so multi-account posture is visible."
 
   - id: CTRL-AWS-008
     title: "Security Hub Aggregation Enabled"
@@ -247,6 +303,8 @@ controls:
     category: cloud_security
     service: aws
     compliance_mapping:
+      zero_trust:
+        - "secops.visibility"
       iso27001_2022:
         - "A.8.16"
       nist_csf_2:
@@ -262,3 +320,10 @@ controls:
       if enabled is None:
           return "not_applicable"
       return "implemented" if enabled else "not_implemented"
+    remediation:
+      summary: "Turn on Security Hub and adopt a standard."
+      steps:
+        - action: "Enable Security Hub in the home region and the AWS Foundational Security Best Practices standard."
+        - action: "Enable cross-region and cross-account aggregation."
+        - action: "Route critical findings to the ticket queue used by the operations team."
+

@@ -117,9 +117,19 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
   const soon = daysLeft !== null && daysLeft <= 30
 
   const rotate = async () => {
-    setError(''); setBusy(true)
+    setError('')
+    // Validity is chosen per rotation; Entra accepts 1-1095 days, and a year is
+    // the default because it is long enough to forget and short enough to matter.
+    const answer = window.prompt('New certificate lifetime in days (1-1095):', '365')
+    if (answer === null) return
+    const days = Number(answer)
+    if (!Number.isFinite(days) || days < 1 || days > 1095) {
+      setError('Enter a whole number of days between 1 and 1095.')
+      return
+    }
+    setBusy(true)
     try {
-      await api.post('/onboarding/microsoft/certificate/rotate', {})
+      await api.post('/onboarding/microsoft/certificate/rotate', { validity_days: Math.round(days) })
       onRotated()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

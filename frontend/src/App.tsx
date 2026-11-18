@@ -13,6 +13,7 @@ import CloudDashboard from './pages/CloudDashboard'
 import CisoDashboard from './pages/CisoDashboard'
 import CloudProviderPage from './pages/CloudProviderPage'
 import ZeroTrustPage from './pages/ZeroTrustPage'
+import ZeroTrustAssessmentPage from './pages/ZeroTrustAssessmentPage'
 import AlertsPage from './pages/AlertsPage'
 import LicensesPage from './pages/LicensesPage'
 import ServiceHealthPage from './pages/ServiceHealthPage'
@@ -87,6 +88,7 @@ export default function App() {
             <Route path="ciso" element={<RouteErrorBoundary><CisoDashboard /></RouteErrorBoundary>} />
             <Route path="clouds" element={<RouteErrorBoundary><CloudDashboard /></RouteErrorBoundary>} />
             <Route path="zero-trust" element={<RouteErrorBoundary><ZeroTrustPage /></RouteErrorBoundary>} />
+            <Route path="zero-trust/assessment" element={<RouteErrorBoundary><ZeroTrustAssessmentPage /></RouteErrorBoundary>} />
             <Route path="clouds/:providerId" element={<RouteErrorBoundary><CloudProviderPage /></RouteErrorBoundary>} />
             <Route path="security" element={<RouteErrorBoundary><SecurityDashboard /></RouteErrorBoundary>} />
             <Route path="compliance" element={<RouteErrorBoundary><ComplianceDashboard /></RouteErrorBoundary>} />

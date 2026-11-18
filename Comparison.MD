@@ -143,6 +143,9 @@ Legend: ✅ first-class · 🟡 partial / implicit · ❌ absent · **➡** merg
 | Vigil365 | Licence posture and service health | `/monitoring/licensing`, `/monitoring/service-health`, two pages |
 | Vigil365 | Ctrl+K global search | `/search`, `SearchPalette` |
 | Vigil365 | Hash-chained audit trail | `core/audit.py`, migration 003, Audit page badge |
+| ZT Assessment | 364 PowerShell checks with per-result remediation | Import JSON, ZT Assessment page, runner script bundled |
+| Vigil365 + ZT Assessment | Coverage extended to AWS, GCP, Google Workspace | `/zerotrust/run` + remediation on all cloud controls |
+| ZT Assessment | Remediation guidance on every result | Cloud controls carry summary + steps; import keeps Microsoft's |
 | Vigil365 | Scheduled collection | `collect_all_tenants` beat task, Data Collection page |
 
 Everything else in UniMonitor — the setup wizard, dashboards, assessments, frameworks, reporting,

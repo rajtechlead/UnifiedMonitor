@@ -44,6 +44,18 @@ export const dashboardApi = {
     api.get(`/dashboard/clouds/${providerId}`).then((r) => r.data),
 }
 
+export const zerotrustApi = {
+  summary: () => api.get('/zerotrust/summary').then((r) => r.data),
+  checks: (params?: Record<string, unknown>) =>
+    api.get('/zerotrust/checks', { params }).then((r) => r.data),
+  runs: () => api.get('/zerotrust/runs').then((r) => r.data),
+  importReport: (payload: unknown) =>
+    api.post('/zerotrust/import', { source: 'microsoft', payload }).then((r) => r.data),
+  evaluate: (platform: string) =>
+    api.post('/zerotrust/run', { platform }).then((r) => r.data),
+  script: () => api.get('/zerotrust/script', { responseType: 'text' }).then((r) => r.data),
+}
+
 export const findingsApi = {
   list: (params?: Record<string, unknown>) =>
     api.get('/findings', { params }).then((r) => r.data),
