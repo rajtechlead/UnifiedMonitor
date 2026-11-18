@@ -97,6 +97,9 @@ class Settings(BaseSettings):
     ENTRA_SIGNIN_CLIENT_ID: str = ""
     ENTRA_AUTHORITY: str = "https://login.microsoftonline.com"
     ENTRA_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
+    # Where the OAuth callback sends the browser after sign-in. Empty = same origin
+    # as the API, which is where the bundled web UI is served.
+    UNIMONITOR_FRONTEND_URL: str = ""
     GRAPH_API_VERSION: str = "v1.0"
     GRAPH_API_BASE_URL: str = "https://graph.microsoft.com"
     GRAPH_RATE_LIMIT_PER_SECOND: float = 5.0

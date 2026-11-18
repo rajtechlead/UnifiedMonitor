@@ -44,6 +44,10 @@ class ControlDefinition:
     compliance_mapping: dict
     collector: str = ""
     data_path: str = ""
+    # Remediation ROI inputs: security impact (1–10) and effort/complexity (1–5).
+    # Optional; findings fall back to the severity weight and an effort of 3.
+    impact: int = 0
+    effort: int = 3
     _evaluate_code: str = field(default="", repr=False)
 
     def run_evaluate(self, data: dict) -> str:
@@ -158,6 +162,8 @@ def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
         compliance_mapping=ctrl.get("compliance_mapping", {}),
         collector=ctrl.get("collector", ""),
         data_path=ctrl.get("data_path", ""),
+        impact=int(ctrl.get("impact", 0) or 0),
+        effort=int(ctrl.get("effort", 3) or 3),
         _evaluate_code=_evaluate_code,
     )
 

@@ -21,7 +21,7 @@ router = APIRouter()
 # ── Schemas ──────────────────────────────────────────────────
 
 ReportType = Literal["executive", "audit", "compliance", "board", "operational"]
-ReportFormat = Literal["pdf", "docx", "excel", "csv", "json"]
+ReportFormat = Literal["pdf", "docx", "excel", "csv", "json", "html"]
 
 
 class ReportGenerateRequest(BaseModel):
@@ -322,12 +322,13 @@ async def get_report_status(
     """Get report status and metadata."""
     # Try DB
     try:
+        from sqlalchemy import select
+
         from unimonitor.db.base import async_session_factory
-        from unimonitor.db.repositories.assessment_repo import ReportRepository
+        from unimonitor.db.models.report import Report
 
         async with async_session_factory() as session:
-            repo = ReportRepository(session)
-            report = await repo.get_report_by_id(report_id)
+            report = (await session.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
             if report:
                 return ReportStatusResponse.model_validate(report)
     except Exception:  # noqa: S110
@@ -340,33 +341,69 @@ async def get_report_status(
     return ReportStatusResponse(**{k: v for k, v in record.items() if k in ReportStatusResponse.model_fields})
 
 
+_FORMAT_EXT = {"pdf": "pdf", "docx": "docx", "excel": "xlsx", "csv": "csv", "json": "json", "html": "html"}
+_MEDIA_TYPES = {
+    "pdf": "application/pdf",
+    "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "excel": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "csv": "text/csv",
+    "json": "application/json",
+    "html": "text/html",
+}
+
+
+async def _report_files(report_id: str) -> dict[str, str]:
+    """Return ``{format: existing path}`` for a report, from its stored file map."""
+    import json
+
+    from sqlalchemy import select
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.report import Report
+
+    try:
+        async with async_session_factory() as session:
+            report = (await session.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
+            if not report or not report.file_paths:
+                return {}
+            stored = json.loads(report.file_paths)
+    except Exception as exc:  # noqa: BLE001 - a missing DB must return 404, not 500
+        logger.warning("report_lookup_failed", report_id=report_id, error=str(exc))
+        return {}
+    return {str(fmt): str(path) for fmt, path in stored.items() if Path(str(path)).exists()}
+
+
+def _file_response(fmt: str, path: str) -> FileResponse:
+    return FileResponse(path=path, media_type=_MEDIA_TYPES[fmt], filename=Path(path).name)
+
+
+@router.get("/{report_id}/download/{fmt}")
+async def download_report_format(
+    report_id: str,
+    fmt: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+) -> FileResponse:
+    """Download one generated format of a report."""
+    if fmt not in _FORMAT_EXT:
+        raise HTTPException(status_code=404, detail=f"Unknown report format: {fmt}")
+
+    files = await _report_files(report_id)
+    path = files.get(fmt)
+    if not path:
+        raise HTTPException(status_code=404, detail=f"Report has no {fmt} file yet")
+    return _file_response(fmt, path)
+
+
 @router.get("/{report_id}/download")
 async def download_report(
     report_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> FileResponse:
-    """Download a completed report file."""
-    from unimonitor.config import get_settings
-
-    settings = get_settings()
-
-    # Locate file
-    report_dir = Path(settings.REPORT_STORAGE_PATH)
-    for ext in ("pdf", "docx", "xlsx", "csv", "json"):
-        file_path = report_dir / f"{report_id}.{ext}"
-        if file_path.exists():
-            media_types = {
-                "pdf": "application/pdf",
-                "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "csv": "text/csv",
-                "json": "application/json",
-            }
-            return FileResponse(
-                path=str(file_path),
-                media_type=media_types[ext],
-                filename=file_path.name,
-            )
+    """Download the first available format (legacy clients that omit the format)."""
+    files = await _report_files(report_id)
+    for fmt in _FORMAT_EXT:
+        if fmt in files:
+            return _file_response(fmt, files[fmt])
 
     raise HTTPException(status_code=404, detail="Report file not found or not yet generated")
 
@@ -376,30 +413,24 @@ async def delete_report(
     report_id: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> None:
-    """Delete a report and its file."""
-    from unimonitor.config import get_settings
-
-    settings = get_settings()
-
-    # Remove file
-    report_dir = Path(settings.REPORT_STORAGE_PATH)
-    for ext in ("pdf", "docx", "xlsx", "csv", "json"):
-        file_path = report_dir / f"{report_id}.{ext}"
-        if file_path.exists():
-            file_path.unlink()
+    """Delete a report and its generated files."""
+    for path in (await _report_files(report_id)).values():
+        Path(path).unlink(missing_ok=True)
 
     # Remove from store
     _reports_store.pop(report_id, None)
 
-    # Try DB removal
+    # Remove the database row
     try:
+        from sqlalchemy import delete as sql_delete
+
         from unimonitor.db.base import async_session_factory
-        from unimonitor.db.repositories.assessment_repo import ReportRepository
+        from unimonitor.db.models.report import Report
 
         async with async_session_factory() as session:
-            repo = ReportRepository(session)
-            await repo.delete_report(report_id)
-    except Exception:  # noqa: S110
-        pass
+            await session.execute(sql_delete(Report).where(Report.id == report_id))
+            await session.commit()
+    except Exception as exc:  # noqa: BLE001 - deletion still succeeds without a DB
+        logger.warning("report_row_delete_failed", report_id=report_id, error=str(exc))
 
     logger.info("report_deleted", report_id=report_id, by=current_user.id)

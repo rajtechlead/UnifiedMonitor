@@ -311,6 +311,20 @@ same-vendor upgrades within the approved stack, not substitutions.
 | PyInstaller | ⬜ NOT RUN | last Linux success 2026-11-13 |
 | Windows installer | ⬜ UNKNOWN | Windows environment required |
 
+## 2026-11-18 — Reference-repository merge
+
+- Analysed `mstanton/m365_sheppard`, `sameerk27/vigil365` and `microsoft/zerotrustassessment`
+  against this codebase; wrote `Comparison.MD` and `gap_analysis.md` (GAP-01…GAP-20).
+- Fixed the login page's Microsoft sign-in (wrong route, unread token fragment, no redirect URI),
+  and the worker that awaited a synchronous report generator.
+- Merged: HTML report, Zero Trust pillar view, ROI priority queue, finding triage
+  (ack/snooze/assign/resolve), per-finding timeline. Migration `002` adds the triage columns.
+- Deferred with reasons: alert-policy engine, licence posture, service health, global search,
+  hash-chained audit, 364 PowerShell checks. See `gap_analysis.md` §3.
+- Also repaired the rest of the report pipeline: per-format download, status and delete (a
+  non-existent `ReportRepository` import made them fall through) — 630 tests.
+- Checks: 630 tests, ruff, ruff format, mypy 103 files, `tsc && vite build`, ESLint all clean.
+
 ## Resume Instructions
 
 1. Read `SECTION_STATE.md`… i.e. this file, `NEXT_ACTIONS.md`, `GAP_REGISTER.md`,

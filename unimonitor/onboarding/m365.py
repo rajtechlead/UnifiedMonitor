@@ -24,6 +24,7 @@ from typing import Any
 
 import httpx
 
+from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 from unimonitor.onboarding import certificates
 from unimonitor.onboarding.permissions import GRAPH_APP_ID, OPTIONAL, REQUIRED, SELF_MANAGEMENT
@@ -352,6 +353,9 @@ async def provision_app(
             payload={
                 "displayName": display_name,
                 "signInAudience": "AzureADMyOrg",
+                # Without the web redirect URI the app's own "Sign in with Microsoft"
+                # fails with AADSTS50011 redirect_uri mismatch.
+                "web": {"redirectUris": [get_settings().ENTRA_REDIRECT_URI]},
                 "requiredResourceAccess": [
                     {
                         "resourceAppId": GRAPH_APP_ID,

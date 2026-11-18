@@ -382,6 +382,30 @@ that starts with Microsoft 365 alone can connect AWS or Google Cloud when it nee
 Settings picker offers the same **Google Cloud + Workspace — one service account** connector as
 the wizard, and shows each Microsoft connection's certificate thumbprint and expiry.
 
+#### Web single sign-on ("Sign in with Microsoft")
+
+The login page offers **Sign in with Microsoft**; the button is enabled only when
+`ENTRA_CLIENT_ID` and `ENTRA_REDIRECT_URI` are set, so a fresh install shows a hint instead of
+sending the browser to Microsoft with an empty client id.
+
+What the installer and the wizard take care of:
+
+1. The generated app registration includes the web redirect URI `ENTRA_REDIRECT_URI`
+   (`http://localhost:8000/api/v1/auth/callback` by default).
+2. On the app's **Authentication** page, *ID tokens* are not required — the callback uses the
+   authorization-code flow with a certificate or secret held by the server.
+3. The callback returns the session in the URL fragment and the web UI consumes it, so the user
+   lands signed in on the dashboard.
+
+One tenant-side step remains: grant **admin consent** for the delegated permissions
+`User.Read` and `Organization.Read.All` the first time an administrator signs in (Entra prompts
+for it, or use **API permissions → Grant admin consent**). If your web UI runs on a different
+origin during development, set `UNIMONITOR_FRONTEND_URL` (for example `http://localhost:5173`)
+so the callback returns there.
+
+If the button is disabled, the app registration has not been connected yet: finish
+**Microsoft 365** in the setup wizard or in **Settings → Platform connections**.
+
 ### Step 2 (alternative) — Register the app by hand
 
 Only needed when the wizard's automated registration is blocked by tenant policy.

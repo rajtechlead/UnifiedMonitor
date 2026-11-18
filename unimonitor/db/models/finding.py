@@ -32,6 +32,15 @@ class FindingSeverity(StrEnum):
     CRITICAL = "critical"
 
 
+class TriageStatus(StrEnum):
+    """Handler workflow, separate from the control's implementation state."""
+
+    OPEN = "open"
+    ACKNOWLEDGED = "acknowledged"
+    SNOOZED = "snoozed"
+    RESOLVED = "resolved"
+
+
 SEVERITY_WEIGHTS = {
     FindingSeverity.INFORMATIONAL: 1,
     FindingSeverity.LOW: 3,
@@ -76,6 +85,10 @@ class Finding(Base):
     # Flags
     is_suppressed: Mapped[bool] = mapped_column(default=False)
     suppression_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Triage workflow (acknowledge / snooze / assign / resolve)
+    triage_status: Mapped[str] = mapped_column(String(32), default=TriageStatus.OPEN.value, index=True)
+    assignee_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)
+    snoozed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     first_detected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

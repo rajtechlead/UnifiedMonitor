@@ -105,19 +105,34 @@ async def login_local(
     )
 
 
+@router.get("/sso")
+async def sso_status() -> dict[str, bool]:
+    """Whether "Sign in with Microsoft" can work on this install.
+
+    The login page hides the button when no Entra app is configured, instead of
+    sending the browser to Microsoft with an empty client id.
+    """
+    settings = get_settings()
+    return {"enabled": bool(settings.ENTRA_CLIENT_ID and settings.ENTRA_REDIRECT_URI)}
+
+
 @router.get("/login")
 async def login(
     request: Request,
     redirect_after: str = Query(default="/", alias="redirect"),
 ) -> RedirectResponse:
     """Redirect to Entra ID OAuth2 authorization endpoint."""
-    get_settings()
     state = secrets.token_urlsafe(32)
 
     # Store state + redirect destination in cache (5 min TTL)
     await cache_set(f"oauth_state:{state}", {"redirect": redirect_after}, ttl=300)
 
-    authorize_url = build_authorize_url(state=state)
+    try:
+        authorize_url = build_authorize_url(state=state)
+    except Exception as exc:  # no client id / bad authority: tell the page, don't 500
+        logger.warning("oauth_login_unavailable", error=str(exc))
+        return RedirectResponse(url="/login?error=sso_unavailable", status_code=status.HTTP_303_SEE_OTHER)
+
     logger.info("oauth_login_initiated", state=state[:8])
     return RedirectResponse(url=authorize_url, status_code=status.HTTP_302_FOUND)
 
@@ -188,20 +203,16 @@ async def oauth_callback(
 
     logger.info("user_authenticated", user_id=db_user.id, email=db_user.email)
 
-    # Redirect to frontend with tokens in URL fragment or return JSON
+    # Send the browser back to the web UI with the tokens in the fragment. The
+    # fragment never reaches a server and the SPA consumes it on load, which is
+    # why the old JSON-only response left users on the login page.
     redirect_to = state_data.get("redirect", "/")
-    if redirect_to.startswith("/") and not redirect_to.startswith("//"):
-        frontend_url = settings.UNIMONITOR_CORS_ORIGINS[0] if settings.UNIMONITOR_CORS_ORIGINS else ""
-        if frontend_url:
-            return RedirectResponse(
-                url=f"{frontend_url}{redirect_to}#access_token={access_token}&refresh_token={refresh_token}",
-                status_code=status.HTTP_302_FOUND,
-            )
-
-    return TokenResponse(
-        access_token=access_token,
-        refresh_token=refresh_token,
-        expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+    if not (redirect_to.startswith("/") and not redirect_to.startswith("//")):
+        redirect_to = "/"
+    frontend_url = settings.UNIMONITOR_FRONTEND_URL.rstrip("/")
+    return RedirectResponse(
+        url=f"{frontend_url}{redirect_to}#access_token={access_token}&refresh_token={refresh_token}",
+        status_code=status.HTTP_302_FOUND,
     )
 
 

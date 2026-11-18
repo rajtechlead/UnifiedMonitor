@@ -38,6 +38,7 @@ export const dashboardApi = {
   getAudit: () => api.get('/dashboard/audit').then((r) => r.data),
   getClouds: () => api.get('/dashboard/clouds').then((r) => r.data),
   getCiso: () => api.get('/dashboard/ciso').then((r) => r.data),
+  getZeroTrust: () => api.get('/dashboard/zero-trust').then((r) => r.data),
   getCloudProvider: (providerId: string) =>
     api.get(`/dashboard/clouds/${providerId}`).then((r) => r.data),
 }
@@ -46,8 +47,15 @@ export const findingsApi = {
   list: (params?: Record<string, unknown>) =>
     api.get('/findings', { params }).then((r) => r.data),
   get: (id: string) => api.get(`/findings/${id}`).then((r) => r.data),
-  update: (id: string, data: Record<string, unknown>) =>
-    api.patch(`/findings/${id}`, data).then((r) => r.data),
+  // The API calls a compliance state change `/state`; PATCH /findings/{id} does not exist.
+  updateState: (id: string, state: string, comment?: string) =>
+    api.patch(`/findings/${id}/state`, { state, comment }).then((r) => r.data),
+  triage: (id: string, data: Record<string, unknown>) =>
+    api.post(`/findings/${id}/triage`, data).then((r) => r.data),
+  history: (id: string) => api.get(`/findings/${id}/history`).then((r) => r.data),
+  timeline: (id: string) => api.get(`/findings/${id}/timeline`).then((r) => r.data),
+  priority: (tenantId?: string) =>
+    api.get('/findings/priority', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
   getRemediation: (id: string) =>
     api.get(`/findings/${id}/remediation`).then((r) => r.data),
 }

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from typing import Annotated, Any
+import json
+from datetime import UTC, datetime, timedelta
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -31,6 +32,9 @@ class FindingResponse(BaseModel):
     category: str
     service: str
     risk_score: int
+    triage_status: str = "open"
+    assignee_id: str | None = None
+    snoozed_until: datetime | None = None
     is_suppressed: bool
     suppression_reason: str | None
     first_detected_at: datetime
@@ -68,6 +72,43 @@ class StateUpdateRequest(BaseModel):
 
 class SuppressRequest(BaseModel):
     reason: str
+
+
+class TriageRequest(BaseModel):
+    """Handler workflow change; the control's implementation state is separate."""
+
+    status: Literal["open", "acknowledged", "snoozed", "resolved"]
+    assignee_id: str | None = None
+    snooze_hours: int | None = None
+    note: str | None = None
+
+
+class PriorityItem(BaseModel):
+    id: str
+    external_control_id: str
+    title: str
+    severity: str
+    category: str
+    service: str
+    risk_score: int
+    triage_status: str
+    effort: int
+    impact: int
+    roi: float
+
+
+class PriorityQueueResponse(BaseModel):
+    items: list[PriorityItem]
+    total: int
+    tenant_id: str | None
+
+
+class TimelineItem(BaseModel):
+    kind: str
+    at: datetime
+    state: str | None = None
+    source: str | None = None
+    detail: str | None = None
 
 
 class AiRemediationRequest(BaseModel):
@@ -126,6 +167,7 @@ async def list_findings(
     tenant_id: str | None = Query(default=None),
     severity: str | None = Query(default=None),
     state: str | None = Query(default=None),
+    triage_status: str | None = Query(default=None),
     category: str | None = Query(default=None),
     service: str | None = Query(default=None),
     is_suppressed: bool | None = Query(default=None),
@@ -147,6 +189,7 @@ async def list_findings(
         tenant_id=tenant_id,
         severity=severity,
         state=state,
+        triage_status=triage_status,
         category=category,
         service=service,
         is_suppressed=is_suppressed,
@@ -165,6 +208,63 @@ async def list_findings(
         page_size=page_size,
         pages=pages,
     )
+
+
+@router.get("/priority", response_model=PriorityQueueResponse)
+async def priority_queue(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+    limit: int = Query(default=20, ge=1, le=100),
+) -> PriorityQueueResponse:
+    """Open findings ranked by return on remediation effort (ROI).
+
+    ``impact`` is the control's security impact (severity weight when the control
+    does not declare one) and ``effort`` its 1–5 remediation complexity. A control
+    can set either in YAML; the defaults keep the queue useful out of the box.
+    """
+    from unimonitor.db.models.finding import SEVERITY_WEIGHTS, FindingSeverity, FindingState
+    from unimonitor.db.repositories.finding_repo import FindingRepository
+    from unimonitor.grc.control_loader import ControlLoader
+
+    repo = FindingRepository(db)
+    findings, total = await repo.list_paginated(
+        tenant_id=tenant_id,
+        is_suppressed=False,
+        page=1,
+        page_size=500,
+        sort_by="risk_score",
+        sort_desc=True,
+    )
+    controls = {c.id: c for c in ControlLoader().load_all()}
+    done = {FindingState.IMPLEMENTED.value, FindingState.NOT_APPLICABLE.value}
+
+    items: list[PriorityItem] = []
+    for finding in findings:
+        if finding.state in done or finding.triage_status == "resolved":
+            continue
+        control = controls.get(finding.external_control_id)
+        effort = max(1, min(5, int(getattr(control, "effort", 3) or 3)))
+        impact = int(getattr(control, "impact", 0) or 0) or SEVERITY_WEIGHTS.get(finding.severity.upper(), SEVERITY_WEIGHTS[FindingSeverity.MEDIUM])
+        roi = round((impact * 10 + (finding.risk_score or 0)) / effort, 2)
+        items.append(
+            PriorityItem(
+                id=finding.id,
+                external_control_id=finding.external_control_id,
+                title=finding.title,
+                severity=finding.severity,
+                category=finding.category,
+                service=finding.service,
+                risk_score=finding.risk_score,
+                triage_status=finding.triage_status,
+                effort=effort,
+                impact=impact,
+                roi=roi,
+            )
+        )
+
+    items.sort(key=lambda item: item.roi, reverse=True)
+    return PriorityQueueResponse(items=items[:limit], total=total, tenant_id=tenant_id)
 
 
 @router.get("/{finding_id}", response_model=FindingResponse)
@@ -224,6 +324,94 @@ async def update_finding_state(
 
     logger.info("finding_state_updated", finding_id=finding_id, old=old_state, new=body.state)
     return FindingResponse.model_validate(finding)
+
+
+@router.post("/{finding_id}/triage", response_model=FindingResponse)
+async def triage_finding(
+    finding_id: str,
+    body: TriageRequest,
+    current_user: Annotated[Any, Depends(require_role("analyst"))],
+    db: AsyncSession = Depends(get_db),
+) -> FindingResponse:
+    """Acknowledge, snooze, assign or resolve a finding.
+
+    Separate from ``state`` (whether the control is implemented): this is the
+    handler's queue status, and every change is written to the audit log.
+    """
+    from unimonitor.db.models.audit_log import AuditLog
+    from unimonitor.db.repositories.finding_repo import FindingRepository
+
+    repo = FindingRepository(db)
+    finding = await repo.get_by_id(finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    previous = finding.triage_status
+    snoozed_until = None
+    if body.status == "snoozed":
+        hours = body.snooze_hours if body.snooze_hours and body.snooze_hours > 0 else 24
+        snoozed_until = datetime.now(UTC) + timedelta(hours=hours)
+
+    finding = await repo.update(
+        finding_id,
+        triage_status=body.status,
+        assignee_id=body.assignee_id if body.assignee_id is not None else finding.assignee_id,
+        snoozed_until=snoozed_until,
+    )
+    await repo.add_history(
+        finding_id=finding_id,
+        previous_state=previous,
+        new_state=body.status,
+        changed_by=current_user.id,
+        comment=body.note or f"Triage: {previous} → {body.status}",
+    )
+    db.add(
+        AuditLog(
+            tenant_id=finding.tenant_id,
+            user_id=current_user.id,
+            action="finding.triaged",
+            resource_type="finding",
+            resource_id=finding_id,
+            payload=json.dumps({"from": previous, "to": body.status, "assignee_id": body.assignee_id, "note": body.note}),
+        )
+    )
+    await db.flush()
+
+    logger.info("finding_triaged", finding_id=finding_id, old=previous, new=body.status, by=current_user.id)
+    return FindingResponse.model_validate(finding)
+
+
+@router.get("/{finding_id}/timeline", response_model=list[TimelineItem])
+async def finding_timeline(
+    finding_id: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+) -> list[TimelineItem]:
+    """Merged investigation timeline: state changes and collected evidence."""
+    from unimonitor.db.repositories.finding_repo import FindingRepository
+
+    repo = FindingRepository(db)
+    finding = await repo.get_by_id(finding_id)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Finding not found")
+
+    timeline = [
+        TimelineItem(
+            kind="history",
+            at=item.changed_at,
+            state=item.new_state,
+            detail=item.comment or f"{item.previous_state} → {item.new_state}",
+        )
+        for item in await repo.get_history(finding_id)
+    ]
+    from sqlalchemy import select
+
+    from unimonitor.db.models.finding import FindingEvidence
+
+    evidence = (await db.execute(select(FindingEvidence).where(FindingEvidence.finding_id == finding_id))).scalars().all()
+    timeline += [TimelineItem(kind="evidence", at=item.collected_at, source=item.source, detail=item.evidence_type) for item in evidence]
+    timeline.sort(key=lambda item: item.at)
+    return timeline
 
 
 @router.post("/{finding_id}/suppress", response_model=FindingResponse)

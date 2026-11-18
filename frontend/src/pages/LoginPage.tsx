@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Shield } from 'lucide-react'
 import { api } from '../hooks/useApi'
 import { useAuthStore } from '../store/authStore'
@@ -9,8 +9,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [ssoEnabled, setSsoEnabled] = useState(true)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
+
+  useEffect(() => {
+    api.get('/auth/sso')
+      .then((res) => setSsoEnabled(Boolean(res.data.enabled)))
+      .catch(() => setSsoEnabled(false))
+  }, [])
+
+  useEffect(() => {
+    const ssoError = searchParams.get('error')
+    if (ssoError === 'sso_unavailable') {
+      setError('Microsoft sign-in is not configured. Connect Microsoft 365 in Settings, or sign in with your local admin account.')
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -33,7 +48,7 @@ export default function LoginPage() {
   }
 
   const handleEntraLogin = () => {
-    window.location.href = '/api/v1/auth/entra/login'
+    window.location.href = '/api/v1/auth/login'
   }
 
   return (
@@ -73,13 +88,15 @@ export default function LoginPage() {
         {/* Microsoft SSO button */}
         <button
           onClick={handleEntraLogin}
+          disabled={!ssoEnabled}
+          title={ssoEnabled ? undefined : 'Connect Microsoft 365 in Settings first'}
           style={{
             width: '100%', padding: '11px 16px',
             background: '#0078D4', color: 'white',
-            border: 'none', borderRadius: 8, cursor: 'pointer',
+            border: 'none', borderRadius: 8, cursor: ssoEnabled ? 'pointer' : 'not-allowed',
             fontSize: 14, fontWeight: 600,
             display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-            marginBottom: 20,
+            marginBottom: 20, opacity: ssoEnabled ? 1 : 0.5,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
@@ -90,6 +107,11 @@ export default function LoginPage() {
           </svg>
           Sign in with Microsoft
         </button>
+        {!ssoEnabled && (
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -12, marginBottom: 16, textAlign: 'center' }}>
+            Connect Microsoft 365 in Settings to enable single sign-on.
+          </p>
+        )}
 
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20,

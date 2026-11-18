@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-17 UTC
+Last Updated: 2026-11-18 UTC
 
 ## Current Release Status
 
@@ -25,7 +25,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 619/619 | 67s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 630/630 | 69s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | First-run onboarding | ✅ 45 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account; sign-in client override; certificate expiry + rotation |
@@ -37,7 +37,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Installer workflow | ✅ On demand | `windows-installer.yml` dispatch builds the .exe + portable zip |
 | Windows installer | 🟡 PyInstaller ✅ on runner | freezes 1134 files and `--help` passes on `windows-latest`; NSIS step fixed (`makensis` PATH) and awaiting a green run |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
-| Ruff format | ✅ CLEAN | 162 files |
+| Ruff format | ✅ CLEAN | 166 files |
 | mypy | ✅ CLEAN | 101 source files |
 | SQLite validation | ✅ | in-memory SQLite for all tests |
 | PostgreSQL validation | ⬜ | not exercised this session |

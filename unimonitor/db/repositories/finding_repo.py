@@ -80,6 +80,7 @@ class FindingRepository(BaseRepository[Finding]):
         tenant_id: str | None = None,
         severity: str | None = None,
         state: str | None = None,
+        triage_status: str | None = None,
         category: str | None = None,
         service: str | None = None,
         is_suppressed: bool | None = None,
@@ -97,6 +98,8 @@ class FindingRepository(BaseRepository[Finding]):
             conditions.append(Finding.severity == severity)
         if state:
             conditions.append(Finding.state == state)
+        if triage_status:
+            conditions.append(Finding.triage_status == triage_status)
         if category:
             conditions.append(Finding.category == category)
         if service:

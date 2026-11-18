@@ -4,6 +4,23 @@ Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
 Last Updated: 2026-11-17 UTC
 
+## Phase 10 — Repository merge (2026-11-18)
+
+| Task | Status | Notes |
+|---|---|---|
+| P10-001 Comparison document | ✅ Done | `Comparison.MD` (reference repos vs UniMonitor capability matrix) |
+| P10-002 Gap analysis | ✅ Done | `gap_analysis.md` (GAP-01…GAP-20, dispositions, residual risks) |
+| P10-003 Microsoft sign-in on login page | ✅ Done | wrong route, unread token fragment, missing redirect URI; `/auth/sso` gate |
+| P10-004 HTML report | ✅ Done | `reporting/html_generator.py`; worker no longer awaits a sync generator |
+| P10-005 Zero Trust pillar view | ✅ Done | `grc/pillars.py`, `GET /dashboard/zero-trust`, `ZeroTrustPage` |
+| P10-006 Finding triage workflow | ✅ Done | ack/snooze/assign/resolve, migration `002`, audit entry |
+| P10-007 ROI priority queue | ✅ Done | `GET /findings/priority`, `impact`/`effort` control keys |
+| P10-008 Findings page contract fix | ✅ Done | real params/fields, pagination, triage column |
+| P10-009 Entity timeline | ✅ Done | `GET /findings/{id}/timeline` |
+| P10-010 Alert policy engine | ⬜ Deferred | GAP-06; notification severity threshold only |
+| P10-011 Licence posture / service health | ⬜ Deferred | GAP-09/GAP-10; new collectors + pages |
+| P10-012 Hash-chained audit | ⬜ Deferred | GAP-16; needs more audit writers first |
+
 ## Priority Execution Queue
 
 Phase 1–4 ✅ COMPLETE

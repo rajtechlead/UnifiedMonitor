@@ -732,6 +732,89 @@ def _group_by_provider(findings: list) -> dict[str, list]:
     return groups
 
 
+class PillarScore(BaseModel):
+    id: str
+    name: str
+    description: str
+    controls_total: int
+    implemented: int
+    partial: int
+    not_implemented: int
+    not_applicable: int
+    coverage_pct: float
+    status: str  # "covered" | "gap" | "uncovered"
+
+
+class ZeroTrustResponse(BaseModel):
+    pillars: list[PillarScore]
+    overall_coverage_pct: float
+    generated_at: datetime
+
+
+@router.get("/zero-trust", response_model=ZeroTrustResponse)
+async def dashboard_zero_trust(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+) -> ZeroTrustResponse:
+    """Coverage per Zero Trust pillar, grouped from each control's ``zero_trust`` mapping."""
+    from sqlalchemy import select
+
+    from unimonitor.db.models.finding import Finding, FindingState
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.pillars import PILLARS, pillar_for
+
+    stmt = select(Finding.external_control_id, Finding.state)
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
+    states = {row[0]: row[1] for row in (await db.execute(stmt)).all()}
+
+    buckets: dict[str, dict[str, int]] = {
+        pillar.id: {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0} for pillar in PILLARS
+    }
+    for control in ControlLoader().load_all():
+        state = states.get(control.id, FindingState.NOT_IMPLEMENTED.value)
+        for mapping in control.compliance_mapping.get("zero_trust", []) or []:
+            pillar_id = pillar_for(str(mapping))
+            if pillar_id is None:
+                continue
+            bucket = buckets[pillar_id]
+            if state == FindingState.IMPLEMENTED.value:
+                bucket["implemented"] += 1
+            elif state == FindingState.PARTIALLY_IMPLEMENTED.value:
+                bucket["partial"] += 1
+            elif state == FindingState.NOT_APPLICABLE.value:
+                bucket["not_applicable"] += 1
+            else:
+                bucket["not_implemented"] += 1
+
+    pillars: list[PillarScore] = []
+    for pillar in PILLARS:
+        b = buckets[pillar.id]
+        applicable = b["implemented"] + b["partial"] + b["not_implemented"]
+        total = applicable + b["not_applicable"]
+        coverage = round((b["implemented"] + b["partial"] * 0.5) / applicable * 100, 2) if applicable else 0.0
+        status = "uncovered" if applicable == 0 else ("gap" if coverage < 60 else "covered")
+        pillars.append(
+            PillarScore(
+                id=pillar.id,
+                name=pillar.name,
+                description=pillar.description,
+                controls_total=total,
+                implemented=b["implemented"],
+                partial=b["partial"],
+                not_implemented=b["not_implemented"],
+                not_applicable=b["not_applicable"],
+                coverage_pct=coverage,
+                status=status,
+            )
+        )
+
+    covered = [p for p in pillars if p.status != "uncovered"]
+    overall = round(sum(p.coverage_pct for p in covered) / len(covered), 2) if covered else 0.0
+    return ZeroTrustResponse(pillars=pillars, overall_coverage_pct=overall, generated_at=datetime.now(UTC))
+
+
 @router.get("/clouds", response_model=CloudAggregateResponse)
 async def dashboard_clouds(
     current_user: Annotated[Any, Depends(get_current_user)],

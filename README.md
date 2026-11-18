@@ -21,8 +21,11 @@ with a per-cloud view and an aggregate view across all of them.
 | **AI Remediation** | Azure OpenAI GPT-4o powered remediation plans with rule-based fallback |
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
 | **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
-| **Reporting** | PDF, DOCX, Excel, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
-| **Dashboards** | Executive, CISO, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
+| **Reporting** | PDF, DOCX, Excel, HTML, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
+| **Dashboards** | Executive, CISO, Zero Trust, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Assessments, Reports |
+| **Zero Trust view** | Coverage per Microsoft Zero Trust pillar, grouped from each control's `zero_trust` mapping |
+| **Triage & ROI queue** | Acknowledge, snooze, assign and resolve findings; the highest impact-per-effort fixes are ranked first |
+| **Investigation timeline** | Per-finding history and collected evidence in one ordered list |
 
 ---
 
@@ -158,6 +161,8 @@ files, the database, Docker manifests, or installer assets.
 | [docs/SECRET_MANAGEMENT.md](docs/SECRET_MANAGEMENT.md) | Secret provider setup and rotation |
 | [docs/PRODUCTION_READINESS.md](docs/PRODUCTION_READINESS.md) | Pre-production checklist |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | Release history |
+| [Comparison.MD](Comparison.MD) | Capability comparison with M365 Sheppard, Vigil365 and the Microsoft Zero Trust Assessment |
+| [gap_analysis.md](gap_analysis.md) | Gap register, what was merged, and what was deliberately deferred |
 
 ---
 
@@ -167,7 +172,7 @@ files, the database, Docker manifests, or installer assets.
 git clone https://github.com/rajtechlead/UniMonitor.git
 cd UniMonitor
 pip install -e ".[dev]"
-pytest                                           # run all 105 tests
+pytest                                           # run the test suite
 UNIMONITOR_ENV=development unimonitor start --reload
 ```
 

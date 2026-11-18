@@ -41,6 +41,19 @@ None
 | M-029 | Windows installer: PyInstaller freeze and the packaged `--help` smoke test are verified on a `windows-latest` runner, and the NSIS step's PATH bug is fixed, but a green installer build and a real fresh install/upgrade have not been observed | `deploy/windows/` | 🟡 needs a green NSIS run |
 | M-028 | Azure-specific controls (25, `azure_security`) roll up under the Microsoft 365 provider; there is no standalone Azure dashboard | `unimonitor/grc/providers.py` | 🟡 grouping decision; split if Azure is sold separately |
 
+## Resolved This Session (2026-11-18)
+
+| ID | Description | Resolution |
+|---|---|---|
+| GAP-01 | "Sign in with Microsoft" on the login page never worked: the button called a non-existent `/auth/entra/login`, the callback's token fragment was never read, and the provisioned app had no web redirect URI | Correct route, fragment consumed in `main.tsx`, redirect URI registered by `provision_app`, `/auth/sso` gate disables the button when unconfigured |
+| GAP-02 | Report generation always failed because the worker awaited a synchronous generator | Synchronous call; `html` added to the generator registry |
+| GAP-03 | Findings page used parameters and fields the API never accepted or returned, and defaulted to a state that does not exist | Page rewritten against `/findings` contract with real pagination and triage |
+| GAP-05 | No HTML report | `reporting/html_generator.py` (escaped, self-contained) |
+| GAP-07 | No triage workflow | `triage_status`/`assignee_id`/`snoozed_until`, `POST /findings/{id}/triage`, migration `002` |
+| GAP-08 | No merged investigation timeline | `GET /findings/{id}/timeline` + detail panel |
+| GAP-04 | No ROI ranking | `GET /findings/priority`, optional `impact`/`effort` in control YAML |
+| GAP-15 | No Zero Trust pillar roll-up | `GET /dashboard/zero-trust` + `ZeroTrustPage` |
+
 ## Resolved This Session (2026-11-17)
 
 | ID | Description | Resolution |

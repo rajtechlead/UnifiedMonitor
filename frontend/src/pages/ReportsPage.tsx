@@ -31,9 +31,10 @@ type RunReportSummary = {
   report_status: string | null
 }
 
-const FORMAT_OPTIONS = ['pdf', 'excel', 'csv', 'json']
+const FORMAT_OPTIONS = ['pdf', 'excel', 'csv', 'json', 'html']
 const FORMAT_LABELS: Record<string, string> = {
   pdf: 'PDF Report', excel: 'Excel Workbook', csv: 'CSV Export', json: 'JSON Data',
+  html: 'HTML Report',
 }
 
 function StatusIcon({ status }: { status: string }) {

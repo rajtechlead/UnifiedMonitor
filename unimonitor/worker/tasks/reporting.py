@@ -54,6 +54,7 @@ def generate_report_task(
         from unimonitor.reporting.csv_generator import CsvReportGenerator
         from unimonitor.reporting.docx_generator import DocxReportGenerator
         from unimonitor.reporting.excel_generator import ExcelReportGenerator
+        from unimonitor.reporting.html_generator import HtmlReportGenerator
         from unimonitor.reporting.json_generator import JsonReportGenerator
         from unimonitor.reporting.pdf_generator import PdfReportGenerator
 
@@ -85,6 +86,7 @@ def generate_report_task(
                 "excel": ExcelReportGenerator,
                 "csv": CsvReportGenerator,
                 "json": JsonReportGenerator,
+                "html": HtmlReportGenerator,
             }
 
             for fmt in formats:
@@ -94,7 +96,9 @@ def generate_report_task(
                     continue
                 try:
                     gen = gen_cls(tenant_id=tenant_id, run=run, findings=findings)
-                    file_path = await gen.generate(report_type=report_type)
+                    # Generators are synchronous; awaiting their path string raised
+                    # TypeError and silently marked every report failed.
+                    file_path = gen.generate(report_type=report_type)
                     generated_files[fmt] = file_path
                 except Exception as exc:
                     logger.error("Report generation failed", extra={"fmt": fmt, "error": str(exc)})
