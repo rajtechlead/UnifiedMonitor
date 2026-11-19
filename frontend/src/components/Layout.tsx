@@ -81,7 +81,7 @@ export default function Layout() {
             width: 32, height: 32, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <img src="/belle-raja-corp.svg" alt="Belle-Raja Corp" width={32} height={32} />
+            <img src="/belle-raja-corp.png" alt="Belle-Raja Corp" width={32} height={32} />
           </div>
           {sidebarOpen && (
             <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--color-brand)' }}>

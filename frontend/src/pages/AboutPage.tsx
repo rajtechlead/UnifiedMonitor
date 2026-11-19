@@ -39,7 +39,7 @@ export default function AboutPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 860 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
-        <img src="/belle-raja-corp.svg" alt={`${OWNER} logo`} width={84} height={84} />
+        <img src="/belle-raja-corp.png" alt={`${OWNER} logo`} width={84} height={84} />
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0 }}>UniMonitor</h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: '4px 0 0' }}>

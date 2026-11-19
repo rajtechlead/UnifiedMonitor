@@ -444,7 +444,8 @@ the lifespan, so every page failed — exactly the reported "setup page erroring
   PowerShell download/import as a manual fallback.
 - Branding: publisher/company is "Belle-Raja Corp" (installer, PE version info, package
   metadata, sidebar and About page), contact Contact@Belle-RajaCorp.com, new About & Help
-  page crediting Raj Raja as designer/builder, logo at `frontend/public/belle-raja-corp.svg`.
+  page crediting Raj Raja as designer/builder, logo at `frontend/public/belle-raja-corp.png`
+  (the supplied `belle-raja-corp.jpg`, background knocked out).
 - Version 1.1.0 across `pyproject.toml`, `main.APP_VERSION`, `unimonitor.__version__`,
   `install.nsi` and the installer workflow default.
 - Reference clones: `reference/` (git-ignored) for vigil365, m365_sheppard and
