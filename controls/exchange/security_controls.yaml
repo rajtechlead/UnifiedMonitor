@@ -4,6 +4,7 @@ controls:
     severity: HIGH
     category: identity
     service: exchange
+    ms_zt_tests: ["21829"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.1"]
       iso27001_2022: ["A.8.5"]
@@ -25,6 +26,7 @@ controls:
     severity: HIGH
     category: identity
     service: exchange
+    ms_zt_tests: ["21796"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.2"]
       iso27001_2022: ["A.8.5"]
@@ -64,6 +66,7 @@ controls:
     severity: HIGH
     category: threat_protection
     service: exchange
+    ms_zt_tests: ["41033"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.6"]
       iso27001_2022: ["A.8.7"]
@@ -85,6 +88,7 @@ controls:
     severity: HIGH
     category: threat_protection
     service: exchange
+    ms_zt_tests: ["41031"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.7"]
       iso27001_2022: ["A.8.7"]
@@ -101,6 +105,7 @@ controls:
     severity: HIGH
     category: threat_protection
     service: exchange
+    ms_zt_tests: ["41032"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.8"]
       iso27001_2022: ["A.8.7"]
@@ -116,6 +121,7 @@ controls:
     severity: HIGH
     category: threat_protection
     service: exchange
+    ms_zt_tests: ["41029"]
     compliance_mapping:
       cis_m365_benchmark: ["2.1.3"]
       iso27001_2022: ["A.8.7"]

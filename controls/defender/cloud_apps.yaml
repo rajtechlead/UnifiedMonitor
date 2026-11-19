@@ -85,6 +85,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender_cloud_apps
+    ms_zt_tests: ["41080"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.20"
@@ -121,6 +122,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender_cloud_apps
+    ms_zt_tests: ["41081"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.16"

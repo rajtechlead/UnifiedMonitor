@@ -12,6 +12,8 @@ from unimonitor.db.models.finding import Finding, FindingState
 from unimonitor.db.models.zerotrust import ZeroTrustCheck, ZeroTrustRun
 from unimonitor.grc.control_loader import ControlLoader
 from unimonitor.grc.pillars import pillar_for
+from unimonitor.zerotrust.microsoft import TEST_IDS
+from unimonitor.zerotrust.microsoft import TESTS as MICROSOFT_TESTS
 from unimonitor.zerotrust.normalise import PLATFORMS, normalise_checks, summarise
 
 # Imports arrive on a schedule; keep only the newest snapshots so the table and
@@ -51,8 +53,23 @@ PLATFORM_SERVICES: dict[str, tuple[str, ...]] = {
 }
 
 
+# Worst-case ordering used when several controls back one upstream test.
+_STATUS_PRIORITY = ("fail", "warn", "pass", "not_run", "not_applicable")
+
+
 def _platform_name(source: str) -> str:
     return PLATFORMS.get(source, source)
+
+
+def _worst_status(statuses: list[str]) -> str:
+    """The weakest result in a group; a single failure fails the test."""
+    if not statuses:
+        return "not_run"
+    return min(statuses, key=lambda status: _STATUS_PRIORITY.index(status) if status in _STATUS_PRIORITY else len(_STATUS_PRIORITY))
+
+
+def _remediation_steps(control: Any) -> list[str]:
+    return list(control.remediation_steps or ([control.remediation_summary] if control.remediation_summary else []))
 
 
 def _control_pillar(compliance_mapping: dict[str, Any]) -> str | None:
@@ -142,18 +159,83 @@ async def prune_runs(db: AsyncSession, *, tenant_id: str, source: str, keep: int
     return len(stale)
 
 
-async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[dict[str, Any]]:
-    """Evaluate the platform's controls against the tenant's latest findings.
-
-    The remediation text comes from the control YAML, so these checks carry the
-    same "what to do next" as the Microsoft assessment.
-    """
+async def _finding_states(db: AsyncSession, tenant_id: str) -> dict[str, str]:
     rows = (await db.execute(select(Finding.external_control_id, Finding.state).where(Finding.tenant_id == tenant_id))).all()
     states: dict[str, str] = {}
     for control_id, state in rows:
         # Later rows overwrite; findings are one row per control, so this is the current state.
         states[control_id] = state
+    return states
 
+
+async def _microsoft_checks(db: AsyncSession, tenant_id: str) -> list[dict[str, Any]]:
+    """Every upstream Microsoft Zero Trust test, scored from local evidence.
+
+    Microsoft's assessment is 364 PowerShell tests; this reports all of them in
+    their own ids so an export from the PowerShell runner and a Python run can be
+    compared row for row. A test whose evidence a control collects takes that
+    control's finding; the rest stay ``not_run`` instead of being assumed to pass.
+    Controls that the catalogue does not cover are appended under their own ids so
+    their findings are still visible.
+    """
+    states = await _finding_states(db, tenant_id)
+    services = set(PLATFORM_SERVICES["microsoft"])
+    controls = [control for control in ControlLoader().load_all() if control.service in services]
+
+    by_test: dict[str, list[Any]] = {}
+    for control in controls:
+        for test_id in control.ms_zt_tests:
+            by_test.setdefault(test_id, []).append(control)
+
+    checks: list[dict[str, Any]] = []
+    for test in MICROSOFT_TESTS:
+        backing = by_test.get(test.id, [])
+        statuses = [_STATUS_TO_RESULT.get(states.get(control.id, ""), "not_run") for control in backing]
+        checks.append(
+            {
+                "check_id": test.id,
+                "title": test.title,
+                "pillar": test.pillar,
+                "severity": test.severity,
+                "status": _worst_status(statuses),
+                "category": test.category,
+                "remediation": next((steps for control in backing if (steps := _remediation_steps(control))), []),
+                "reference": "",
+            }
+        )
+
+    # A control the catalogue does not cover (or maps to an id that no longer
+    # exists upstream) must not disappear from the assessment.
+    for control in controls:
+        if not any(test_id in TEST_IDS for test_id in control.ms_zt_tests):
+            checks.append(_control_check(control, states.get(control.id)))
+    return checks
+
+
+def _control_check(control: Any, current_state: str | None) -> dict[str, Any]:
+    return {
+        "check_id": control.id,
+        "title": control.title,
+        "pillar": _control_pillar(control.compliance_mapping) or "infrastructure",
+        "severity": control.severity.lower(),
+        "status": _STATUS_TO_RESULT.get(current_state or "", "not_run"),
+        "category": control.service,
+        "remediation": _remediation_steps(control),
+        "reference": "",
+    }
+
+
+async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[dict[str, Any]]:
+    """Evaluate the platform's checks against the tenant's latest findings.
+
+    Microsoft is served from the ported test catalogue; the other platforms use
+    their own control definitions. Either way the remediation text comes from the
+    control YAML, so every check carries a "what to do next".
+    """
+    if platform == "microsoft":
+        return await _microsoft_checks(db, tenant_id)
+
+    states = await _finding_states(db, tenant_id)
     services = PLATFORM_SERVICES.get(platform, (platform,))
     checks: list[dict[str, Any]] = []
     for control in ControlLoader().load_all():
@@ -170,7 +252,7 @@ async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[
                 "severity": control.severity.lower(),
                 "status": status,
                 "category": control.service,
-                "remediation": control.remediation_steps or ([control.remediation_summary] if control.remediation_summary else []),
+                "remediation": _remediation_steps(control),
                 "reference": "",
             }
         )

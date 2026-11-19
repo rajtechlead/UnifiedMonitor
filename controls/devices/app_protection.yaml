@@ -9,6 +9,7 @@ controls:
     severity: HIGH
     category: devices
     service: intune
+    ms_zt_tests: ["51014"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.1"
@@ -81,6 +82,7 @@ controls:
     severity: HIGH
     category: devices
     service: intune
+    ms_zt_tests: ["24573"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.8"

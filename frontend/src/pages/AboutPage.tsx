@@ -1,4 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Mail, ShieldCheck, Globe, LifeBuoy } from 'lucide-react'
+import { healthApi } from '../hooks/useApi'
 
 const OWNER = 'Belle-Raja Corp'
 const AUTHOR = 'Raj Raja'
@@ -25,6 +27,15 @@ function Card({ title, children }: Readonly<{ title: string; children: React.Rea
 }
 
 export default function AboutPage() {
+  const [version, setVersion] = useState('')
+
+  // The build reports its own version, so a release bump needs no frontend edit.
+  useEffect(() => {
+    healthApi.get()
+      .then((health) => setVersion(health.version))
+      .catch(() => setVersion(''))
+  }, [])
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 860 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
@@ -70,7 +81,7 @@ export default function AboutPage() {
           <li>Zero Trust → ZT Assessment holds the current scores; the PowerShell runner stays available as a manual, offline option.</li>
         </ul>
         <p style={{ fontSize: 12, color: 'var(--color-text-muted)', margin: '12px 0 0', display: 'flex', gap: 6, alignItems: 'center' }}>
-          <LifeBuoy size={13} /> {OWNER} · version 1.1.0
+          <LifeBuoy size={13} /> {OWNER}{version && ` · version ${version}`}
         </p>
       </Card>
 

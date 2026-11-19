@@ -10,6 +10,7 @@ controls:
     severity: CRITICAL
     category: cloud_security
     service: azure_security
+    ms_zt_tests: ["61004"]
     compliance_mapping:
       iso27001_2022: ["A.8.8", "A.8.16"]
       nist_csf_2: ["DE.CM-01", "ID.RA-01"]
@@ -48,6 +49,7 @@ controls:
     severity: HIGH
     category: cloud_security
     service: azure_security
+    ms_zt_tests: ["50001"]
     compliance_mapping:
       iso27001_2022: ["A.8.8"]
       nist_csf_2: ["ID.IM-02", "PR.IP-07"]
@@ -708,6 +710,7 @@ controls:
     severity: HIGH
     category: network_security
     service: azure_security
+    ms_zt_tests: ["25541"]
     compliance_mapping:
       iso27001_2022: ["A.8.20", "A.8.22"]
       nist_800_53_r5: ["SC-7", "SI-3"]
@@ -745,6 +748,7 @@ controls:
     severity: MEDIUM
     category: network_security
     service: azure_security
+    ms_zt_tests: ["25533"]
     compliance_mapping:
       iso27001_2022: ["A.8.22"]
       nist_800_53_r5: ["SC-5"]
@@ -884,6 +888,7 @@ controls:
     severity: HIGH
     category: logging_monitoring
     service: azure_security
+    ms_zt_tests: ["61002"]
     compliance_mapping:
       iso27001_2022: ["A.8.15", "A.8.16"]
       nist_csf_2: ["DE.AE-02", "RS.AN-03"]

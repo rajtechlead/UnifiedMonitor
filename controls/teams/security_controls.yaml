@@ -4,6 +4,7 @@ controls:
     severity: HIGH
     category: data_protection
     service: teams
+    ms_zt_tests: ["21822"]
     compliance_mapping:
       cis_m365_benchmark: ["8.1"]
       iso27001_2022: ["A.8.3"]
@@ -25,6 +26,7 @@ controls:
     severity: HIGH
     category: data_protection
     service: teams
+    ms_zt_tests: ["21821"]
     compliance_mapping:
       cis_m365_benchmark: ["8.2"]
       iso27001_2022: ["A.8.3"]
@@ -45,6 +47,7 @@ controls:
     severity: MEDIUM
     category: data_protection
     service: teams
+    ms_zt_tests: ["21822"]
     compliance_mapping:
       cis_m365_benchmark: ["8.3"]
       iso27001_2022: ["A.8.3"]

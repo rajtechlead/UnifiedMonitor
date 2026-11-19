@@ -9,6 +9,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender_office
+    ms_zt_tests: ["41039"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.7"
@@ -90,6 +91,7 @@ controls:
     severity: MEDIUM
     category: defender
     service: defender_office
+    ms_zt_tests: ["41036"]
     compliance_mapping:
       iso27001_2022:
         - "A.7.2.2"
@@ -131,6 +133,7 @@ controls:
     severity: MEDIUM
     category: defender
     service: defender_office
+    ms_zt_tests: ["41035"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.24"
@@ -175,6 +178,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender_office
+    ms_zt_tests: ["41033"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.7"
@@ -307,6 +311,7 @@ controls:
     severity: MEDIUM
     category: defender
     service: defender_office
+    ms_zt_tests: ["41041"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.16"

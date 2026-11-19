@@ -9,6 +9,7 @@ controls:
     severity: CRITICAL
     category: defender
     service: defender_identity
+    ms_zt_tests: ["41002"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.16"
@@ -187,6 +188,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender_identity
+    ms_zt_tests: ["41022"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.24"
@@ -221,6 +223,7 @@ controls:
     severity: MEDIUM
     category: defender
     service: defender_identity
+    ms_zt_tests: ["41018"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.16"

@@ -44,7 +44,7 @@ and dashboard. The aggregate view rolls them up side by side.
 
 | Provider | Collector | Controls | Credentials |
 |---|---|---|---|
-| Microsoft 365 | Entra ID, Intune, Defender, Purview, Exchange, SharePoint, Teams, Copilot | 158 | Entra app registration (`TENANT_CLIENT_ID` / `TENANT_CLIENT_SECRET`) |
+| Microsoft 365 | Entra ID, Intune, Defender, Purview, Exchange, SharePoint, Teams, Copilot | 158 controls + all 364 Zero Trust tests | Entra app registration (`TENANT_CLIENT_ID` / `TENANT_CLIENT_SECRET`) |
 | Amazon Web Services | `aws` (boto3) | 8 | `AWS_REGION` + standard AWS credential chain |
 | Google Cloud Platform | `gcp` (REST) | 8 | `GCP_PROJECT_ID`, `GCP_ACCESS_TOKEN` |
 | Google Workspace | `google_workspace` (Admin SDK REST) | 6 | `GOOGLE_WORKSPACE_CUSTOMER_ID`, `GOOGLE_ACCESS_TOKEN` |

@@ -29,6 +29,11 @@ api.interceptors.response.use(
 
 // ── API functions ────────────────────────────────────────────────────────────
 
+export const healthApi = {
+  // Unauthenticated: the build's own version, so the UI never hardcodes one.
+  get: () => api.get('/health').then((r) => r.data as { status: string; version: string }),
+}
+
 export const dashboardApi = {
   getExecutive: () => api.get('/dashboard/executive').then((r) => r.data),
   getSecurity: () => api.get('/dashboard/security').then((r) => r.data),

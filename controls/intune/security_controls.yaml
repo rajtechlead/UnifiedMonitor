@@ -9,6 +9,7 @@ controls:
     severity: CRITICAL
     category: intune
     service: intune
+    ms_zt_tests: ["24550"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.3"
@@ -55,6 +56,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24551"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.5"
@@ -99,6 +101,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24541"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.1"
@@ -131,6 +134,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24546"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.1"
@@ -166,6 +170,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24569"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.3"
@@ -204,6 +209,7 @@ controls:
     severity: CRITICAL
     category: intune
     service: intune
+    ms_zt_tests: ["41045"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.16"
@@ -279,6 +285,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24548", "24549"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.3"
@@ -353,6 +360,7 @@ controls:
     severity: HIGH
     category: intune
     service: intune
+    ms_zt_tests: ["24553"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.8"

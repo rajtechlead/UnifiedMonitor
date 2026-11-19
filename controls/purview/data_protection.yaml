@@ -9,6 +9,7 @@ controls:
     severity: HIGH
     category: purview
     service: purview
+    ms_zt_tests: ["35004"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.12"
@@ -58,6 +59,7 @@ controls:
     severity: HIGH
     category: purview
     service: purview
+    ms_zt_tests: ["35030"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.12"
@@ -103,6 +105,7 @@ controls:
     severity: MEDIUM
     category: purview
     service: purview
+    ms_zt_tests: ["35038"]
     compliance_mapping:
       iso27001_2022:
         - "A.6.3"
@@ -185,6 +188,7 @@ controls:
     severity: HIGH
     category: purview
     service: purview
+    ms_zt_tests: ["35030"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.12"

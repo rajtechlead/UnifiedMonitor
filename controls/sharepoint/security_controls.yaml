@@ -4,6 +4,7 @@ controls:
     severity: HIGH
     category: identity
     service: sharepoint
+    ms_zt_tests: ["21796"]
     compliance_mapping:
       cis_m365_benchmark: ["7.1"]
       iso27001_2022: ["A.8.5"]
@@ -44,6 +45,7 @@ controls:
     severity: MEDIUM
     category: device_compliance
     service: sharepoint
+    ms_zt_tests: ["21892"]
     compliance_mapping:
       cis_m365_benchmark: ["7.3"]
       iso27001_2022: ["A.8.1"]
@@ -117,6 +119,7 @@ controls:
     severity: MEDIUM
     category: compliance
     service: sharepoint
+    ms_zt_tests: ["35007"]
     compliance_mapping:
       iso27001_2022: ["A.8.3"]
       nist_csf_2: ["PR.DS-5"]

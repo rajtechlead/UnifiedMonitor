@@ -138,6 +138,7 @@ controls:
     severity: CRITICAL
     category: governance
     service: copilot_studio
+    ms_zt_tests: ["61011"]
     compliance_mapping:
       iso42001:
         - "A.8.1"
@@ -262,6 +263,7 @@ controls:
     severity: MEDIUM
     category: governance
     service: copilot_studio
+    ms_zt_tests: ["61014"]
     compliance_mapping:
       iso42001:
         - "A.9.1"

@@ -52,6 +52,10 @@ class ControlDefinition:
     # and the control library. Empty when the YAML has no ``remediation`` block.
     remediation_summary: str = ""
     remediation_steps: list[str] = field(default_factory=list)
+    # Microsoft Zero Trust Assessment tests this control provides evidence for.
+    # The Zero Trust engine reports every upstream test and fills its result from
+    # the control's finding, so the mapping is what makes a test evaluated.
+    ms_zt_tests: list[str] = field(default_factory=list)
     _evaluate_code: str = field(default="", repr=False)
 
     def run_evaluate(self, data: dict) -> str:
@@ -172,6 +176,7 @@ def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
         effort=int(ctrl.get("effort", 3) or 3),
         remediation_summary=remediation_summary,
         remediation_steps=remediation_steps,
+        ms_zt_tests=[str(test_id) for test_id in (ctrl.get("ms_zt_tests") or [])],
         _evaluate_code=_evaluate_code,
     )
 

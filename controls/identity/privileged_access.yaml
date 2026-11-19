@@ -9,6 +9,7 @@ controls:
     severity: CRITICAL
     category: identity
     service: entra_id
+    ms_zt_tests: ["21816"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.2"
@@ -59,6 +60,7 @@ controls:
     severity: HIGH
     category: identity
     service: entra_id
+    ms_zt_tests: ["21812"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.2"
@@ -103,6 +105,7 @@ controls:
     severity: HIGH
     category: identity
     service: entra_id
+    ms_zt_tests: ["21835"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.2"
@@ -140,6 +143,7 @@ controls:
     severity: HIGH
     category: identity
     service: entra_id
+    ms_zt_tests: ["21814"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.2"

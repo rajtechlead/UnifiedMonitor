@@ -129,6 +129,59 @@ def test_control_loader_reads_remediation() -> None:
     assert any("root user" in step for step in aws.remediation_steps)
 
 
+# ── Microsoft test catalogue ────────────────────────────────────────────────
+
+
+def test_catalogue_ports_every_upstream_test() -> None:
+    from unimonitor.grc.pillars import PILLAR_IDS
+    from unimonitor.zerotrust.microsoft import TEST_IDS, TESTS
+
+    assert len(TESTS) == len(TEST_IDS) == 364
+    assert all(test.pillar in PILLAR_IDS for test in TESTS)
+    assert all(test.title and test.severity in {"high", "medium", "low"} for test in TESTS)
+    # A spot check that the metadata survived the port, not just the count.
+    assert next(test for test in TESTS if test.id == "21868").title == "Guests don't own apps in the tenant"
+
+
+def test_control_mapping_only_points_at_real_tests() -> None:
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.zerotrust.microsoft import TEST_IDS
+
+    mapped = {test_id: control.id for control in ControlLoader().load_all() for test_id in control.ms_zt_tests}
+    assert mapped, "no control declares ms_zt_tests, so no Microsoft test can be evaluated"
+    assert set(mapped) <= TEST_IDS
+
+
+@pytest.mark.asyncio
+async def test_microsoft_engine_scores_mapped_tests_and_leaves_the_rest_unrun(db_session, tenant) -> None:
+    """A mapped test takes the control's finding; an unevidenced one is not a pass."""
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.zerotrust import service
+
+    db_session.add(
+        Finding(
+            tenant_id=tenant.id,
+            external_control_id="CTRL-DEF-001",
+            title="Microsoft Defender Antivirus Real-Time Protection Enabled",
+            description="real-time protection off",
+            severity="high",
+            state="not_implemented",
+            category="endpoint",
+            service="defender",
+        )
+    )
+    await db_session.flush()
+
+    checks = {check["check_id"]: check for check in await service.cloud_checks(db_session, tenant.id, "microsoft")}
+
+    assert checks["41055"]["status"] == "fail"
+    assert checks["41055"]["remediation"], "a mapped test inherits the control's remediation"
+    assert checks["41055"]["title"] == "Real-time, behavioral, and heuristic protection are enabled on Microsoft Defender Antivirus"
+    assert checks["21770"]["status"] == "not_run"
+    # A control the upstream catalogue has no counterpart for keeps its own row.
+    assert checks["CTRL-PUR-004"]["category"] == "purview"
+
+
 # ── Cloud evaluation and API ────────────────────────────────────────────────
 
 
@@ -168,8 +221,8 @@ async def test_python_engine_covers_every_platform(client, auth_headers, db_sess
     from unimonitor.zerotrust import service
 
     microsoft = await service.cloud_checks(db_session, tenant.id, "microsoft")
-    assert len(microsoft) > 100
-    assert any(check["category"] in {"entra_id", "intune"} for check in microsoft)
+    assert len(microsoft) >= 364
+    assert any(check["category"] == "Access control" for check in microsoft)
 
     response = await client.post("/api/v1/zerotrust/run-all", headers=auth_headers)
     assert response.status_code == 200, response.text
