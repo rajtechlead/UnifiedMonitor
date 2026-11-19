@@ -207,6 +207,36 @@ def _walk(node: Any, out: list[dict[str, Any]], depth: int) -> None:
             _walk(value, out, depth + 1)
 
 
+def _pillar_for(item: dict[str, Any], title: str, category: str) -> str:
+    """The pillar a test row belongs to; identity when it does not say."""
+    declared = _first(item, _PILLAR_KEYS)
+    pillar = pillar_for(str(declared)) if declared else None
+    pillar = pillar or pillar_for_text(f"{title} {category}")
+    if pillar is None or pillar not in PILLAR_IDS:
+        return "identity"
+    return pillar
+
+
+def _check_from_item(item: dict[str, Any]) -> tuple[str, dict[str, Any]] | None:
+    """One normalised check, or None when the row has neither a title nor an id."""
+    title = str(_first(item, _TITLE_KEYS) or "").strip()
+    raw_id = _first(item, _ID_KEYS)
+    if not title and raw_id is None:
+        return None
+    check_id = str(raw_id).strip() if raw_id not in (None, "") else (title[:64] or "unknown")
+    category = str(_first(item, _CATEGORY_KEYS) or "").strip()
+    return check_id, {
+        "check_id": check_id,
+        "title": title or check_id,
+        "pillar": _pillar_for(item, title, category),
+        "severity": _as_severity(_first(item, _SEVERITY_KEYS)),
+        "status": _as_status(_first(item, _STATUS_KEYS)),
+        "category": category,
+        "remediation": _as_remediation(_first(item, _REMEDIATION_KEYS)),
+        "reference": str(_first(item, _REFERENCE_KEYS) or ""),
+    }
+
+
 def normalise_checks(payload: Any) -> list[dict[str, Any]]:
     """Normalise an assessment export into UniMonitor check dicts.
 
@@ -217,34 +247,14 @@ def normalise_checks(payload: Any) -> list[dict[str, Any]]:
     seen: set[str] = set()
 
     for item in _extract(payload):
-        title = str(_first(item, _TITLE_KEYS) or "").strip()
-        raw_id = _first(item, _ID_KEYS)
-        check_id = str(raw_id).strip() if raw_id not in (None, "") else (title[:64] or "unknown")
-        if not title and raw_id is None:
+        parsed = _check_from_item(item)
+        if parsed is None:
             continue
+        check_id, check = parsed
         if check_id in seen:
             continue
         seen.add(check_id)
-
-        category = str(_first(item, _CATEGORY_KEYS) or "").strip()
-        declared = _first(item, _PILLAR_KEYS)
-        pillar = pillar_for(str(declared)) if declared else None
-        pillar = pillar or pillar_for_text(f"{title} {category}")
-        if pillar is None or pillar not in PILLAR_IDS:
-            pillar = "identity"
-
-        checks.append(
-            {
-                "check_id": check_id,
-                "title": title or check_id,
-                "pillar": pillar,
-                "severity": _as_severity(_first(item, _SEVERITY_KEYS)),
-                "status": _as_status(_first(item, _STATUS_KEYS)),
-                "category": category,
-                "remediation": _as_remediation(_first(item, _REMEDIATION_KEYS)),
-                "reference": str(_first(item, _REFERENCE_KEYS) or ""),
-            }
-        )
+        checks.append(check)
 
     return checks
 

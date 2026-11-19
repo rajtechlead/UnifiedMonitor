@@ -312,6 +312,76 @@ async def remove_certificate(
             await http.aclose()
 
 
+def _role_payloads(role_ids: dict[str, str]) -> tuple[list[dict[str, str]], list[str]]:
+    """The app roles to request on the new registration, plus any Graph does not offer."""
+    warnings: list[str] = []
+    required: list[dict[str, str]] = []
+    for perm in REQUIRED:
+        if perm.name in role_ids:
+            required.append({"id": role_ids[perm.name], "type": "Role"})
+        else:
+            warnings.append(f"Graph has no app role '{perm.name}'; skipped.")
+    optional = [{"id": role_ids[perm.name], "type": "Role"} for perm in (*OPTIONAL, *SELF_MANAGEMENT) if perm.name in role_ids]
+    return required + optional, warnings
+
+
+async def _create_app(
+    client: httpx.AsyncClient,
+    token: str,
+    display_name: str,
+    resource_access: list[dict[str, str]],
+    certificate: certificates.ClientCertificate | None,
+) -> dict[str, Any]:
+    """Create the app registration, with the certificate attached when one is wanted.
+
+    Creating the credential in this one call matters: a later ``addKey`` by the
+    signed-in administrator answers 403 Insufficient privileges whenever they do not
+    own the new registration, which is the common failure in hardened tenants.
+    """
+    payload: dict[str, Any] = {
+        "displayName": display_name,
+        "signInAudience": "AzureADMyOrg",
+        # Without the web redirect URI the app's own "Sign in with Microsoft"
+        # fails with AADSTS50011 redirect_uri mismatch.
+        "web": {"redirectUris": [get_settings().ENTRA_REDIRECT_URI]},
+        "requiredResourceAccess": [{"resourceAppId": GRAPH_APP_ID, "resourceAccess": resource_access}],
+    }
+    if certificate is not None:
+        payload["keyCredentials"] = [certificates.graph_key_credential(certificate)]
+    return await _graph(client, "POST", "/applications", token, payload=payload)
+
+
+async def _grant_roles(
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    graph_sp_id: str,
+    sp_id: str,
+    role_ids: dict[str, str],
+) -> tuple[list[str], list[str]]:
+    """Assign each Graph app role to the new service principal (admin consent)."""
+    granted: list[str] = []
+    warnings: list[str] = []
+    for perm in (*REQUIRED, *OPTIONAL, *SELF_MANAGEMENT):
+        role_id = role_ids.get(perm.name)
+        if not role_id:
+            continue
+        try:
+            await _graph(
+                client,
+                "POST",
+                f"/servicePrincipals/{graph_sp_id}/appRoleAssignedTo",
+                token,
+                payload={"principalId": sp_id, "resourceId": graph_sp_id, "appRoleId": role_id},
+                retries=5,
+            )
+            granted.append(perm.name)
+        except M365Error as exc:
+            # An optional role a tenant refuses must not abort the whole setup.
+            warnings.append(f"{perm.name} not granted: {exc}")
+    return granted, warnings
+
+
 async def provision_app(
     access_token: str,
     *,
@@ -335,35 +405,10 @@ async def provision_app(
         tenant_id, tenant_name = await _tenant_info(http, access_token)
         graph_sp_id, role_ids = await _resolve_role_ids(http, access_token)
 
-        warnings: list[str] = []
-        required_roles = []
-        for perm in REQUIRED:
-            if perm.name in role_ids:
-                required_roles.append({"id": role_ids[perm.name], "type": "Role"})
-            else:
-                warnings.append(f"Graph has no app role '{perm.name}'; skipped.")
-        optional_roles = [{"id": role_ids[p.name], "type": "Role"} for p in OPTIONAL if p.name in role_ids]
-        self_roles = [{"id": role_ids[p.name], "type": "Role"} for p in SELF_MANAGEMENT if p.name in role_ids]
+        resource_access, warnings = _role_payloads(role_ids)
+        certificate = certificates.generate_client_certificate(display_name, certificate_validity_days) if auth_method == "certificate" else None
 
-        app = await _graph(
-            http,
-            "POST",
-            "/applications",
-            access_token,
-            payload={
-                "displayName": display_name,
-                "signInAudience": "AzureADMyOrg",
-                # Without the web redirect URI the app's own "Sign in with Microsoft"
-                # fails with AADSTS50011 redirect_uri mismatch.
-                "web": {"redirectUris": [get_settings().ENTRA_REDIRECT_URI]},
-                "requiredResourceAccess": [
-                    {
-                        "resourceAppId": GRAPH_APP_ID,
-                        "resourceAccess": required_roles + optional_roles + self_roles,
-                    }
-                ],
-            },
-        )
+        app = await _create_app(http, access_token, display_name, resource_access, certificate)
         app_id, app_object_id = app["appId"], app["id"]
 
         sp = await _graph(
@@ -377,24 +422,8 @@ async def provision_app(
         sp_id = sp["id"]
 
         # Admin consent: assign each Graph app role to the new service principal.
-        granted: list[str] = []
-        for perm in REQUIRED + OPTIONAL + SELF_MANAGEMENT:
-            role_id = role_ids.get(perm.name)
-            if not role_id:
-                continue
-            try:
-                await _graph(
-                    http,
-                    "POST",
-                    f"/servicePrincipals/{graph_sp_id}/appRoleAssignedTo",
-                    access_token,
-                    payload={"principalId": sp_id, "resourceId": graph_sp_id, "appRoleId": role_id},
-                    retries=5,
-                )
-                granted.append(perm.name)
-            except M365Error as exc:
-                # An optional role a tenant refuses must not abort the whole setup.
-                warnings.append(f"{perm.name} not granted: {exc}")
+        granted, grant_warnings = await _grant_roles(http, access_token, graph_sp_id=graph_sp_id, sp_id=sp_id, role_ids=role_ids)
+        warnings.extend(grant_warnings)
 
         # Being an owner of its own registration is what lets the runtime rotate its
         # certificate with Application.ReadWrite.OwnedBy — nothing wider, and pointless
@@ -436,14 +465,18 @@ async def provision_app(
             logger.info("M365 app registration provisioned", app_id=app_id, tenant_id=tenant_id, auth="client_secret")
             return result
 
-        result.certificate = certificates.generate_client_certificate(display_name, certificate_validity_days)
-        try:
-            await add_certificate(access_token, app_object_id, result.certificate, client=http)
-            result.certificate_uploaded = True
-        except M365Error as exc:
-            result.certificate_error = str(exc)
-            result.manual_steps = list(MANUAL_CERTIFICATE_STEPS)
-            warnings.append(f"Certificate upload failed: {exc}")
+        assert certificate is not None  # generated above for the certificate branch
+        result.certificate = certificate
+        result.certificate_uploaded = bool(app.get("keyCredentials"))
+        if not result.certificate_uploaded:
+            # Older Graph behaviour, or a tenant that dropped the key on create.
+            try:
+                await add_certificate(access_token, app_object_id, certificate, client=http)
+                result.certificate_uploaded = True
+            except M365Error as exc:
+                result.certificate_error = str(exc)
+                result.manual_steps = list(MANUAL_CERTIFICATE_STEPS)
+                warnings.append(f"Certificate upload failed: {exc}")
 
         logger.info(
             "M365 app registration provisioned",

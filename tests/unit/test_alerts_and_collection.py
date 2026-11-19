@@ -207,5 +207,6 @@ def test_audit_entry_digest_is_stable() -> None:
         "payload": '{"a": 1}',
         "created_at": created,
     }
-    assert entry_digest(**kwargs) == entry_digest(**kwargs)
+    first = entry_digest(**kwargs)
+    assert entry_digest(**kwargs) == first
     assert entry_digest(**{**kwargs, "action": "other"}) != entry_digest(**kwargs)

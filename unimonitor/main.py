@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from collections.abc import AsyncIterator
@@ -133,6 +134,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     await init_cache()
     logger.info("Cache initialised")
 
+    # Automatic collection: with no Celery/Redis (the single-process installer) the
+    # API schedules it here; with a broker, Celery beat already does.
+    collection_task: asyncio.Task | None = None
+    if settings.AUTO_COLLECTION_ENABLED:
+        from unimonitor.worker.inline import broker_available, collect_periodically
+
+        if not broker_available():
+            from unimonitor.worker.tasks.assessment import collect_all_tenants_now
+
+            collection_task = asyncio.create_task(
+                collect_periodically(
+                    settings.COLLECTION_INTERVAL_MINUTES,
+                    lambda: collect_all_tenants_now(queue=False),
+                )
+            )
+            logger.info(
+                "Automatic collection running in-process",
+                interval_minutes=settings.COLLECTION_INTERVAL_MINUTES,
+            )
+
     # Instrument OpenTelemetry if enabled
     if settings.OTEL_ENABLED:
         _setup_otel(app, settings)
@@ -142,6 +163,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
     # Shutdown
+    if collection_task is not None:
+        collection_task.cancel()
+        try:
+            await collection_task
+        except asyncio.CancelledError:
+            pass
     from unimonitor.core.cache import close_cache
 
     await close_cache()

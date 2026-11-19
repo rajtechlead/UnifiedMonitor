@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
+from unimonitor.core.tenants import resolve_tenant as _resolve_tenant
 from unimonitor.db.base import get_session
 from unimonitor.db.models.assessment import Assessment, AssessmentRun, AssessmentStatus
 from unimonitor.db.models.tenant import Tenant
@@ -20,6 +21,8 @@ from unimonitor.db.models.user import User
 
 logger = get_logger(__name__)
 router = APIRouter()
+
+TENANT_QUERY_DESCRIPTION = "Tenant ID (default: first active tenant)"
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -251,7 +254,7 @@ async def get_platform_health(
 async def get_collectors(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
+    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
 ) -> list[CollectorStatus]:
     """Return the status of all data collectors for a given tenant."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -303,7 +306,7 @@ async def run_collector(
     collector_name: str,
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
+    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
 ) -> CollectorRunResponse:
     """Trigger a named collector to run immediately for a tenant."""
     valid_names = {d["name"] for d in COLLECTOR_DEFINITIONS}
@@ -316,9 +319,12 @@ async def run_collector(
     tenant = await _resolve_tenant(db, tenant_id)
 
     try:
-        from unimonitor.worker.tasks.assessment import run_single_collector_task
+        from unimonitor.worker.inline import dispatch
+        from unimonitor.worker.tasks.assessment import run_collector_now, run_single_collector_task
 
-        task = run_single_collector_task.delay(
+        task_id = dispatch(
+            run_single_collector_task,
+            run_collector_now,
             tenant_id=tenant.id,
             collector_name=collector_name,
             triggered_by=str(current_user.id),
@@ -327,10 +333,10 @@ async def run_collector(
             "Collector triggered",
             collector=collector_name,
             tenant_id=tenant_id,
-            task_id=task.id,
+            task_id=task_id,
         )
         return CollectorRunResponse(
-            task_id=task.id,
+            task_id=task_id,
             collector=collector_name,
             tenant_id=tenant_id,
             message=f"Collector '{collector_name}' queued successfully",
@@ -349,7 +355,7 @@ async def get_collection_history(
     limit: int = Query(default=20, ge=1, le=100),
     db: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
-    tenant_id: str | None = Query(default=None, description="Tenant ID (default: first active tenant)"),
+    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
 ) -> list[CollectionHistoryEntry]:
     """Return the last N assessment runs for a tenant."""
     from unimonitor.db.models.assessment import Assessment
@@ -457,14 +463,6 @@ class ServiceHealthResponse(BaseModel):
     generated_at: datetime
 
 
-async def _resolve_tenant(db: AsyncSession, tenant_id: str | None) -> Tenant:
-    stmt = select(Tenant).where(Tenant.id == tenant_id) if tenant_id else select(Tenant).where(Tenant.is_active)
-    tenant = (await db.execute(stmt.order_by(Tenant.created_at).limit(1))).scalar_one_or_none()
-    if not tenant:
-        raise HTTPException(status_code=404, detail="Tenant not found")
-    return tenant
-
-
 async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
     """GET one Graph collection for a tenant, raising an actionable error."""
     from unimonitor.graph.client import GraphClient
@@ -561,9 +559,12 @@ async def collect_now(
 
     task_id: str | None = None
     try:
-        from unimonitor.worker.tasks.assessment import run_assessment_task
+        from unimonitor.worker.inline import dispatch
+        from unimonitor.worker.tasks.assessment import run_assessment_now, run_assessment_task
 
-        task = run_assessment_task.delay(
+        task_id = dispatch(
+            run_assessment_task,
+            run_assessment_now,
             run_id=run.id,
             tenant_id=tenant.id,
             assessment_id=assessment.id,
@@ -571,7 +572,6 @@ async def collect_now(
             collectors=assessment.collector_list() or None,
             triggered_by=current_user.id,
         )
-        task_id = task.id
     except Exception as exc:  # noqa: BLE001 - the run row records the failure
         run.status = AssessmentStatus.FAILED.value
         run.error_message = f"Could not queue collection: {exc}"

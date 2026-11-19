@@ -5,26 +5,29 @@ import { CheckCircle, XCircle, AlertCircle, RefreshCw, Activity } from 'lucide-r
 type CollectorStatus = {
   name: string
   display_name: string
-  last_run?: string
-  status?: string
-  error?: string
-  items_collected?: number
+  provider: string
+  last_run: string | null
+  last_status: string | null
+  last_duration_seconds: number | null
 }
 
-type ServiceCard = {
-  name: string
-  status: 'healthy' | 'warning' | 'error' | 'unknown'
-  findings: number
-  coverage: number
+type SeverityCounts = {
+  critical: number
+  high: number
+  medium: number
+  low: number
+  informational: number
+  total: number
 }
 
 function StatusIcon({ status }: { status: string }) {
-  if (status === 'healthy' || status === 'success') return <CheckCircle size={16} color="#10B981" />
-  if (status === 'error' || status === 'failed') return <XCircle size={16} color="#EF4444" />
+  if (status === 'success') return <CheckCircle size={16} color="#10B981" />
+  if (status === 'failed' || status === 'error') return <XCircle size={16} color="#EF4444" />
   return <AlertCircle size={16} color="#F59E0B" />
 }
 
 function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) => void }) {
+  const status = c.last_status || 'never run'
   return (
     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
       <td style={{ padding: '10px 12px' }}>
@@ -33,15 +36,15 @@ function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) 
       </td>
       <td style={{ padding: '10px 12px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <StatusIcon status={c.status || 'unknown'} />
-          <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{c.status || 'unknown'}</span>
+          <StatusIcon status={c.last_status || 'unknown'} />
+          <span style={{ fontSize: 13, textTransform: 'capitalize' }}>{status}</span>
         </div>
       </td>
       <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--color-text-muted)' }}>
         {c.last_run ? new Date(c.last_run).toLocaleString() : '—'}
       </td>
-      <td style={{ padding: '10px 12px', fontSize: 13 }}>
-        {c.items_collected ?? '—'}
+      <td style={{ padding: '10px 12px', fontSize: 13, color: 'var(--color-text-muted)' }}>
+        {c.last_duration_seconds != null ? `${c.last_duration_seconds.toFixed(1)}s` : '—'}
       </td>
       <td style={{ padding: '10px 12px' }}>
         <button
@@ -61,6 +64,14 @@ function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) 
   )
 }
 
+const SEVERITIES: { key: keyof SeverityCounts; label: string; colour: string }[] = [
+  { key: 'critical', label: 'Critical', colour: '#B91C1C' },
+  { key: 'high', label: 'High', colour: '#EF4444' },
+  { key: 'medium', label: 'Medium', colour: '#F59E0B' },
+  { key: 'low', label: 'Low', colour: '#3B82F6' },
+  { key: 'informational', label: 'Informational', colour: '#64748B' },
+]
+
 export default function SecurityDashboard() {
   const { data: security } = useQuery({
     queryKey: ['dashboard', 'security'],
@@ -71,7 +82,7 @@ export default function SecurityDashboard() {
     queryFn: monitoringApi.health,
     refetchInterval: 30000,
   })
-  const { data: collectors, refetch: refetchCollectors } = useQuery({
+  const { data: collectors, refetch: refetchCollectors } = useQuery<CollectorStatus[]>({
     queryKey: ['monitoring', 'collectors'],
     queryFn: monitoringApi.collectors,
   })
@@ -85,18 +96,11 @@ export default function SecurityDashboard() {
     }
   }
 
-  const services: ServiceCard[] = security?.services || [
-    { name: 'Entra ID', status: 'healthy', findings: 3, coverage: 85 },
-    { name: 'Intune', status: 'warning', findings: 7, coverage: 72 },
-    { name: 'Defender', status: 'healthy', findings: 2, coverage: 91 },
-    { name: 'Purview', status: 'warning', findings: 5, coverage: 68 },
-    { name: 'Exchange', status: 'healthy', findings: 1, coverage: 88 },
-    { name: 'SharePoint', status: 'healthy', findings: 4, coverage: 76 },
-    { name: 'Teams', status: 'healthy', findings: 2, coverage: 80 },
-    { name: 'Copilot', status: 'unknown', findings: 0, coverage: 45 },
-  ]
-
-  const collectorList: CollectorStatus[] = collectors?.collectors || []
+  // Real counts from stored findings — this page shows nothing it did not collect.
+  const counts: SeverityCounts = security?.finding_counts ?? {
+    critical: 0, high: 0, medium: 0, low: 0, informational: 0, total: 0,
+  }
+  const collectorList: CollectorStatus[] = collectors ?? []
   const systemHealth = health?.status || 'unknown'
 
   return (
@@ -105,7 +109,7 @@ export default function SecurityDashboard() {
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Security Dashboard</h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            M365 service health and collector status
+            Open findings and collector status
           </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -116,38 +120,29 @@ export default function SecurityDashboard() {
         </div>
       </div>
 
-      {/* Service health grid */}
+      {/* Findings by severity */}
       <div>
-        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>M365 Service Coverage</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 12 }}>
-          {services.map((svc) => (
-            <div key={svc.name} style={{
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>
+          Open Findings · {counts.total}
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 12 }}>
+          {SEVERITIES.map((severity) => (
+            <div key={severity.key} style={{
               background: 'var(--color-surface)', border: '1px solid var(--color-border)',
               borderRadius: 10, padding: 16,
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <span style={{ fontWeight: 600, fontSize: 13 }}>{svc.name}</span>
-                <StatusIcon status={svc.status} />
-              </div>
-              <div style={{ marginBottom: 8 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: 4 }}>
-                  <span style={{ color: 'var(--color-text-muted)' }}>Coverage</span>
-                  <span style={{ fontWeight: 600 }}>{svc.coverage}%</span>
-                </div>
-                <div style={{ height: 4, background: 'var(--color-surface-2)', borderRadius: 2, overflow: 'hidden' }}>
-                  <div style={{
-                    height: '100%', width: `${svc.coverage}%`,
-                    background: svc.coverage >= 80 ? '#10B981' : svc.coverage >= 60 ? '#F59E0B' : '#EF4444',
-                    borderRadius: 2, transition: 'width 0.5s ease',
-                  }} />
-                </div>
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                {svc.findings} open finding{svc.findings !== 1 ? 's' : ''}
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{severity.label}</div>
+              <div style={{ fontSize: 26, fontWeight: 700, color: severity.colour }}>
+                {counts[severity.key]}
               </div>
             </div>
           ))}
         </div>
+        {counts.total === 0 && (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--color-text-muted)' }}>
+            No findings stored yet. Run a collection from the Data Collection page.
+          </div>
+        )}
       </div>
 
       {/* Collectors table */}
@@ -171,13 +166,13 @@ export default function SecurityDashboard() {
         </div>
         {collectorList.length === 0 ? (
           <div style={{ textAlign: 'center', padding: 32, color: 'var(--color-text-muted)', fontSize: 13 }}>
-            No collector data available. Run an assessment to populate.
+            No collector data available. Run a collection to populate.
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Collector', 'Status', 'Last Run', 'Items', 'Actions'].map(h => (
+                {['Collector', 'Status', 'Last Run', 'Duration', 'Actions'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '8px 12px',
                     fontWeight: 600, color: 'var(--color-text-muted)', fontSize: 12 }}>{h}</th>
                 ))}

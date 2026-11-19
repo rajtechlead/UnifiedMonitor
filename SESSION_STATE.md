@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-18 UTC
+Last Updated: 2026-11-19 UTC
 
 ## Current Session Commits (2026-11-18)
 
@@ -379,3 +379,35 @@ same-vendor upgrades within the approved stack, not substitutions.
 ## Usage Limit Procedure
 
 At ~95% context: update all four trackers, commit, push, stop. Never leave untracked work.
+
+## 2026-11-19 (later) — collection without Celery, Entra 403, SonarQube pass
+
+A Windows install runs one process and no Redis, so `.delay()` raised and every
+collection button answered 503; the Security dashboard had no real data and fell back to
+hardcoded demo cards.
+
+- `worker/inline.py`: `dispatch()` queues on Celery when a broker answers and otherwise
+  runs the same coroutine as a background asyncio task; `collect_periodically()` is the
+  broker-less beat. `main.lifespan` starts it when `AUTO_COLLECTION_ENABLED` and no broker,
+  so automatic collection works on a single node and still runs once in Celery when a
+  worker exists. Task bodies moved to `run_assessment_now`, `run_collector_now`,
+  `collect_all_tenants_now` and are shared by the Celery tasks and the API.
+- `monitoring.collect` / `monitoring.run_collector` / `assessments.trigger_run` use
+  `dispatch`, so they no longer answer 503 without a worker. `assessments.trigger_run`
+  also stopped queuing with missing `tenant_id`/`frameworks`.
+- Security dashboard: the fabricated M365 coverage cards are gone; it shows real open
+  findings by severity plus the collector table. The collector list read
+  `collectors.collectors` from an array endpoint, which is why it always said "No collector
+  data"; the row now uses `last_status`/`last_duration_seconds`.
+- Entra setup: `POST /applications` now carries `keyCredentials`, so the certificate is
+  created with the app. The separate `addKey` call the signed-in administrator made was
+  what answered `403 Authorization_RequestDenied / Insufficient privileges`; it remains as
+  a fallback only.
+- SonarQube: nested ternaries and template literals on the dashboards, unstable list keys,
+  palette a11y (role + keyboard + ref focus instead of `autoFocus`), `dataset` over
+  `setAttribute`, duplicated literals (`Finding not found`, `Assessment not found`, tenant
+  query text, `Table Grid`, `SET NULL`), cognitive complexity in `normalise_checks`,
+  `provision_app` and `dashboard_zero_trust`, the self-comparing test assertion, and the
+  duplicated tenant resolver (`core/tenants.resolve_tenant`). FastAPI `Annotated`/
+  `response_model`/`responses` style reminders were left alone: no behaviour, large churn.
+- Checks: 662 pytest, ruff check + format, mypy (117 files), `npm run build`, ESLint.

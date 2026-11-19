@@ -16,6 +16,9 @@ if TYPE_CHECKING:
     from unimonitor.db.models.control import Control
     from unimonitor.db.models.tenant import Tenant
 
+# Deleting a referenced row must not delete the finding that pointed at it.
+SET_NULL = "SET NULL"
+
 
 class FindingState(StrEnum):
     IMPLEMENTED = "implemented"
@@ -59,13 +62,13 @@ class Finding(Base):
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)
     assessment_run_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("assessment_runs.id", ondelete="SET NULL"),
+        ForeignKey("assessment_runs.id", ondelete=SET_NULL),
         nullable=True,
         index=True,
     )
     control_id: Mapped[str | None] = mapped_column(
         String(36),
-        ForeignKey("controls.id", ondelete="SET NULL"),
+        ForeignKey("controls.id", ondelete=SET_NULL),
         nullable=True,
         index=True,
     )

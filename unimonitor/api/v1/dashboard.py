@@ -820,6 +820,31 @@ class ZeroTrustResponse(BaseModel):
     generated_at: datetime
 
 
+def _pillar_buckets(states: dict[str, str]) -> dict[str, dict[str, int]]:
+    """Count control states per Zero Trust pillar from each control's mapping."""
+    from unimonitor.db.models.finding import FindingState
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.pillars import PILLARS, pillar_for
+
+    # Control state → the bucket it increments; anything unrecognised is unimplemented.
+    buckets_for = {
+        FindingState.IMPLEMENTED.value: "implemented",
+        FindingState.PARTIALLY_IMPLEMENTED.value: "partial",
+        FindingState.NOT_APPLICABLE.value: "not_applicable",
+    }
+    buckets: dict[str, dict[str, int]] = {
+        pillar.id: {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0} for pillar in PILLARS
+    }
+    for control in ControlLoader().load_all():
+        state = states.get(control.id, FindingState.NOT_IMPLEMENTED.value)
+        bucket_name = buckets_for.get(state, "not_implemented")
+        for mapping in control.compliance_mapping.get("zero_trust", []) or []:
+            pillar_id = pillar_for(str(mapping))
+            if pillar_id is not None and pillar_id in buckets:
+                buckets[pillar_id][bucket_name] += 1
+    return buckets
+
+
 @router.get("/zero-trust", response_model=ZeroTrustResponse)
 async def dashboard_zero_trust(
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -829,33 +854,14 @@ async def dashboard_zero_trust(
     """Coverage per Zero Trust pillar, grouped from each control's ``zero_trust`` mapping."""
     from sqlalchemy import select
 
-    from unimonitor.db.models.finding import Finding, FindingState
-    from unimonitor.grc.control_loader import ControlLoader
-    from unimonitor.grc.pillars import PILLARS, pillar_for
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.grc.pillars import PILLARS
 
     stmt = select(Finding.external_control_id, Finding.state)
     if tenant_id:
         stmt = stmt.where(Finding.tenant_id == tenant_id)
     states = {row[0]: row[1] for row in (await db.execute(stmt)).all()}
-
-    buckets: dict[str, dict[str, int]] = {
-        pillar.id: {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0} for pillar in PILLARS
-    }
-    for control in ControlLoader().load_all():
-        state = states.get(control.id, FindingState.NOT_IMPLEMENTED.value)
-        for mapping in control.compliance_mapping.get("zero_trust", []) or []:
-            pillar_id = pillar_for(str(mapping))
-            if pillar_id is None:
-                continue
-            bucket = buckets[pillar_id]
-            if state == FindingState.IMPLEMENTED.value:
-                bucket["implemented"] += 1
-            elif state == FindingState.PARTIALLY_IMPLEMENTED.value:
-                bucket["partial"] += 1
-            elif state == FindingState.NOT_APPLICABLE.value:
-                bucket["not_applicable"] += 1
-            else:
-                bucket["not_implemented"] += 1
+    buckets = _pillar_buckets(states)
 
     pillars: list[PillarScore] = []
     for pillar in PILLARS:

@@ -12,6 +12,9 @@ from typing import Any
 
 from unimonitor.reporting.base import BaseReportGenerator
 
+# python-docx's built-in table style, reused by every report table.
+TABLE_STYLE = "Table Grid"
+
 try:
     from docx import Document
     from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -69,7 +72,7 @@ class DocxReportGenerator(BaseReportGenerator):
             ("Total Findings", str(stats["total_findings"])),
         ]
         score_table = doc.add_table(rows=1, cols=2)
-        score_table.style = "Table Grid"
+        score_table.style = TABLE_STYLE
         self._header_row(score_table, ["Metric", "Value"], BRAND_BLUE)
         for metric, value in score_rows:
             cells = score_table.add_row().cells
@@ -78,7 +81,7 @@ class DocxReportGenerator(BaseReportGenerator):
 
         doc.add_heading("Finding Severity Breakdown", level=1)
         sev_table = doc.add_table(rows=1, cols=2)
-        sev_table.style = "Table Grid"
+        sev_table.style = TABLE_STYLE
         self._header_row(sev_table, ["Severity", "Count"], BRAND_BLUE)
         for sev, count in stats["severity_counts"].items():
             cells = sev_table.add_row().cells
@@ -91,7 +94,7 @@ class DocxReportGenerator(BaseReportGenerator):
         if providers:
             doc.add_heading("Cloud Provider Coverage", level=1)
             prov_table = doc.add_table(rows=1, cols=6)
-            prov_table.style = "Table Grid"
+            prov_table.style = TABLE_STYLE
             self._header_row(
                 prov_table,
                 ["Provider", "Findings", "Critical", "High", "Coverage", "Score"],
@@ -134,7 +137,7 @@ class DocxReportGenerator(BaseReportGenerator):
                     key=lambda f: SEVERITY_ORDER.get((self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5),
                 )
                 table = doc.add_table(rows=1, cols=4)
-                table.style = "Table Grid"
+                table.style = TABLE_STYLE
                 self._header_row(table, ["Control ID", "Title", "Severity", "Status"], p["colour"].lstrip("#"))
                 for f in findings[:MAX_FINDINGS_PER_PROVIDER]:
                     severity = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
@@ -150,7 +153,7 @@ class DocxReportGenerator(BaseReportGenerator):
         if report_type == "full":
             doc.add_heading("All Findings", level=1)
             table = doc.add_table(rows=1, cols=4)
-            table.style = "Table Grid"
+            table.style = TABLE_STYLE
             self._header_row(table, ["Control ID", "Title", "Severity", "Status"], BRAND_BLUE)
             ordered = sorted(
                 self.findings,

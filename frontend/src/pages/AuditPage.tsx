@@ -41,6 +41,16 @@ export default function AuditPage() {
 
   const entries: AuditEntry[] = audit?.entries ?? []
 
+  let chainLabel = 'Hash chain'
+  let chainMessage = ''
+  if (chain) {
+    chainLabel = chain.valid ? 'Hash chain valid' : 'Hash chain BROKEN'
+    const skipped = chain.legacy ? ` (${chain.legacy} pre-chain entries skipped)` : ''
+    chainMessage = chain.valid
+      ? `Tamper-evident audit chain verified across ${chain.checked} entries${skipped}.`
+      : `Chain broken at entry ${chain.broken_at?.slice(0, 8)}: ${chain.reason}`
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
       <div>
@@ -55,7 +65,7 @@ export default function AuditPage() {
           { label: 'Total Audit Events', value: audit?.total ?? 0, color: 'var(--color-brand)' },
           { label: 'Events (24h)', value: audit?.actions_24h ?? 0, color: '#10B981' },
           {
-            label: chain ? (chain.valid ? 'Hash chain valid' : 'Hash chain BROKEN') : 'Hash chain',
+            label: chainLabel,
             value: chain ? `${chain.checked}` : '…',
             color: chain && !chain.valid ? '#EF4444' : '#8B5CF6',
           },
@@ -79,9 +89,7 @@ export default function AuditPage() {
           color: chain.valid ? '#10B981' : '#EF4444',
         }}>
           {chain.valid ? <ShieldCheck size={16} /> : <ShieldAlert size={16} />}
-          {chain.valid
-            ? `Tamper-evident audit chain verified across ${chain.checked} entries${chain.legacy ? ` (${chain.legacy} pre-chain entries skipped)` : ''}.`
-            : `Chain broken at entry ${chain.broken_at?.slice(0, 8)}: ${chain.reason}`}
+          {chainMessage}
         </div>
       )}
 

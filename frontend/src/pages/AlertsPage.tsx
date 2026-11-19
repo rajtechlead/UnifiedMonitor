@@ -42,6 +42,8 @@ type Template = { key: string; name: string; description: string; metric_label: 
 
 const STATUS = ['', 'open', 'acknowledged', 'snoozed', 'resolved']
 
+const ACTION_LABELS: Record<string, string> = { acknowledged: 'Ack', snoozed: 'Snooze', resolved: 'Resolve' }
+
 const card = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-border)',
@@ -87,6 +89,10 @@ export default function AlertsPage() {
   }
 
   const alerts = page?.items ?? []
+
+  let listPlaceholder = ''
+  if (isLoading) listPlaceholder = 'Loading alerts…'
+  else if (alerts.length === 0) listPlaceholder = 'No alerts match this filter.'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -182,7 +188,7 @@ export default function AlertsPage() {
                     severity: policy.severity, enabled: e.target.checked, notify: policy.notify,
                   }))}
                 />
-                enabled
+                <span style={{ fontSize: 12 }}>enabled</span>
               </label>
               <button
                 onClick={() => run(() => alertsApi.deletePolicy(policy.id))}
@@ -214,10 +220,8 @@ export default function AlertsPage() {
       </div>
 
       <div style={{ ...card, padding: 0, overflow: 'hidden' }}>
-        {isLoading ? (
-          <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>Loading alerts…</div>
-        ) : alerts.length === 0 ? (
-          <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>No alerts match this filter.</div>
+        {listPlaceholder ? (
+          <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>{listPlaceholder}</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
@@ -256,7 +260,7 @@ export default function AlertsPage() {
                             border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
                             color: 'var(--color-text)', opacity: alert.status === next ? 0.4 : 1 }}
                         >
-                          {next === 'acknowledged' ? 'Ack' : next === 'snoozed' ? 'Snooze' : 'Resolve'}
+                          {ACTION_LABELS[next] ?? next}
                         </button>
                       ))}
                     </div>

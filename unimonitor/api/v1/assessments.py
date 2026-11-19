@@ -16,6 +16,8 @@ from unimonitor.db.session import get_db
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+NOT_FOUND_DETAIL = "Assessment not found"
+
 
 # ── Schemas ──────────────────────────────────────────────────
 
@@ -168,7 +170,7 @@ async def get_assessment(
     repo = AssessmentRepository(db)
     assessment = await repo.get_by_id(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
     latest = await repo.get_latest_run(assessment_id)
 
     return _assessment_to_response(assessment, latest)
@@ -187,7 +189,7 @@ async def update_assessment(
     repo = AssessmentRepository(db)
     assessment = await repo.get_by_id(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     updates: dict = {}
     if body.name is not None:
@@ -220,7 +222,7 @@ async def delete_assessment(
     repo = AssessmentRepository(db)
     assessment = await repo.get_by_id(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
     await repo.delete(assessment_id)
 
     logger.info("assessment_deleted", assessment_id=assessment_id, by=current_user.id)
@@ -238,7 +240,7 @@ async def trigger_run(
     repo = AssessmentRepository(db)
     assessment = await repo.get_by_id(assessment_id)
     if not assessment:
-        raise HTTPException(status_code=404, detail="Assessment not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     # Create the run record
     run = await repo.create_run(
@@ -248,17 +250,24 @@ async def trigger_run(
     )
     await db.flush()
 
-    # Dispatch Celery task
+    # Dispatch on Celery, or in-process when this install has no worker
     task_id = f"local-{run.id}"
     try:
+        from unimonitor.worker.inline import dispatch
         from unimonitor.worker.tasks import run_assessment_task
+        from unimonitor.worker.tasks.assessment import run_assessment_now
 
-        task = run_assessment_task.delay(
+        task_id = dispatch(
+            run_assessment_task,
+            run_assessment_now,
             assessment_id=assessment_id,
             run_id=run.id,
+            tenant_id=assessment.tenant_id,
+            frameworks=assessment.framework_list(),
+            collectors=assessment.collector_list() or None,
+            triggered_by=current_user.id,
         )
-        await repo.update_run(run.id, task_id=task.id)
-        task_id = task.id
+        await repo.update_run(run.id, task_id=task_id)
     except Exception as exc:
         logger.warning("celery_dispatch_failed", error=str(exc))
         # Store the local task id; the run stays pending for now

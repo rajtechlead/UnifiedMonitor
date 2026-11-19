@@ -46,8 +46,31 @@ const statusLabel: Record<string, string> = {
   not_applicable: 'N/A',
 }
 
-const severityColour = (severity: string) =>
-  severity === 'critical' ? '#B91C1C' : severity === 'high' ? '#EF4444' : severity === 'medium' ? '#F59E0B' : '#64748B'
+const SEVERITY_COLOURS: Record<string, string> = {
+  critical: '#B91C1C',
+  high: '#EF4444',
+  medium: '#F59E0B',
+}
+
+const severityColour = (severity: string) => SEVERITY_COLOURS[severity] ?? '#64748B'
+
+function scoreColour(score: number): string {
+  if (score >= 70) return statusColour.pass
+  if (score >= 50) return statusColour.warn
+  return statusColour.fail
+}
+
+function platformCaption(platform: Platform): string {
+  if (!platform.has_run) return 'No assessment yet'
+  const unrun = platform.not_run ? ` · ${platform.not_run} not run` : ''
+  return `${platform.passed} passed · ${platform.failed} failed${unrun}`
+}
+
+function emptyChecksMessage(hasRun: boolean, isMicrosoft: boolean): string {
+  if (hasRun) return 'No checks match these filters.'
+  if (isMicrosoft) return 'Import a ZeroTrustAssessmentReport.json to see Microsoft’s checks here.'
+  return 'Select Evaluate now to score this platform from collected evidence.'
+}
 
 export default function ZeroTrustAssessmentPage() {
   const queryClient = useQueryClient()
@@ -155,13 +178,11 @@ export default function ZeroTrustAssessmentPage() {
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600 }}>{platform.platform}</span>
-            <span style={{ fontSize: 22, fontWeight: 700, color: platform.has_run ? statusColour[platform.score >= 70 ? 'pass' : platform.score >= 50 ? 'warn' : 'fail'] : '#94A3B8' }}>
+            <span style={{ fontSize: 22, fontWeight: 700, color: platform.has_run ? scoreColour(platform.score) : '#94A3B8' }}>
               {platform.has_run ? `${Math.round(platform.score)}%` : '—'}
             </span>
             <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              {platform.has_run
-                ? `${platform.passed} passed · ${platform.failed} failed${platform.not_run ? ` · ${platform.not_run} not run` : ''}`
-                : 'No assessment yet'}
+              {platformCaption(platform)}
             </span>
           </button>
         ))}
@@ -176,7 +197,7 @@ export default function ZeroTrustAssessmentPage() {
               type="file"
               accept="application/json,.json"
               style={{ display: 'none' }}
-              onChange={(event) => { const file = event.target.files?.[0]; if (file) importReport(file) }}
+              onChange={(event) => { const file = event.target.files?.[0]; if (file) void importReport(file) }}
             />
             <button onClick={() => fileInput.current?.click()} disabled={busy} style={primaryButton}>
               <Upload size={14} /> Import ZeroTrustAssessmentReport.json
@@ -242,13 +263,7 @@ export default function ZeroTrustAssessmentPage() {
       <div style={{ border: '1px solid var(--color-border)', borderRadius: 10, overflow: 'hidden' }}>
         {checks.isLoading && <div style={emptyStyle}>Loading checks…</div>}
         {!checks.isLoading && (checks.data?.length ?? 0) === 0 && (
-          <div style={emptyStyle}>
-            {selected?.has_run
-              ? 'No checks match these filters.'
-              : isMicrosoft
-                ? 'Import a ZeroTrustAssessmentReport.json to see Microsoft’s checks here.'
-                : 'Select Evaluate now to score this platform from collected evidence.'}
-          </div>
+          <div style={emptyStyle}>{emptyChecksMessage(Boolean(selected?.has_run), isMicrosoft)}</div>
         )}
         {(checks.data ?? []).map((check) => {
           const open = expanded === check.check_id
@@ -289,7 +304,7 @@ export default function ZeroTrustAssessmentPage() {
                     <>
                       <div style={{ fontWeight: 600, color: 'var(--color-text)', marginBottom: 4 }}>Remediation</div>
                       <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-                        {check.remediation.map((step, index) => <li key={index}>{step}</li>)}
+                        {check.remediation.map((step) => <li key={`${check.check_id}:${step}`}>{step}</li>)}
                       </ol>
                     </>
                   ) : (

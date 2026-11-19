@@ -16,6 +16,8 @@ from unimonitor.db.session import get_db
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+NOT_FOUND_DETAIL = "Finding not found"
+
 
 # ── Schemas ──────────────────────────────────────────────────
 
@@ -278,7 +280,7 @@ async def get_finding(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     return FindingResponse.model_validate(finding)
 
@@ -302,7 +304,7 @@ async def update_finding_state(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     old_state = finding.state
     updates: dict = {"state": body.state}
@@ -343,7 +345,7 @@ async def triage_finding(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     previous = finding.triage_status
     snoozed_until = None
@@ -390,7 +392,7 @@ async def finding_timeline(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     timeline = [
         TimelineItem(
@@ -424,7 +426,7 @@ async def suppress_finding(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     finding = await repo.update(
         finding_id,
@@ -455,7 +457,7 @@ async def unsuppress_finding(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     finding = await repo.update(
         finding_id,
@@ -487,7 +489,7 @@ async def trigger_ai_remediation(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
     if finding.ai_remediation and not body.force_refresh:
         import json
@@ -524,7 +526,7 @@ async def get_finding_history(
     repo = FindingRepository(db)
     finding = await repo.get_by_id(finding_id)
     if not finding:
-        raise HTTPException(status_code=404, detail="Finding not found")
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
     history = await repo.get_history(finding_id)
 
     return [FindingHistoryItem.model_validate(h) for h in history]

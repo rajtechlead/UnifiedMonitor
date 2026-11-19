@@ -21,7 +21,15 @@ type ZeroTrustScore = {
 }
 
 function scoreColour(score: number) {
-  return score >= 80 ? '#10B981' : score >= 50 ? '#F59E0B' : '#EF4444'
+  if (score >= 80) return '#10B981'
+  if (score >= 50) return '#F59E0B'
+  return '#EF4444'
+}
+
+function zeroTrustCaption(p: ZeroTrustScore): string {
+  if (!p.has_run) return 'Not assessed'
+  const seen = p.last_run ? ` · ${new Date(p.last_run).toLocaleDateString()}` : ''
+  return `${p.passed}/${p.total} passing${seen}`
 }
 
 function ScoreGauge({ label, score, color }: { label: string; score: number; color: string }) {
@@ -138,9 +146,7 @@ export default function ExecutiveDashboard() {
                 {p.has_run ? Math.round(p.score) : '—'}
               </div>
               <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                {p.has_run
-                  ? `${p.passed}/${p.total} passing${p.last_run ? ` · ${new Date(p.last_run).toLocaleDateString()}` : ''}`
-                  : 'Not assessed'}
+                {zeroTrustCaption(p)}
               </div>
             </div>
           ))}
@@ -184,7 +190,7 @@ export default function ExecutiveDashboard() {
                 <Tooltip contentStyle={tooltipStyle} />
                 <Bar dataKey="coverage_pct" name="Coverage %" radius={[4, 4, 0, 0]}>
                   {frameworks.slice(0, 8).map((fw) => (
-                    <Cell key={fw.framework_id} fill={fw.coverage_pct >= 80 ? '#10B981' : fw.coverage_pct >= 50 ? '#F59E0B' : '#EF4444'} />
+                    <Cell key={fw.framework_id} fill={scoreColour(fw.coverage_pct)} />
                   ))}
                 </Bar>
               </BarChart>

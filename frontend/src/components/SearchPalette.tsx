@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { Search } from 'lucide-react'
@@ -22,9 +22,10 @@ const PAGES: Hit[] = [
   ['Data Collection', '/collection'], ['Settings', '/settings'],
 ].map(([title, href]) => ({ kind: 'page', id: href, title, subtitle: null, href, severity: null }))
 
-export default function SearchPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function SearchPalette({ open, onClose }: { readonly open: boolean; readonly onClose: () => void }) {
   const [query, setQuery] = useState('')
   const [debounced, setDebounced] = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -33,7 +34,8 @@ export default function SearchPalette({ open, onClose }: { open: boolean; onClos
   }, [query])
 
   useEffect(() => {
-    if (!open) setQuery('')
+    if (open) inputRef.current?.focus()
+    else setQuery('')
   }, [open])
 
   const { data } = useQuery<{ hits: Hit[] }>({
@@ -59,11 +61,16 @@ export default function SearchPalette({ open, onClose }: { open: boolean; onClos
 
   return (
     <div
+      role="presentation"
       onClick={onClose}
+      onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)',
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '12vh', zIndex: 100 }}
     >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Search"
         onClick={(event) => event.stopPropagation()}
         style={{ width: '100%', maxWidth: 560, background: 'var(--color-surface)',
           border: '1px solid var(--color-border)', borderRadius: 12, overflow: 'hidden',
@@ -73,7 +80,7 @@ export default function SearchPalette({ open, onClose }: { open: boolean; onClos
           borderBottom: '1px solid var(--color-border)' }}>
           <Search size={16} color="var(--color-text-muted)" />
           <input
-            autoFocus
+            ref={inputRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}

@@ -16,11 +16,11 @@ export const useThemeStore = create<ThemeState>()(
       toggleTheme: () =>
         set((s) => {
           const next = s.theme === 'dark' ? 'light' : 'dark'
-          document.documentElement.setAttribute('data-theme', next)
+          document.documentElement.dataset.theme = next
           return { theme: next }
         }),
       setTheme: (t) => {
-        document.documentElement.setAttribute('data-theme', t)
+        document.documentElement.dataset.theme = t
         set({ theme: t })
       },
     }),
@@ -28,7 +28,7 @@ export const useThemeStore = create<ThemeState>()(
       name: 'unimonitor-theme',
       onRehydrateStorage: () => (state) => {
         if (state) {
-          document.documentElement.setAttribute('data-theme', state.theme)
+          document.documentElement.dataset.theme = state.theme
         }
       },
     }

@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-17 UTC
+Last Updated: 2026-11-19 UTC
 
 ## Phase 10 — Repository merge (2026-11-18)
 
@@ -32,6 +32,10 @@ Last Updated: 2026-11-17 UTC
 | P10-022 Zero Trust run retention | ✅ Done | `store_run` prunes to the newest 5 runs per tenant/platform (checks deleted too) |
 | P10-023 Executive ZT scores | ✅ Done | `/dashboard/executive` returns `zero_trust`; board shows the latest score per platform |
 | P10-024 Installer bundle check | ✅ Done | CI checks `_internal/scripts/…` (PyInstaller 6 puts datas there) |
+| P10-025 In-process collection | ✅ Done | No Celery/Redis: API runs the task, scheduler replaces beat |
+| P10-026 Security dashboard demo data | ✅ Done | Real severity counts; collector list reads the API shape |
+| P10-027 Entra certificate on create | ✅ Done | `keyCredentials` at creation avoids the 403 `addKey` |
+| P10-028 SonarQube review pass | ✅ Done | Bugs, criticals and complexity/duplication; style rules deferred |
 
 ## Priority Execution Queue
 
