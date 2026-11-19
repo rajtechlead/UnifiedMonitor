@@ -69,7 +69,7 @@ jobs:
           pip-audit --format=json --output=pip-audit-results.json || true
           pip-audit --format=markdown || true
       - name: Upload audit results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: dependency-audit-results
