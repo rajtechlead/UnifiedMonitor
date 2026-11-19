@@ -357,6 +357,17 @@ same-vendor upgrades within the approved stack, not substitutions.
   contract change.
 - Checks: 656 tests, ruff, mypy 115 files, frontend build + ESLint clean.
 
+## 2026-11-19 — Zero Trust retention, executive scores, installer fix
+
+- Imported runs are pruned to the newest 5 per tenant and platform (`RETAIN_RUNS_PER_PLATFORM`,
+  `service.prune_runs`), so scheduled imports no longer grow the table and their checks unbounded.
+- `GET /dashboard/executive` now returns `zero_trust` (latest score, totals and run date per
+  platform); the Executive Dashboard renders them as a score strip.
+- Windows installer workflow failed on `8ac2860`: PyInstaller 6 collects datas into
+  `dist/UniMonitor/_internal/`, not beside the exe. The check in both workflows now accepts either
+  location, so the runner is found where it actually lands.
+- Checks: 660 tests, ruff check/format, mypy 115 files, frontend build + ESLint clean.
+
 ## Resume Instructions
 
 1. Read `SECTION_STATE.md`… i.e. this file, `NEXT_ACTIONS.md`, `GAP_REGISTER.md`,

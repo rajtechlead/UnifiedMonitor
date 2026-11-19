@@ -29,6 +29,9 @@ Last Updated: 2026-11-17 UTC
 | P10-019 Cloud remediation text | ✅ Done | `remediation` blocks on all 22 cloud controls, parsed by the loader |
 | P10-020 PowerShell runner | ✅ Done | `scripts/zerotrust/Invoke-UniMonitorZeroTrust.ps1`, bundled, parsed in CI |
 | P10-021 Certificate rotation duration | ✅ Done | Rotate dialog takes 1–1095 days, default 365 |
+| P10-022 Zero Trust run retention | ✅ Done | `store_run` prunes to the newest 5 runs per tenant/platform (checks deleted too) |
+| P10-023 Executive ZT scores | ✅ Done | `/dashboard/executive` returns `zero_trust`; board shows the latest score per platform |
+| P10-024 Installer bundle check | ✅ Done | CI checks `_internal/scripts/…` (PyInstaller 6 puts datas there) |
 
 ## Priority Execution Queue
 

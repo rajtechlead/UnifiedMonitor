@@ -217,6 +217,90 @@ async def test_script_endpoint_serves_the_runner(client, auth_headers) -> None:
     assert "zerotrust/import" in response.text
 
 
+# ── Retention ───────────────────────────────────────────────────────────────
+
+
+def _single_check() -> list[dict]:
+    return [
+        {
+            "check_id": "1",
+            "title": "MFA enforced",
+            "pillar": "identity",
+            "severity": "high",
+            "status": "pass",
+            "category": "microsoft",
+            "remediation": [],
+            "reference": "",
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_repeated_imports_keep_only_the_latest_runs(client, auth_headers) -> None:
+    """Importing every week must not grow the run table without bound."""
+    from unimonitor.zerotrust.service import RETAIN_RUNS_PER_PLATFORM
+
+    payload = {"tests": [{"TestId": 1, "Title": "MFA enforced", "Pillar": "Identity", "Result": "Passed"}]}
+    for _ in range(RETAIN_RUNS_PER_PLATFORM + 3):
+        response = await client.post("/api/v1/zerotrust/import", json={"source": "microsoft", "payload": payload}, headers=auth_headers)
+        assert response.status_code == 200, response.text
+
+    runs = (await client.get("/api/v1/zerotrust/runs", headers=auth_headers)).json()
+    assert len(runs) == RETAIN_RUNS_PER_PLATFORM
+
+
+@pytest.mark.asyncio
+async def test_prune_keeps_newest_runs_and_deletes_their_checks(db_session, tenant) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import func, select
+
+    from unimonitor.db.models.zerotrust import ZeroTrustCheck, ZeroTrustRun
+    from unimonitor.zerotrust import service
+
+    base = datetime(2026, 1, 1, tzinfo=UTC)
+    aws_runs = []
+    for index in range(4):
+        run, _ = await service.store_run(db_session, tenant_id=tenant.id, source="aws", checks=_single_check(), retain=10)
+        run.created_at = base + timedelta(hours=index)
+        aws_runs.append(run.id)
+    other, _ = await service.store_run(db_session, tenant_id=tenant.id, source="gcp", checks=_single_check(), retain=10)
+    other.created_at = base
+    await db_session.flush()
+
+    removed = await service.prune_runs(db_session, tenant_id=tenant.id, source="aws", keep=2)
+
+    assert removed == 2
+    remaining = set((await db_session.execute(select(ZeroTrustRun.id).where(ZeroTrustRun.source == "aws"))).scalars().all())
+    assert remaining == set(aws_runs[2:])
+    # The pruned runs took their checks with them, and other platforms are untouched.
+    orphaned = await db_session.scalar(select(func.count()).select_from(ZeroTrustCheck).where(ZeroTrustCheck.run_id.in_(aws_runs[:2])))
+    assert orphaned == 0
+    assert (await db_session.execute(select(ZeroTrustRun.id).where(ZeroTrustRun.id == other.id))).scalar_one_or_none() == other.id
+
+
+@pytest.mark.asyncio
+async def test_executive_dashboard_shows_zero_trust_scores(client, auth_headers) -> None:
+    payload = {
+        "tests": [
+            {"TestId": 1, "Title": "MFA enforced", "Pillar": "Identity", "Result": "Passed"},
+            {"TestId": 2, "Title": "Legacy auth blocked", "Pillar": "Identity", "Result": "Failed"},
+        ]
+    }
+    imported = await client.post("/api/v1/zerotrust/import", json={"source": "microsoft", "payload": payload}, headers=auth_headers)
+    assert imported.status_code == 200, imported.text
+
+    response = await client.get("/api/v1/dashboard/executive", headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    scores = {row["source"]: row for row in response.json()["zero_trust"]}
+    assert scores["microsoft"]["has_run"] is True
+    assert scores["microsoft"]["score"] == 50.0
+    assert scores["microsoft"]["passed"] == 1
+    assert scores["microsoft"]["failed"] == 1
+    assert scores["aws"]["has_run"] is False
+
+
 # ── Packaging ───────────────────────────────────────────────────────────────
 
 
@@ -229,3 +313,10 @@ def test_runner_script_is_bundled_with_the_windows_build() -> None:
 def test_installer_workflow_parses_the_runner() -> None:
     workflow = (ROOT / ".github" / "workflows" / "windows-installer.yml").read_text()
     assert "Invoke-UniMonitorZeroTrust.ps1" in workflow
+
+
+def test_builds_check_the_runner_where_pyinstaller_puts_it() -> None:
+    """PyInstaller 6 onedir collects datas into _internal, not beside the exe."""
+    for name in ("windows-installer.yml", "release.yml"):
+        workflow = (ROOT / ".github" / "workflows" / name).read_text()
+        assert "_internal/scripts/zerotrust" in workflow

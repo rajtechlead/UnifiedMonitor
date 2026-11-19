@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.db.models.finding import Finding, FindingState
@@ -13,6 +13,10 @@ from unimonitor.db.models.zerotrust import ZeroTrustCheck, ZeroTrustRun
 from unimonitor.grc.control_loader import ControlLoader
 from unimonitor.grc.pillars import pillar_for
 from unimonitor.zerotrust.normalise import PLATFORMS, normalise_checks, summarise
+
+# Imports arrive on a schedule; keep only the newest snapshots so the table and
+# the executive score do not accumulate every historical export.
+RETAIN_RUNS_PER_PLATFORM = 5
 
 _STATUS_TO_RESULT = {
     FindingState.IMPLEMENTED.value: "pass",
@@ -42,8 +46,12 @@ async def store_run(
     checks: list[dict[str, Any]],
     origin: str = "import",
     user_id: str | None = None,
+    retain: int = RETAIN_RUNS_PER_PLATFORM,
 ) -> tuple[ZeroTrustRun, dict[str, Any]]:
-    """Persist one run and its checks. The caller commits."""
+    """Persist one run and its checks, pruning the platform's older runs.
+
+    The caller commits.
+    """
     summary = summarise(checks)
     run = ZeroTrustRun(
         tenant_id=tenant_id,
@@ -77,7 +85,36 @@ async def store_run(
             )
         )
     await db.flush()
+    await prune_runs(db, tenant_id=tenant_id, source=source, keep=retain)
     return run, summary
+
+
+async def prune_runs(db: AsyncSession, *, tenant_id: str, source: str, keep: int = RETAIN_RUNS_PER_PLATFORM) -> int:
+    """Delete all but the newest ``keep`` runs for one tenant and platform.
+
+    Returns how many runs were removed. Ordering is by creation time with the id
+    as a tie-breaker, because imports within the same second share a timestamp.
+    """
+    if keep < 1:
+        return 0
+    stale = list(
+        (
+            await db.execute(
+                select(ZeroTrustRun.id)
+                .where(ZeroTrustRun.tenant_id == tenant_id, ZeroTrustRun.source == source)
+                .order_by(desc(ZeroTrustRun.created_at), desc(ZeroTrustRun.id))
+                .offset(keep)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not stale:
+        return 0
+    await db.execute(delete(ZeroTrustCheck).where(ZeroTrustCheck.run_id.in_(stale)))
+    await db.execute(delete(ZeroTrustRun).where(ZeroTrustRun.id.in_(stale)))
+    await db.flush()
+    return len(stale)
 
 
 async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[dict[str, Any]]:

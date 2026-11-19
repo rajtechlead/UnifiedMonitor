@@ -94,11 +94,23 @@ class FrameworkCoverage(BaseModel):
     controls_passed: int
 
 
+class ZeroTrustPlatformScore(BaseModel):
+    source: str
+    platform: str
+    has_run: bool
+    score: float
+    total: int
+    passed: int
+    failed: int
+    last_run: datetime | None
+
+
 class ExecutiveSummaryResponse(BaseModel):
     scores: ScoreSummary
     score_trends: list[TrendPoint]
     top_risks: list[TopFinding]
     framework_coverage: list[FrameworkCoverage]
+    zero_trust: list[ZeroTrustPlatformScore] = []
     asset_coverage_pct: float
     remediation_progress_pct: float
     generated_at: datetime
@@ -242,6 +254,38 @@ async def _get_top_findings_list(db: AsyncSession, tenant_id: str | None, limit:
     ]
 
 
+async def _build_zero_trust_scores(db: AsyncSession, tenant_id: str | None) -> list[ZeroTrustPlatformScore]:
+    """Latest Zero Trust Assessment score per platform, for the executive board."""
+    from sqlalchemy import select
+
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.zerotrust import service
+    from unimonitor.zerotrust.normalise import PLATFORMS
+
+    if not tenant_id:
+        tenant_id = (await db.execute(select(Tenant.id).where(Tenant.is_active.is_(True)).order_by(Tenant.created_at).limit(1))).scalar_one_or_none()
+    if not tenant_id:
+        return []
+
+    latest = await service.latest_by_source(db, tenant_id)
+    rows: list[ZeroTrustPlatformScore] = []
+    for source, label in PLATFORMS.items():
+        run = latest.get(source)
+        rows.append(
+            ZeroTrustPlatformScore(
+                source=source,
+                platform=label,
+                has_run=run is not None,
+                score=run.score if run else 0.0,
+                total=run.total if run else 0,
+                passed=run.passed if run else 0,
+                failed=run.failed if run else 0,
+                last_run=run.created_at if run else None,
+            )
+        )
+    return rows
+
+
 async def _build_framework_coverage(db: AsyncSession, tenant_id: str | None) -> list[FrameworkCoverage]:
     """Build framework coverage data from findings vs control mappings."""
     try:
@@ -357,6 +401,7 @@ async def dashboard_executive(
     repo = AssessmentRepository(db)
     trend_points = await repo.get_score_trends(tenant_id=tenant_id, days=30)
     framework_coverage = await _build_framework_coverage(db, tenant_id)
+    zero_trust = await _build_zero_trust_scores(db, tenant_id)
 
     return ExecutiveSummaryResponse(
         scores=ScoreSummary(
@@ -376,6 +421,7 @@ async def dashboard_executive(
         ],
         top_risks=top_findings[:5],
         framework_coverage=framework_coverage,
+        zero_trust=zero_trust,
         asset_coverage_pct=0.0,
         remediation_progress_pct=0.0,
         generated_at=datetime.now(UTC),

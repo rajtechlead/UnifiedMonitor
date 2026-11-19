@@ -15,6 +15,14 @@ type TopRisk = {
   id: string; title: string; severity: string
   category: string; service: string; first_detected_at: string
 }
+type ZeroTrustScore = {
+  source: string; platform: string; has_run: boolean
+  score: number; total: number; passed: number; failed: number; last_run: string | null
+}
+
+function scoreColour(score: number) {
+  return score >= 80 ? '#10B981' : score >= 50 ? '#F59E0B' : '#EF4444'
+}
 
 function ScoreGauge({ label, score, color }: { label: string; score: number; color: string }) {
   const data = [{ value: score, fill: color }, { value: 100 - score, fill: 'var(--color-surface-2)' }]
@@ -92,6 +100,7 @@ export default function ExecutiveDashboard() {
   const trends: TrendPoint[] = exec?.score_trends ?? []
   const frameworks: FrameworkCoverage[] = exec?.framework_coverage ?? []
   const topRisks: TopRisk[] = exec?.top_risks ?? []
+  const ztPlatforms = (exec?.zero_trust ?? []) as ZeroTrustScore[]
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -107,6 +116,40 @@ export default function ExecutiveDashboard() {
         <ScoreGauge label="Security Score" score={scores.security_score} color="var(--color-brand)" />
         <ScoreGauge label="Compliance Score" score={scores.compliance_score} color="#10B981" />
         <ScoreGauge label="Risk Score" score={scores.risk_score} color="#F59E0B" />
+      </div>
+
+      {/* Zero Trust Assessment — latest imported score per platform */}
+      <div style={{
+        background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+        borderRadius: 12, padding: 20,
+      }}>
+        <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>Zero Trust Assessment</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 16 }}>
+          Latest score per platform
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12 }}>
+          {ztPlatforms.map((p) => (
+            <div key={p.source} style={{ border: '1px solid var(--color-border)', borderRadius: 10, padding: 14 }}>
+              <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{p.platform}</div>
+              <div style={{
+                fontSize: 22, fontWeight: 700,
+                color: p.has_run ? scoreColour(p.score) : 'var(--color-text-muted)',
+              }}>
+                {p.has_run ? Math.round(p.score) : '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                {p.has_run
+                  ? `${p.passed}/${p.total} passing${p.last_run ? ` · ${new Date(p.last_run).toLocaleDateString()}` : ''}`
+                  : 'Not assessed'}
+              </div>
+            </div>
+          ))}
+          {ztPlatforms.length === 0 && (
+            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+              No Zero Trust assessment yet. Import a report from the ZT Assessment page.
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Stat cards */}
