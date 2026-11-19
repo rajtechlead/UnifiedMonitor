@@ -12,10 +12,10 @@
 ; ============================================================
 
 !define APPNAME      "UniMonitor"
-!define APPVERSION   "1.0.0"
-!define PUBLISHER    "rajtechlead"
+!define APPVERSION   "1.1.0"
+!define PUBLISHER    "Belle-Raja Corp"
 !define WEBSITE      "https://github.com/rajtechlead/UniMonitor"
-!define CONTACT      "rajrsngroup@gmail.com"
+!define CONTACT      "Contact@Belle-RajaCorp.com"
 !define DESCRIPTION  "Unified Multi-Cloud Security Monitoring & GRC Platform"
 !define INSTALL_DIR  "$PROGRAMFILES64\${APPNAME}"
 !define REG_KEY      "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
@@ -51,7 +51,7 @@ BrandingText   "${APPNAME} ${APPVERSION} — ${PUBLISHER}"
 !define MUI_HEADERIMAGE
 !define MUI_HEADERIMAGE_RIGHT
 !define MUI_WELCOMEPAGE_TITLE  "Welcome to ${APPNAME} Setup"
-!define MUI_WELCOMEPAGE_TEXT   "This wizard will install ${APPNAME} ${APPVERSION} on your computer.$\r$\n$\r$\nUniMonitor provides unified security monitoring across Microsoft 365, AWS, Google Cloud and Google Workspace, with GRC framework assessments and per-cloud compliance reporting.$\r$\n$\r$\nClick Next to continue."
+!define MUI_WELCOMEPAGE_TEXT   "This wizard will install ${APPNAME} ${APPVERSION} by ${PUBLISHER} on your computer.$\r$\n$\r$\nUniMonitor provides unified security monitoring across Microsoft 365, AWS, Google Cloud and Google Workspace, with GRC framework assessments and per-cloud compliance reporting.$\r$\n$\r$\nClick Next to continue."
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_TEXT   "Open the UniMonitor setup wizard (choose your platforms)"
 !define MUI_FINISHPAGE_RUN_FUNCTION FinishPageAction
@@ -80,7 +80,7 @@ Var ServiceInstalled
 VIProductVersion "${APPVERSION}.0"
 VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductName"      "${APPNAME}"
 VIAddVersionKey /LANG=${LANG_ENGLISH} "CompanyName"      "${PUBLISHER}"
-VIAddVersionKey /LANG=${LANG_ENGLISH} "LegalCopyright"   "Copyright © 2024 ${PUBLISHER}"
+VIAddVersionKey /LANG=${LANG_ENGLISH} "LegalCopyright"   "Copyright © 2026 ${PUBLISHER}"
 VIAddVersionKey /LANG=${LANG_ENGLISH} "FileDescription"  "${DESCRIPTION}"
 VIAddVersionKey /LANG=${LANG_ENGLISH} "FileVersion"      "${APPVERSION}"
 VIAddVersionKey /LANG=${LANG_ENGLISH} "ProductVersion"   "${APPVERSION}"

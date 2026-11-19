@@ -411,3 +411,38 @@ hardcoded demo cards.
   duplicated tenant resolver (`core/tenants.resolve_tenant`). FastAPI `Annotated`/
   `response_model`/`responses` style reminders were left alone: no behaviour, large churn.
 - Checks: 662 pytest, ruff check + format, mypy (117 files), `npm run build`, ESLint.
+
+## 2026-11-19 (installer + branding) — frozen-build fix, About page, 1.1.0
+
+The packaged app broke `/setup` because the new startup path imported the Celery
+broker probe, and PyInstaller's celery/kombu hooks left `celery.fixups`,
+`celery.loaders.app` and the redis transport out of the bundle: the ImportError killed
+the lifespan, so every page failed — exactly the reported "setup page erroring out".
+
+- `main.lifespan`: the automatic-collection block is wrapped in try/except and logs a
+  warning when it cannot start, so a collector-side import error can never stop the API
+  booting. The first in-process run waits 120s (`INITIAL_COLLECTION_DELAY_SECONDS`) so
+  setup and the dashboard get a responsive server first.
+- `deploy/windows/unimonitor.spec`: collect all `celery` and `kombu` submodules plus
+  `kombu.transport.redis`. Verified by building the frozen bundle on Linux and reading
+  the startup log: `Automatic collection running in-process first_run_in_seconds=120`.
+- `unimonitor/cli.py`: `--version` no longer looks up distribution metadata (which does
+  not exist in a frozen build); it uses `unimonitor.__version__`, now 1.1.0.
+- `/setup` when no frontend build exists answers with a 503 HTML page explaining
+  `npm run build`, instead of a bare JSON 404 (source runs only; installers bundle it).
+- Setup page: shows the API's error detail with a retry button, tolerates a missing
+  `platforms`/`connections` array, and its route is wrapped in the error boundary.
+- Zero Trust: the Python engine is the default for all four platforms (Microsoft's
+  controls are mapped from 15 control services, 158 checks; AWS 8, GCP 8, Workspace 6),
+  `POST /zerotrust/run-all` scores every platform in one pass, and the page keeps the
+  PowerShell download/import as a manual fallback.
+- Branding: publisher/company is "Belle-Raja Corp" (installer, PE version info, package
+  metadata, sidebar and About page), contact Contact@Belle-RajaCorp.com, new About & Help
+  page crediting Raj Raja as designer/builder, logo at `frontend/public/belle-raja-corp.svg`.
+- Version 1.1.0 across `pyproject.toml`, `main.APP_VERSION`, `unimonitor.__version__`,
+  `install.nsi` and the installer workflow default.
+- Reference clones: `reference/` (git-ignored) for vigil365, m365_sheppard and
+  zerotrustassessment; `scripts/update-reference-repos.sh` clones or fast-forwards them;
+  `docs/REFERENCE_REPOS.md` records what each one is for.
+- Checks: 663 pytest, ruff check/format, mypy, `npm run build`, ESLint, frozen-bundle
+  startup and `/setup` smoke test.

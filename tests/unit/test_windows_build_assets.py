@@ -21,11 +21,24 @@ RELEASE = ROOT / ".github" / "workflows" / "release.yml"
 INSTALLER_WORKFLOW = ROOT / ".github" / "workflows" / "windows-installer.yml"
 
 
+def _literal_names(node: ast.AST) -> list[str]:
+    """Names from a list literal, including the literal halves of ``a + [...]``.
+
+    ``collect_submodules(...)`` calls are resolved by PyInstaller at build time, so
+    they contribute nothing to check here.
+    """
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        return _literal_names(node.left) + _literal_names(node.right)
+    if isinstance(node, ast.Call):
+        return []
+    return list(ast.literal_eval(node))
+
+
 def _spec_hiddenimports() -> list[str]:
     tree = ast.parse(SPEC.read_text())
     for node in ast.walk(tree):
         if isinstance(node, ast.Assign) and any(getattr(t, "id", None) == "hiddenimports" for t in node.targets):
-            return list(ast.literal_eval(node.value))
+            return _literal_names(node.value)
     raise AssertionError("hiddenimports not found in spec")
 
 

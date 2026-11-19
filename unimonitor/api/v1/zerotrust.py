@@ -89,8 +89,14 @@ class ImportResponse(BaseModel):
 
 
 class RunRequest(BaseModel):
-    platform: Literal["aws", "gcp", "google_workspace"]
+    # The Python engine is the default path for every platform, Microsoft included.
+    platform: SourceLiteral
     tenant_id: str | None = None
+
+
+class RunAllResponse(BaseModel):
+    runs: list[RunResponse]
+    skipped: list[str] = []
 
 
 async def _resolve_tenant(db: AsyncSession, tenant_id: str | None) -> str:
@@ -292,7 +298,7 @@ async def zerotrust_run_platform(
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
     db: AsyncSession = Depends(get_db),
 ) -> ImportResponse:
-    """Evaluate a cloud platform's checks from the latest collected evidence."""
+    """Evaluate a platform's checks from the latest collected evidence."""
     tenant = await _resolve_tenant(db, body.tenant_id)
     checks = await service.cloud_checks(db, tenant, body.platform)
     if not checks:
@@ -321,6 +327,46 @@ async def zerotrust_run_platform(
     stored = await service.run_checks(db, run.id)
     response = ImportResponse(run=_run_response(run), checks=[_check_response(check) for check in stored])
     return response
+
+
+@router.post("/run-all", response_model=RunAllResponse)
+async def zerotrust_run_all(
+    current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+) -> RunAllResponse:
+    """Evaluate every platform with the Python engine in one pass.
+
+    A platform with no defined controls (or no connection) is skipped rather than
+    failing the whole run.
+    """
+    tenant = await _resolve_tenant(db, tenant_id)
+    runs: list[RunResponse] = []
+    skipped: list[str] = []
+    for source in PLATFORMS:
+        checks = await service.cloud_checks(db, tenant, source)
+        if not checks:
+            skipped.append(source)
+            continue
+        run, summary = await service.store_run(
+            db,
+            tenant_id=tenant,
+            source=source,
+            checks=checks,
+            origin="collector",
+            user_id=getattr(current_user, "id", None),
+        )
+        await write_audit(
+            db,
+            action="zerotrust.evaluate",
+            tenant_id=tenant,
+            user_id=getattr(current_user, "id", None),
+            resource_type="zerotrust_run",
+            resource_id=run.id,
+            payload={"source": source, "checks": summary["total"], "score": summary["score"]},
+        )
+        runs.append(_run_response(run))
+    return RunAllResponse(runs=runs, skipped=skipped)
 
 
 @router.get("/script", response_class=PlainTextResponse)

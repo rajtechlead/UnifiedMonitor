@@ -68,7 +68,7 @@ function platformCaption(platform: Platform): string {
 
 function emptyChecksMessage(hasRun: boolean, isMicrosoft: boolean): string {
   if (hasRun) return 'No checks match these filters.'
-  if (isMicrosoft) return 'Import a ZeroTrustAssessmentReport.json to see Microsoft’s checks here.'
+  if (isMicrosoft) return 'Run the Python assessment, or import a ZeroTrustAssessmentReport.json as a manual fallback.'
   return 'Select Evaluate now to score this platform from collected evidence.'
 }
 
@@ -137,6 +137,25 @@ export default function ZeroTrustAssessmentPage() {
     }
   }
 
+  const evaluateAll = async () => {
+    setError(''); setMessage(''); setBusy(true)
+    try {
+      const result = await zerotrustApi.evaluateAll()
+      const scored = result.runs as Array<{ platform?: string; source: string; score: number }>
+      setMessage(
+        `Evaluated ${scored.length} platform(s): ` +
+        scored.map((run) => `${run.source} ${Math.round(run.score)}%`).join(', ') +
+        (result.skipped.length ? ` · skipped ${result.skipped.join(', ')}` : '')
+      )
+      await refresh()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Could not evaluate the platforms.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const downloadScript = async () => {
     setError('')
     try {
@@ -159,8 +178,9 @@ export default function ZeroTrustAssessmentPage() {
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Zero Trust Assessment</h1>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
-          Microsoft’s 364 PowerShell checks plus UniMonitor’s AWS, Google Cloud and Google Workspace controls,
-          with Microsoft’s remediation guidance on every result.
+          One Python assessment engine scores Microsoft 365, AWS, Google Cloud and Google Workspace from
+          collected evidence, with remediation guidance on every result. The PowerShell runner stays
+          available as a manual fallback.
         </p>
       </div>
 
@@ -190,7 +210,13 @@ export default function ZeroTrustAssessmentPage() {
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-        {isMicrosoft ? (
+        <button onClick={evaluate} disabled={busy} style={primaryButton}>
+          <Play size={14} /> {busy ? 'Evaluating…' : `Evaluate ${selected?.platform ?? 'platform'}`}
+        </button>
+        <button onClick={evaluateAll} disabled={busy} style={secondaryButton}>
+          <Play size={14} /> Evaluate all platforms
+        </button>
+        {isMicrosoft && (
           <>
             <input
               ref={fileInput}
@@ -199,31 +225,24 @@ export default function ZeroTrustAssessmentPage() {
               style={{ display: 'none' }}
               onChange={(event) => { const file = event.target.files?.[0]; if (file) void importReport(file) }}
             />
-            <button onClick={() => fileInput.current?.click()} disabled={busy} style={primaryButton}>
-              <Upload size={14} /> Import ZeroTrustAssessmentReport.json
+            <button onClick={() => fileInput.current?.click()} disabled={busy} style={secondaryButton}>
+              <Upload size={14} /> Import PowerShell report (manual)
             </button>
             <button onClick={downloadScript} style={secondaryButton}>
               <Download size={14} /> PowerShell runner
             </button>
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Run <code>Invoke-ZtAssessment</code> on a Windows admin workstation, then import the JSON it writes.
-            </span>
-          </>
-        ) : (
-          <>
-            <button onClick={evaluate} disabled={busy} style={primaryButton}>
-              <Play size={14} /> {busy ? 'Evaluating…' : 'Evaluate now'}
-            </button>
-            <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-              Runs the platform’s controls against the latest collected evidence.
-            </span>
           </>
         )}
+        <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+          {isMicrosoft
+            ? 'Python by default; the PowerShell report can still be generated on a Windows workstation and imported here.'
+            : 'Runs the platform’s controls against the latest collected evidence.'}
+        </span>
       </div>
 
       {message && <div style={{ fontSize: 12, color: '#10B981' }}>{message}</div>}
       {error && <div style={{ fontSize: 12, color: '#EF4444' }}>{error}</div>}
-      {(busy && isMicrosoft) && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Reading and importing the report…</div>}
+      {busy && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Evaluating…</div>}
 
       {/* Pillar strip */}
       {pillars.length > 0 && (

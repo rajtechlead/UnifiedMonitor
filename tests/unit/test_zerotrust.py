@@ -163,6 +163,22 @@ async def test_cloud_checks_use_findings_and_remediation(client, auth_headers, d
 
 
 @pytest.mark.asyncio
+async def test_python_engine_covers_every_platform(client, auth_headers, db_session, tenant) -> None:
+    """The Python engine is the default for Microsoft too, not only the clouds."""
+    from unimonitor.zerotrust import service
+
+    microsoft = await service.cloud_checks(db_session, tenant.id, "microsoft")
+    assert len(microsoft) > 100
+    assert any(check["category"] in {"entra_id", "intune"} for check in microsoft)
+
+    response = await client.post("/api/v1/zerotrust/run-all", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert {run["source"] for run in body["runs"]} == {"microsoft", "aws", "gcp", "google_workspace"}
+    assert body["skipped"] == []
+
+
+@pytest.mark.asyncio
 async def test_import_and_read_back_a_report(client, auth_headers) -> None:
     payload = {
         "tests": [

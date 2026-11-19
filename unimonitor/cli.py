@@ -16,11 +16,15 @@ import sys
 
 import click
 
+from unimonitor import __version__
+
 
 @click.group()
-@click.version_option(package_name="unimonitor", prog_name="unimonitor")
+# A frozen build has no installed package metadata, so the version is passed
+# explicitly rather than looked up by distribution name.
+@click.version_option(version=__version__, prog_name="UniMonitor")
 def main() -> None:
-    """UniMonitor — Unified M365 Security & GRC Platform."""
+    """UniMonitor — Unified Multi-Cloud Security & GRC Platform."""
 
 
 @main.command()

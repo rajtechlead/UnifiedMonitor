@@ -174,3 +174,13 @@ After each: `npm run lint`, `npm run build`, then commit. Revert + log in GAP_RE
 ## Stop Condition
 
 At ~95% context: update all four trackers, commit, push, stop.
+
+## 2026-11-19 — installer + reference merge
+
+- P10-029 Run GitHub Actions → Windows Installer with version 1.1.0 (needs a Windows
+  runner; the Linux build here validates the spec but cannot produce the NSIS exe).
+- P10-030 Port the Microsoft Zero Trust PowerShell tests into the Python catalogue so
+  the 158 control-backed Microsoft checks approach the 364 PS tests.
+- P10-031 Continue the Vigil365 and m365_sheppard merge from `reference/`: entity
+  investigation, activity/anomaly policies, licence posture per cloud.
+- P10-032 Refresh the clones with `scripts/update-reference-repos.sh` before each batch.

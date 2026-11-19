@@ -14,7 +14,7 @@ import structlog
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from unimonitor.config import get_settings
@@ -28,7 +28,11 @@ from unimonitor.exceptions import (
 
 logger = structlog.get_logger(__name__)
 
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
+
+# Let the setup page and the first request finish before a full tenant collection
+# starts in the web process.
+INITIAL_COLLECTION_DELAY_SECONDS = 120
 
 
 class SpaFallbackMiddleware:
@@ -135,24 +139,31 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("Cache initialised")
 
     # Automatic collection: with no Celery/Redis (the single-process installer) the
-    # API schedules it here; with a broker, Celery beat already does.
+    # API schedules it here; with a broker, Celery beat already does. This block is
+    # guarded because it imports the collector stack: a missing optional dependency
+    # must not stop the app booting, or the setup page that fixes it is unreachable.
     collection_task: asyncio.Task | None = None
     if settings.AUTO_COLLECTION_ENABLED:
-        from unimonitor.worker.inline import broker_available, collect_periodically
+        try:
+            from unimonitor.worker.inline import broker_available, collect_periodically
 
-        if not broker_available():
-            from unimonitor.worker.tasks.assessment import collect_all_tenants_now
+            if not broker_available():
+                from unimonitor.worker.tasks.assessment import collect_all_tenants_now
 
-            collection_task = asyncio.create_task(
-                collect_periodically(
-                    settings.COLLECTION_INTERVAL_MINUTES,
-                    lambda: collect_all_tenants_now(queue=False),
+                collection_task = asyncio.create_task(
+                    collect_periodically(
+                        settings.COLLECTION_INTERVAL_MINUTES,
+                        lambda: collect_all_tenants_now(queue=False),
+                        initial_delay_seconds=INITIAL_COLLECTION_DELAY_SECONDS,
+                    )
                 )
-            )
-            logger.info(
-                "Automatic collection running in-process",
-                interval_minutes=settings.COLLECTION_INTERVAL_MINUTES,
-            )
+                logger.info(
+                    "Automatic collection running in-process",
+                    interval_minutes=settings.COLLECTION_INTERVAL_MINUTES,
+                    first_run_in_seconds=INITIAL_COLLECTION_DELAY_SECONDS,
+                )
+        except Exception as exc:  # noqa: BLE001 - the API must boot regardless
+            logger.warning("Automatic collection unavailable", error=str(exc)[:300])
 
     # Instrument OpenTelemetry if enabled
     if settings.OTEL_ENABLED:
@@ -288,8 +299,32 @@ def create_app() -> FastAPI:
     if spa_dir is not None:
         app.add_middleware(SpaFallbackMiddleware, static_dir=spa_dir)
         logger.info("spa_served", directory=str(spa_dir))
+    else:
+        # Running from source without `npm run build` is normal; say so instead of
+        # answering /setup with a bare JSON 404.
+        logger.warning("No bundled frontend found; build it with `cd frontend && npm run build`")
+
+        @app.get("/", include_in_schema=False)
+        @app.get("/setup", include_in_schema=False)
+        async def frontend_not_built() -> HTMLResponse:
+            return HTMLResponse(MISSING_FRONTEND_HTML, status_code=503)
 
     return app
+
+
+MISSING_FRONTEND_HTML = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>UniMonitor — frontend not built</title>
+<style>body{font-family:Segoe UI,system-ui,sans-serif;max-width:640px;margin:12vh auto;padding:0 24px;color:#1A1F2E;line-height:1.55}
+code{background:#F0F3F8;padding:2px 6px;border-radius:4px}</style></head>
+<body><h1>UniMonitor is running, but the web interface is missing</h1>
+<p>The API answered this request, but no built frontend was found next to the application.</p>
+<p>From the repository root:</p>
+<pre><code>cd frontend
+npm ci
+npm run build
+cp -r dist ../unimonitor/static</code></pre>
+<p>Then restart UniMonitor and reload this page. The Windows installer ships the built
+frontend for you; this only happens when running from source.</p></body></html>"""
 
 
 app = create_app()

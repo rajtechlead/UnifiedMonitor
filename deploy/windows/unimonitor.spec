@@ -8,7 +8,7 @@
 import sys
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH).parent.parent  # repo root
 
@@ -36,7 +36,10 @@ datas = [
 datas += collect_data_files("docx")
 
 # ── Hidden imports that PyInstaller static analysis misses ────────────────────
-hiddenimports = [
+# Celery and kombu load loaders, fixups and transports by name at runtime, so their
+# package hooks leave pieces out. Collecting both packages keeps the broker probe
+# (and therefore the in-process fallback) working inside the frozen build.
+hiddenimports = collect_submodules("celery") + collect_submodules("kombu") + [
     # SQLAlchemy dialects
     "sqlalchemy.dialects.sqlite",
     "sqlalchemy.dialects.postgresql",
@@ -66,6 +69,11 @@ hiddenimports = [
     # Celery
     "celery.app.builtins",
     "celery.backends.redis",
+    # Loaded lazily when a broker connection is attempted; without it the frozen
+    # build cannot decide between Celery and the in-process collector.
+    "celery.fixups",
+    "celery.fixups.django",
+    "kombu.transport.redis",
     # UniMonitor modules (lazy-imported)
     "unimonitor.cli",
     "unimonitor.main",

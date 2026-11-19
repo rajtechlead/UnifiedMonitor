@@ -158,3 +158,6 @@ graphify-out/.graphify_labels.pending.json
 
 # Built frontend copied in by CI/installer
 unimonitor/static/
+
+# ── Reference repositories (read-only clones) ───────────────
+/reference/

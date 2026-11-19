@@ -57,6 +57,11 @@ function StepHeader({ n, title, active, done }: Readonly<{ n: number; title: str
   )
 }
 
+function errorDetail(err: unknown, fallback: string) {
+  const response = (err as { response?: { data?: { detail?: string }; status?: number } })?.response
+  return response?.data?.detail || (response?.status ? `${fallback} (HTTP ${response.status})` : fallback)
+}
+
 /**
  * First-run setup: create the administrator, choose at least one platform, connect it.
  * The platform list is what makes a fresh install useful — a dashboard with no
@@ -75,15 +80,19 @@ export default function SetupPage() {
   const [selected, setSelected] = useState<string[]>([])
   const [sharedGoogle, setSharedGoogle] = useState(true)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [busy, setBusy] = useState(false)
 
   const load = async () => {
     const res = await api.get('/onboarding/status')
     setStatus(res.data)
+    setLoadError('')
     if (!res.data.needs_admin) setStep(2)
   }
 
-  useEffect(() => { load().catch(() => setError('Could not reach the UniMonitor API.')) }, [])
+  useEffect(() => {
+    load().catch((err: unknown) => setLoadError(errorDetail(err, 'Could not reach the UniMonitor API.')))
+  }, [])
 
   const connections = useMemo(() => {
     const map: Record<string, Connection> = {}
@@ -91,7 +100,9 @@ export default function SetupPage() {
     return map
   }, [status])
 
-  const selectedPlatforms = (status?.platforms || []).filter((p) => selected.includes(p.id))
+  const platforms = useMemo(() => status?.platforms || [], [status])
+
+  const selectedPlatforms = platforms.filter((p) => selected.includes(p.id))
   const allSelectedConnected = selectedPlatforms.length > 0
     && selectedPlatforms.every((p) => connections[p.id]?.status === 'connected')
   const googleBothSelected = selected.includes('gcp') && selected.includes('google_workspace')
@@ -109,8 +120,7 @@ export default function SetupPage() {
       await load()
       setStep(2)
     } catch (err: unknown) {
-      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
-      setError(detail || 'Could not create the administrator account.')
+      setError(errorDetail(err, 'Could not create the administrator account.'))
     } finally {
       setBusy(false)
     }
@@ -120,6 +130,24 @@ export default function SetupPage() {
     setSelected((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
 
   const onConnected = async () => { await load() }
+
+  if (loadError) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--color-bg)' }}>
+        <div style={card}>
+          <h2 style={{ margin: '0 0 6px', fontSize: 18 }}>UniMonitor is not reachable</h2>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{loadError}</p>
+          <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+            Check that the UniMonitor service is running and that this page is open from the same host
+            (http://localhost:8000/setup).
+          </p>
+          <button onClick={() => { setLoadError(''); load().catch((err: unknown) => setLoadError(errorDetail(err, 'Could not reach the UniMonitor API.'))) }} style={primaryBtn}>
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   if (!status) {
     return <div style={{ padding: 40, color: 'var(--color-text-muted)' }}>Loading setup…</div>
@@ -174,7 +202,7 @@ export default function SetupPage() {
           {step === 2 ? (
             <div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-                {status.platforms.map((p) => {
+                {platforms.map((p) => {
                   const checked = selected.includes(p.id) || Boolean(connections[p.id])
                   return (
                     <button

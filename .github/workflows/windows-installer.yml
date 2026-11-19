@@ -12,7 +12,7 @@ on:
       version:
         description: "Installer version (e.g. 1.0.0)"
         required: false
-        default: "1.0.0"
+        default: "1.1.0"
 
 env:
   PYTHON_VER: "3.12"
@@ -140,7 +140,7 @@ jobs:
         shell: pwsh
         run: |
           $version = "${{ github.event.inputs.version }}"
-          if (!$version) { $version = "1.0.0" }
+          if (!$version) { $version = "1.1.0" }
           $version = $version.TrimStart('v')
           Write-Host "Building installer for version $version"
           echo "INSTALLER_VERSION=$version" >> $env:GITHUB_ENV

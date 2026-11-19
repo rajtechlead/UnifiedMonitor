@@ -23,6 +23,7 @@ import FindingsPage from './pages/FindingsPage'
 import AssessmentsPage from './pages/AssessmentsPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
+import AboutPage from './pages/AboutPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthStore } from './store/authStore'
 
@@ -74,7 +75,7 @@ export default function App() {
         <SetupGate>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/setup" element={<RouteErrorBoundary><SetupPage /></RouteErrorBoundary>} />
           <Route
             path="/"
             element={
@@ -103,6 +104,7 @@ export default function App() {
             <Route path="assessments" element={<RouteErrorBoundary><AssessmentsPage /></RouteErrorBoundary>} />
             <Route path="reports" element={<RouteErrorBoundary><ReportsPage /></RouteErrorBoundary>} />
             <Route path="settings" element={<RouteErrorBoundary><SettingsPage /></RouteErrorBoundary>} />
+            <Route path="about" element={<RouteErrorBoundary><AboutPage /></RouteErrorBoundary>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

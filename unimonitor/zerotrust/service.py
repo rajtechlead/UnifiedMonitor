@@ -26,6 +26,31 @@ _STATUS_TO_RESULT = {
 }
 
 
+# A platform is several control services for Microsoft, one for each cloud.
+PLATFORM_SERVICES: dict[str, tuple[str, ...]] = {
+    "microsoft": (
+        "entra_id",
+        "azure_security",
+        "intune",
+        "defender",
+        "defender_office",
+        "defender_cloud_apps",
+        "defender_identity",
+        "purview",
+        "purview_insider_risk",
+        "purview_ediscovery",
+        "exchange",
+        "sharepoint",
+        "teams",
+        "copilot_m365",
+        "copilot_studio",
+    ),
+    "aws": ("aws",),
+    "gcp": ("gcp",),
+    "google_workspace": ("google_workspace",),
+}
+
+
 def _platform_name(source: str) -> str:
     return PLATFORMS.get(source, source)
 
@@ -129,9 +154,10 @@ async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[
         # Later rows overwrite; findings are one row per control, so this is the current state.
         states[control_id] = state
 
+    services = PLATFORM_SERVICES.get(platform, (platform,))
     checks: list[dict[str, Any]] = []
     for control in ControlLoader().load_all():
-        if control.service != platform:
+        if control.service not in services:
             continue
         current_state: str | None = states.get(control.id)
         status = _STATUS_TO_RESULT.get(current_state or "", "not_run")

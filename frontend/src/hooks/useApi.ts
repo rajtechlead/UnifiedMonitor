@@ -53,6 +53,7 @@ export const zerotrustApi = {
     api.post('/zerotrust/import', { source: 'microsoft', payload }).then((r) => r.data),
   evaluate: (platform: string) =>
     api.post('/zerotrust/run', { platform }).then((r) => r.data),
+  evaluateAll: () => api.post('/zerotrust/run-all').then((r) => r.data),
   script: () => api.get('/zerotrust/script', { responseType: 'text' }).then((r) => r.data),
 }
 

@@ -53,8 +53,16 @@ def dispatch(task: Any, job: Callable[..., Coroutine[Any, Any, Any]], /, **kwarg
 async def collect_periodically(
     interval_minutes: int,
     collect: Callable[[], Coroutine[Any, Any, Any]],
+    *,
+    initial_delay_seconds: int = 0,
 ) -> None:
-    """Run ``collect`` now, then every interval — the broker-less beat schedule."""
+    """Run ``collect`` every interval — the broker-less beat schedule.
+
+    The first run waits ``initial_delay_seconds`` so a fresh start serves the setup and
+    dashboard pages before a full tenant collection competes with them.
+    """
+    if initial_delay_seconds > 0:
+        await asyncio.sleep(initial_delay_seconds)
     while True:
         try:
             await collect()

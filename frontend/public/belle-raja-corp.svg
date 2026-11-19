@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240" role="img" aria-label="Belle-Raja Corp">
+  <defs>
+    <linearGradient id="brMane" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0B2A5B"/>
+      <stop offset="100%" stop-color="#071A3A"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Angular mane -->
+  <path d="M120 14 L158 34 L196 52 L204 96 L214 132 L196 172 L164 206 L120 226 L76 206 L44 172 L26 132 L36 96 L44 52 L82 34 Z"
+        fill="url(#brMane)"/>
+  <path d="M120 14 L158 34 L196 52 L204 96 L214 132 L196 172 L164 206 L120 226 L76 206 L44 172 L26 132 L36 96 L44 52 L82 34 Z"
+        fill="none" stroke="#0E7490" stroke-width="2"/>
+
+  <!-- Ears -->
+  <path d="M62 74 L96 62 L86 94 Z" fill="#0E3A72"/>
+  <path d="M178 74 L144 62 L154 94 Z" fill="#0E3A72"/>
+
+  <!-- Face -->
+  <path d="M120 58 C86 58 66 78 66 108 C66 138 90 168 120 184 C150 168 174 138 174 108 C174 78 154 58 120 58 Z"
+        fill="#F8FAFC"/>
+
+  <!-- Eyes -->
+  <path d="M86 106 L114 100 L108 116 Z" fill="#0B1F4B"/>
+  <path d="M154 106 L126 100 L132 116 Z" fill="#0B1F4B"/>
+
+  <!-- Cloud -->
+  <g fill="#22D3EE">
+    <ellipse cx="120" cy="140" rx="42" ry="26"/>
+    <circle cx="96" cy="132" r="20"/>
+    <circle cx="124" cy="124" r="25"/>
+    <circle cx="148" cy="134" r="19"/>
+  </g>
+
+  <!-- Circuit traces -->
+  <g fill="none" stroke="#22D3EE" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M64 118 H40 L34 108"/>
+    <circle cx="34" cy="104" r="4" fill="#22D3EE"/>
+    <path d="M176 118 H200 L206 108"/>
+    <circle cx="206" cy="104" r="4" fill="#22D3EE"/>
+    <path d="M92 168 L80 190"/>
+    <path d="M148 168 L160 190"/>
+  </g>
+</svg>

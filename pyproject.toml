@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "unimonitor"
-version = "1.0.0"
-description = "UniMonitor – Unified Monitoring and GRC Solution for Microsoft 365"
+version = "1.1.0"
+description = "UniMonitor – Unified Multi-Cloud Security Monitoring and GRC Solution"
 readme = "README.md"
 license = { text = "Proprietary" }
 requires-python = ">=3.12"
-authors = [{ name = "rajtechlead", email = "rajrsngroup@gmail.com" }]
-maintainers = [{ name = "rajtechlead", email = "rajrsngroup@gmail.com" }]
+authors = [{ name = "Raj Raja", email = "Contact@Belle-RajaCorp.com" }]
+maintainers = [{ name = "Belle-Raja Corp", email = "Contact@Belle-RajaCorp.com" }]
 keywords = ["microsoft365", "security", "grc", "compliance", "monitoring", "intune", "defender", "entra"]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

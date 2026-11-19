@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Shield, CheckCircle, AlertTriangle,
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
   BarChart3, Activity, ScrollText, Cloud, ShieldAlert, ShieldCheck,
-  Bell, KeyRound, RefreshCw, Search, ListChecks,
+  Bell, KeyRound, RefreshCw, Search, ListChecks, Info,
 } from 'lucide-react'
 import SearchPalette from './SearchPalette'
 import { useAuthStore } from '../store/authStore'
@@ -28,6 +28,7 @@ const NAV_ITEMS = [
   { to: '/licenses', icon: KeyRound, label: 'Licences' },
   { to: '/service-health', icon: Activity, label: 'Service Health' },
   { to: '/collection', icon: RefreshCw, label: 'Data Collection' },
+  { to: '/about', icon: Info, label: 'About & Help' },
 ]
 
 export default function Layout() {
@@ -77,11 +78,10 @@ export default function Layout() {
           height: '56px',
         }}>
           <div style={{
-            width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-            background: 'var(--color-brand)',
+            width: 32, height: 32, borderRadius: 8, flexShrink: 0, overflow: 'hidden',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Shield size={18} color="white" />
+            <img src="/belle-raja-corp.svg" alt="Belle-Raja Corp" width={32} height={32} />
           </div>
           {sidebarOpen && (
             <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--color-brand)' }}>
@@ -183,6 +183,11 @@ export default function Layout() {
             <LogOut size={18} style={{ flexShrink: 0 }} />
             {sidebarOpen && 'Sign Out'}
           </button>
+          {sidebarOpen && (
+            <div style={{ padding: '8px 16px 2px', fontSize: 10, color: 'var(--color-text-muted)' }}>
+              © Belle-Raja Corp
+            </div>
+          )}
         </div>
       </aside>
 
