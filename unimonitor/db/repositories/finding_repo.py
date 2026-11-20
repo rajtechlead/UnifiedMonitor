@@ -281,6 +281,11 @@ class FindingRepository(BaseRepository[Finding]):
         result = await self.session.execute(stmt)
         return result.scalars().all()
 
+    async def list_evidence(self, finding_id: str) -> Sequence[FindingEvidence]:
+        """Evidence records attached to one finding, newest first."""
+        stmt = select(FindingEvidence).where(FindingEvidence.finding_id == finding_id).order_by(desc(FindingEvidence.collected_at))
+        return (await self.session.execute(stmt)).scalars().all()
+
     async def get_risk_heatmap(
         self,
         tenant_id: str | None = None,

@@ -153,6 +153,7 @@ class RiskViewResponse(BaseModel):
     overall_risk_score: float
     heatmap: list[RiskCell]
     critical_risks: list[TopFinding]
+    risks: list[TopFinding] = []
     generated_at: datetime
 
 
@@ -185,10 +186,20 @@ class AuditChainResponse(BaseModel):
     reason: str | None = None
 
 
+class CloudAuditEntry(BaseModel):
+    id: str
+    source: str
+    action: str
+    actor: str
+    target: str = ""
+    created_at: datetime
+
+
 class AuditViewResponse(BaseModel):
     entries: list[AuditEntry]
     total: int
     actions_24h: int
+    cloud_events: list[CloudAuditEntry] = []
     generated_at: datetime
 
 
@@ -495,14 +506,35 @@ async def dashboard_risk(
     db: AsyncSession = Depends(get_db),
     tenant_id: str | None = Query(default=None),
 ) -> RiskViewResponse:
-    """Risk dashboard — heatmap and critical risks."""
-    _, _, risk = await _get_scores_for_tenant(db, tenant_id)
-    top_findings = await _get_top_findings_list(db, tenant_id, limit=10)
+    """Risk dashboard — heatmap and every open risk, so nothing is hidden behind "critical"."""
+    from sqlalchemy import select
 
+    from unimonitor.db.models.finding import Finding
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
+    _, _, risk = await _get_scores_for_tenant(db, tenant_id)
     repo = FindingRepository(db)
     heatmap_data = await repo.get_risk_heatmap(tenant_id=tenant_id)
+
+    stmt = select(Finding).where(
+        Finding.state.in_(["not_implemented", "partially_implemented"]),
+        Finding.is_suppressed.is_(False),
+    )
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
+    stmt = stmt.order_by(Finding.risk_score.desc()).limit(200)
+    open_rows = (await db.execute(stmt)).scalars().all()
+    open_risks = [
+        TopFinding(
+            id=f.id,
+            title=f.title,
+            severity=f.severity,
+            category=f.category,
+            service=f.service,
+            first_detected_at=f.first_detected_at,
+        )
+        for f in open_rows
+    ]
 
     return RiskViewResponse(
         overall_risk_score=risk,
@@ -515,7 +547,8 @@ async def dashboard_risk(
             )
             for cell in heatmap_data
         ],
-        critical_risks=[f for f in top_findings if f.severity == "critical"],
+        critical_risks=[f for f in open_risks if f.severity == "critical"],
+        risks=open_risks,
         generated_at=datetime.now(UTC),
     )
 
@@ -557,6 +590,15 @@ async def dashboard_audit(
     since = datetime.now(UTC) - timedelta(hours=24)
     actions_24h = await db.scalar(select(func.count()).select_from(AuditLog).where(AuditLog.created_at >= since)) or 0
 
+    # Platform activity (M365 / AWS / GCP / Workspace), not just this app's own log.
+    from unimonitor.core.cloud_audit import cloud_events as read_cloud_events
+
+    try:
+        cloud_rows = await read_cloud_events(db, limit=limit)
+    except Exception as exc:  # noqa: BLE001 - the app audit trail must still render
+        logger.warning("cloud_audit_unavailable", error=str(exc)[:200])
+        cloud_rows = []
+
     return AuditViewResponse(
         entries=[
             AuditEntry(
@@ -572,6 +614,17 @@ async def dashboard_audit(
         ],
         total=total,
         actions_24h=actions_24h,
+        cloud_events=[
+            CloudAuditEntry(
+                id=row["id"],
+                source=row["source"],
+                action=row["action"],
+                actor=row["actor"],
+                target=row["target"],
+                created_at=row["created_at"],
+            )
+            for row in cloud_rows
+        ],
         generated_at=datetime.now(UTC),
     )
 
@@ -729,7 +782,11 @@ def _count_states(findings: list) -> tuple[FindingCounts, StateCounts, float, fl
     )
 
 
-def _summarise_provider(provider, findings: list, controls: list) -> CloudProviderSummary:
+def _summarise_provider(provider, findings: list, controls: list, connected: bool | None = None) -> CloudProviderSummary:
+    """One provider row. An unconnected cloud reports no data, not false findings."""
+    is_connected = bool(findings) if connected is None else connected
+    if not is_connected:
+        findings = []
     finding_counts, state_counts, sec, comp, risk = _count_states(findings)
     states = {f.external_control_id: f.state for f in findings}
     applicable = [c for c in controls if states.get(c.id) != "not_applicable"]
@@ -741,7 +798,7 @@ def _summarise_provider(provider, findings: list, controls: list) -> CloudProvid
         name=provider.name,
         short_name=provider.short_name,
         description=provider.description,
-        connected=bool(findings),
+        connected=is_connected,
         controls_total=len(controls),
         controls_passed=passed,
         coverage_pct=coverage,
@@ -898,11 +955,13 @@ async def dashboard_clouds(
 ) -> CloudAggregateResponse:
     """Aggregate multi-cloud dashboard: one row per provider plus totals."""
     from unimonitor.grc.providers import PROVIDERS
+    from unimonitor.onboarding.service import connected_providers
 
     findings = await _load_findings(db, tenant_id)
     groups = _group_by_provider(findings)
+    connected = await connected_providers(db, tenant_id)
 
-    providers = [_summarise_provider(p, groups.get(pid, []), _provider_controls(pid)) for pid, p in PROVIDERS.items()]
+    providers = [_summarise_provider(p, groups.get(pid, []), _provider_controls(pid), connected=pid in connected) for pid, p in PROVIDERS.items()]
 
     controls_total = sum(p.controls_total for p in providers)
     controls_passed = sum(p.controls_passed for p in providers)
@@ -947,13 +1006,17 @@ async def dashboard_cloud_provider(
     if provider is None:
         raise HTTPException(status_code=404, detail=f"Unknown cloud provider '{provider_id}'")
 
+    from unimonitor.onboarding.service import connected_providers
+
+    connected = provider.id in await connected_providers(db, tenant_id)
     findings = []
-    for finding in await _load_findings(db, tenant_id):
-        owner = provider_for_service(finding.service)
-        if owner is not None and owner.id == provider.id:
-            findings.append(finding)
+    if connected:
+        for finding in await _load_findings(db, tenant_id):
+            owner = provider_for_service(finding.service)
+            if owner is not None and owner.id == provider.id:
+                findings.append(finding)
     controls = _provider_controls(provider.id)
-    summary = _summarise_provider(provider, findings, controls)
+    summary = _summarise_provider(provider, findings, controls, connected=connected)
 
     states = {f.external_control_id: f.state for f in findings}
     services = [
@@ -1064,13 +1127,17 @@ async def dashboard_ciso(
     """CISO view: residual risk across every monitored cloud."""
     from unimonitor.grc.providers import PROVIDERS, provider_for_service
     from unimonitor.grc.scoring import compute_framework_coverage
+    from unimonitor.onboarding.service import connected_providers
 
     findings = await _load_findings(db, tenant_id)
     groups = _group_by_provider(findings)
+    connected = await connected_providers(db, tenant_id)
+    # Findings from a cloud that is not connected are noise from an earlier install.
+    findings = [f for f in findings if getattr(provider_for_service(f.service), "id", None) in connected]
 
     clouds = []
     for pid, provider in PROVIDERS.items():
-        summary = _summarise_provider(provider, groups.get(pid, []), _provider_controls(pid))
+        summary = _summarise_provider(provider, groups.get(pid, []), _provider_controls(pid), connected=pid in connected)
         clouds.append(
             CloudRiskRow(
                 provider_id=pid,

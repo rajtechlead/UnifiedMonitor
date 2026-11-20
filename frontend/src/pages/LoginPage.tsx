@@ -40,7 +40,9 @@ export default function LoginPage() {
       })
       setAuth(res.data.access_token, res.data.user)
       navigate('/')
-    } catch (_err: unknown) {
+    } catch {
+      // Any failure is shown as the same message: the API deliberately does not
+      // reveal whether the email or the password was wrong.
       setError('Invalid credentials. Please try again.')
     } finally {
       setLoading(false)
@@ -99,7 +101,7 @@ export default function LoginPage() {
             marginBottom: 20, opacity: ssoEnabled ? 1 : 0.5,
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 21 21" fill="none">
+          <svg width="18" height="18" viewBox="0 0 21 21" fill="none" aria-hidden="true">
             <rect x="1" y="1" width="9" height="9" fill="#F25022"/>
             <rect x="11" y="1" width="9" height="9" fill="#7FBA00"/>
             <rect x="1" y="11" width="9" height="9" fill="#00A4EF"/>

@@ -17,6 +17,7 @@ from unimonitor.api.v1.onboarding import router as onboarding_router
 from unimonitor.api.v1.reports import router as reports_router
 from unimonitor.api.v1.search import router as search_router
 from unimonitor.api.v1.tenants import router as tenants_router
+from unimonitor.api.v1.users import router as users_router
 from unimonitor.api.v1.zerotrust import router as zerotrust_router
 
 api_v1_router = APIRouter()
@@ -24,6 +25,7 @@ api_v1_router = APIRouter()
 api_v1_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
 api_v1_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
 api_v1_router.include_router(tenants_router, prefix="/tenants", tags=["Tenants"])
+api_v1_router.include_router(users_router, prefix="/users", tags=["Users"])
 api_v1_router.include_router(assessments_router, prefix="/assessments", tags=["Assessments"])
 api_v1_router.include_router(findings_router, prefix="/findings", tags=["Findings"])
 api_v1_router.include_router(controls_router, prefix="/controls", tags=["Controls"])

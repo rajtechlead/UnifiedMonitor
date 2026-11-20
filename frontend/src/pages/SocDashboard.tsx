@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { dashboardApi } from '../hooks/useApi'
 
 type SeverityCounts = {
@@ -85,11 +86,17 @@ export default function SocDashboard() {
           SEVERITIES.map(([key, label, color]) => (
             <div key={key} style={{ marginBottom: 12 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
-                <span>{label}</span>
-                <span style={{ fontWeight: 700, color }}>{alerts[key]}</span>
+                <Link to={`/findings?severity=${key.toUpperCase()}`} style={{ color: 'inherit' }}>
+                  {label}
+                </Link>
+                <Link to={`/findings?severity=${key.toUpperCase()}`} style={{ fontWeight: 700, color }}>
+                  {alerts[key]}
+                </Link>
               </div>
               <div style={{ height: 8, background: 'var(--color-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-                <div style={{ width: `${(alerts[key] / maxCount) * 100}%`, height: '100%', background: color }} />
+                <Link to={`/findings?severity=${key.toUpperCase()}`} title={`View ${label.toLowerCase()} findings`}>
+                  <div style={{ width: `${(alerts[key] / maxCount) * 100}%`, height: '100%', background: color }} />
+                </Link>
               </div>
             </div>
           ))
@@ -117,11 +124,16 @@ export default function SocDashboard() {
               </tr>
             </thead>
             <tbody>
-              {soc.incident_trend.map((row: Record<string, unknown>, i: number) => (
-                <tr key={i} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  {Object.keys(soc.incident_trend[0]).map(k => (
-                    <td key={k} style={{ padding: '10px 12px' }}>{String(row[k] ?? '—')}</td>
-                  ))}
+              {soc.incident_trend.map((row: Record<string, unknown>) => (
+                <tr key={Object.values(row).join('|')} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                  {Object.keys(soc.incident_trend[0]).map(k => {
+                    const value = row[k]
+                    return (
+                      <td key={k} style={{ padding: '10px 12px' }}>
+                        {value == null ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                      </td>
+                    )
+                  })}
                 </tr>
               ))}
             </tbody>

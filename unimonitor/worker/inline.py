@@ -31,11 +31,36 @@ def broker_available() -> bool:
         return False
 
 
+async def _fail_run(run_id: str, exc: Exception) -> None:
+    """Record an in-process failure, so a run never stays "pending" forever."""
+    from datetime import UTC, datetime
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.assessment import AssessmentRun
+
+    try:
+        async with async_session_factory() as session:
+            run = await session.get(AssessmentRun, run_id)
+            if run is not None and run.status in ("pending", "running"):
+                run.status = "failed"
+                run.error_message = str(exc)[:2000]
+                run.completed_at = datetime.now(UTC)
+                await session.commit()
+    except Exception as mark_exc:  # noqa: BLE001 - the original failure is what matters
+        logger.error("Could not record failed in-process run", run_id=run_id, error=str(mark_exc)[:300])
+
+
 async def _run_later(job: Callable[..., Coroutine[Any, Any, Any]], kwargs: dict[str, Any]) -> None:
-    # The caller has flushed its run row but not committed it yet; give the request time
-    # to commit before the job opens its own session and looks the row up.
+    # The caller commits its run row first; the short pause keeps a snapshot of it
+    # visible before the job opens its own session and looks the row up.
     await asyncio.sleep(0.5)
-    await job(**kwargs)
+    try:
+        await job(**kwargs)
+    except Exception as exc:  # noqa: BLE001 - a background task must not fail silently
+        logger.error("In-process job failed", job=job.__name__, error=str(exc)[:500])
+        run_id = kwargs.get("run_id")
+        if run_id:
+            await _fail_run(str(run_id), exc)
 
 
 def dispatch(task: Any, job: Callable[..., Coroutine[Any, Any, Any]], /, **kwargs: Any) -> str:

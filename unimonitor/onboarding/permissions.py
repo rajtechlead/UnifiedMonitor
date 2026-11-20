@@ -36,13 +36,16 @@ REQUIRED: tuple[GraphPermission, ...] = (
     GraphPermission("AuditLog.Read.All", "Sign-in and directory audit logs"),
     GraphPermission("Reports.Read.All", "Usage and security reports"),
     GraphPermission("User.Read.All", "User profile and authentication methods"),
+    # Licence posture and M365 service health are first-class pages; without these
+    # the wizard left them answering 502 for a permission it never requested.
+    GraphPermission("Organization.Read.All", "Licence posture (subscribed SKUs)"),
+    GraphPermission("ServiceHealth.Read.All", "Microsoft 365 service health and advisories"),
 )
 
 # Granted when the tenant allows it; a refusal is reported, never fatal.
 OPTIONAL: tuple[GraphPermission, ...] = (
     GraphPermission("SecurityAlert.Read.All", "Defender XDR alert detail"),
     GraphPermission("IdentityRiskyUser.Read.All", "Entra ID risky users"),
-    GraphPermission("ServiceHealth.Read.All", "Microsoft 365 service health and advisories"),
 )
 
 # Not read-only: `addKey`/`removeKey` on the app itself. It only reaches applications

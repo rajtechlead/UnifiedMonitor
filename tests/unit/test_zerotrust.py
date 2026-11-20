@@ -182,6 +182,40 @@ async def test_microsoft_engine_scores_mapped_tests_and_leaves_the_rest_unrun(db
     assert checks["CTRL-PUR-004"]["category"] == "purview"
 
 
+@pytest.mark.asyncio
+async def test_mapped_test_ignores_sibling_controls_without_evidence(db_session, tenant) -> None:
+    """One control's finding decides the test, even when a sibling has no evidence."""
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.zerotrust import service
+
+    services = set(service.PLATFORM_SERVICES["microsoft"])
+    backing: dict[str, list] = {}
+    for control in ControlLoader().load_all():
+        if control.service in services:
+            for test_id in control.ms_zt_tests:
+                backing.setdefault(test_id, []).append(control)
+    test_id, controls = next((tid, group) for tid, group in backing.items() if len(group) >= 2)
+    evidenced = controls[0]
+
+    db_session.add(
+        Finding(
+            tenant_id=tenant.id,
+            external_control_id=evidenced.id,
+            title=evidenced.title,
+            description="one backing control has a finding",
+            severity="high",
+            state="not_implemented",
+            category=evidenced.category,
+            service=evidenced.service,
+        )
+    )
+    await db_session.flush()
+
+    checks = {check["check_id"]: check for check in await service.cloud_checks(db_session, tenant.id, "microsoft")}
+    assert checks[test_id]["status"] == "fail"
+
+
 # ── Cloud evaluation and API ────────────────────────────────────────────────
 
 

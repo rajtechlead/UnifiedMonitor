@@ -112,6 +112,7 @@ controls:
     severity: HIGH
     category: defender
     service: defender
+    ms_zt_tests: ["41119"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.7"

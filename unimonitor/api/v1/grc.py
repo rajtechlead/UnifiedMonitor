@@ -168,31 +168,58 @@ async def framework_controls(
     if not fw_info:
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
 
+    from sqlalchemy import select
+
     from unimonitor.db.base import async_session_factory
-    from unimonitor.db.repositories.finding_repo import FindingRepository
-    from unimonitor.grc.control_loader import ControlLibrary
+    from unimonitor.db.models.finding import Finding, FindingEvidence
+    from unimonitor.grc.control_loader import ControlLoader
 
+    # Framework ids appear in control YAML with either dashes or underscores.
+    keys = {framework_id, framework_id.replace("-", "_")}
+    controls = [control for control in ControlLoader().load_all() if keys & set(control.compliance_mapping)]
+
+    result = []
     async with async_session_factory() as session:
-        library = ControlLibrary(session)
-        repo = FindingRepository(session)
-        controls = await library.get_controls_for_framework(framework_id)
+        findings: dict[str, Finding] = {}
+        if controls:
+            stmt = select(Finding).where(Finding.external_control_id.in_([c.id for c in controls]))
+            if tenant_id:
+                stmt = stmt.where(Finding.tenant_id == tenant_id)
+            stmt = stmt.order_by(Finding.last_seen_at.desc())
+            for finding in (await session.execute(stmt)).scalars():
+                findings.setdefault(finding.external_control_id, finding)
 
-        result = []
+        evidence: dict[str, list[FindingEvidence]] = {}
+        finding_ids = [f.id for f in findings.values()]
+        if finding_ids:
+            rows = (await session.execute(select(FindingEvidence).where(FindingEvidence.finding_id.in_(finding_ids)))).scalars()
+            for row in rows:
+                evidence.setdefault(row.finding_id, []).append(row)
+
         for control in controls:
-            # Get latest finding state for this control
-            finding = await repo.get_latest_by_control(
-                external_control_id=control.external_id,
-                tenant_id=tenant_id,
-            )
+            finding = findings.get(control.id)
             result.append(
                 {
                     "control_id": control.id,
-                    "external_id": control.external_id,
-                    "name": control.name,
+                    "external_id": control.id,
+                    "name": control.title,
                     "category": control.category,
-                    "severity": control.severity,
-                    "state": finding.state if finding else "not_implemented",
+                    "severity": control.severity.lower(),
+                    "state": finding.state if finding else "not_run",
                     "last_seen": finding.last_seen_at.isoformat() if finding else None,
+                    "finding_id": finding.id if finding else None,
+                    "remediation": "\n".join(control.remediation_steps) or control.remediation_summary,
+                    "evidence": [
+                        {
+                            "type": item.evidence_type,
+                            "source": item.source,
+                            "content": (item.content or "")[:800],
+                            "collected_at": item.collected_at.isoformat(),
+                        }
+                        for item in evidence.get(finding.id, [])[:3]
+                    ]
+                    if finding
+                    else [],
                 }
             )
 
@@ -205,28 +232,31 @@ async def control_crosswalk(
     control_id: str = Query(..., description="External control ID to crosswalk"),
 ) -> list[CrosswalkEntry]:
     """Show how a control maps across all supported frameworks."""
-    from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.control_loader import ControlLibrary
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+    from unimonitor.grc.control_loader import ControlLoader
 
-    async with async_session_factory() as session:
-        library = ControlLibrary(session)
-        control = await library.get_by_external_id(control_id)
-        if not control:
-            raise HTTPException(status_code=404, detail=f"Control '{control_id}' not found")
+    control = next((item for item in ControlLoader().load_all() if item.id == control_id), None)
+    if control is None:
+        raise HTTPException(status_code=404, detail=f"Control '{control_id}' not found")
 
-        mappings = await library.get_crosswalk_mappings(control.id)
-
-    return [
-        CrosswalkEntry(
-            control_id=control.id,
-            control_name=control.name,
-            framework_id=m.get("framework_id", ""),
-            framework_name=m.get("framework_name", ""),
-            framework_control_id=m.get("framework_control_id", ""),
-            framework_control_name=m.get("framework_control_name", ""),
-        )
-        for m in mappings
-    ]
+    names = {alias: fw["name"] for fw in SUPPORTED_FRAMEWORKS for alias in (fw["id"], fw["id"].replace("-", "_"))}
+    entries: list[CrosswalkEntry] = []
+    for framework_key, references in control.compliance_mapping.items():
+        if framework_key == "zero_trust":
+            continue
+        refs = references if isinstance(references, (list, tuple)) else [references]
+        for reference in refs:
+            entries.append(
+                CrosswalkEntry(
+                    control_id=control.id,
+                    control_name=control.title,
+                    framework_id=framework_key.replace("_", "-"),
+                    framework_name=names.get(framework_key, framework_key.replace("_", " ").title()),
+                    framework_control_id=str(reference),
+                    framework_control_name=control.title,
+                )
+            )
+    return entries
 
 
 @router.get("/gap-analysis", response_model=GapAnalysisResponse)

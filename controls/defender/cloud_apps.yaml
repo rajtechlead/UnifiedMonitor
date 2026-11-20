@@ -158,6 +158,7 @@ controls:
     severity: CRITICAL
     category: defender
     service: defender_cloud_apps
+    ms_zt_tests: ["21770", "21771", "21867"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.15"

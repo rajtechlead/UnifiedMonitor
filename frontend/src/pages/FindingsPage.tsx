@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { findingsApi } from '../hooks/useApi'
 import { Search, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
@@ -15,6 +16,7 @@ type Finding = {
   service: string
   risk_score: number
   ai_remediation: Record<string, unknown> | null
+  remediation: string | null
   first_detected_at: string
   last_seen_at: string
 }
@@ -90,27 +92,50 @@ function Timeline({ findingId }: { findingId: string }) {
 }
 
 export default function FindingsPage() {
+  // Links from the SOC, Risk and Compliance views land on a pre-filtered list.
+  const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
-  const [severity, setSeverity] = useState('')
-  const [state, setState] = useState('')
+  const [severity, setSeverity] = useState(() => (searchParams.get('severity') || '').toUpperCase())
+  const [state, setState] = useState(() => searchParams.get('state') || '')
   const [triage, setTriage] = useState('')
+  const [category, setCategory] = useState('')
+  const [sortBy, setSortBy] = useState('last_seen_at')
+  const [sortDesc, setSortDesc] = useState(true)
   const [page, setPage] = useState(1)
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(() => searchParams.get('finding'))
   const pageSize = 25
   const queryClient = useQueryClient()
 
   const { data, isLoading } = useQuery<FindingListResponse>({
-    queryKey: ['findings', { search, severity, state, triage, page }],
+    queryKey: ['findings', { search, severity, state, triage, category, sortBy, sortDesc, page }],
     queryFn: () => findingsApi.list({
       search: search || undefined,
       severity: severity || undefined,
       state: state || undefined,
       triage_status: triage || undefined,
+      category: category || undefined,
+      sort_by: sortBy,
+      sort_desc: sortDesc,
       page,
       page_size: pageSize,
     }),
     placeholderData: (prev) => prev,
   })
+
+  const { data: summary } = useQuery<{ by_category: Record<string, number> }>({
+    queryKey: ['findings-summary'],
+    queryFn: () => findingsApi.summary(),
+  })
+
+  const toggleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortDesc(!sortDesc)
+    } else {
+      setSortBy(column)
+      setSortDesc(column !== 'title' && column !== 'external_control_id')
+    }
+    setPage(1)
+  }
 
   const { data: priority } = useQuery<{ items: PriorityItem[] }>({
     queryKey: ['finding-priority'],
@@ -216,6 +241,12 @@ export default function FindingsPage() {
             <option key={s} value={s}>{s ? s.replace(/_/g, ' ') : 'All Triage'}</option>
           ))}
         </select>
+        <select value={category} onChange={e => { setCategory(e.target.value); setPage(1) }} style={selectStyle}>
+          <option value="">All Categories</option>
+          {Object.keys(summary?.by_category ?? {}).sort().map(cat => (
+            <option key={cat} value={cat}>{cat}</option>
+          ))}
+        </select>
       </div>
 
       {/* Table */}
@@ -235,9 +266,24 @@ export default function FindingsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
-                {['', 'Control', 'Title', 'Severity', 'Category', 'State', 'Triage'].map(h => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 14px',
-                    fontWeight: 600, color: 'var(--color-text-muted)', fontSize: 12 }}>{h}</th>
+                <th style={{ width: 24 }} />
+                {[
+                  { label: 'Control', sort: 'external_control_id' },
+                  { label: 'Title', sort: 'title' },
+                  { label: 'Severity', sort: 'severity' },
+                  { label: 'Category', sort: 'category' },
+                  { label: 'State', sort: 'state' },
+                  { label: 'Triage', sort: 'triage_status' },
+                ].map(({ label, sort }) => (
+                  <th
+                    key={label}
+                    onClick={() => toggleSort(sort)}
+                    title={`Sort by ${label.toLowerCase()}`}
+                    style={{ textAlign: 'left', padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
+                      fontWeight: 600, color: sortBy === sort ? 'var(--color-brand)' : 'var(--color-text-muted)', fontSize: 12 }}
+                  >
+                    {label}{sortBy === sort ? (sortDesc ? ' ▼' : ' ▲') : ''}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -309,7 +355,7 @@ export default function FindingsPage() {
                               REMEDIATION GUIDANCE
                             </div>
                             <div style={{ fontSize: 13, lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
-                              {remediationText(f.ai_remediation)}
+                              {f.remediation || remediationText(f.ai_remediation)}
                             </div>
                           </div>
                         </div>

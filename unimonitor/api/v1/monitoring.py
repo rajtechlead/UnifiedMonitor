@@ -43,6 +43,7 @@ class CollectorStatus(BaseModel):
     display_name: str
     description: str
     provider: str = "microsoft"
+    connected: bool = True
     last_run: datetime | None
     last_status: str | None  # "success" | "partial" | "failed" | "never"
     last_duration_seconds: float | None
@@ -256,8 +257,15 @@ async def get_collectors(
     db: AsyncSession = Depends(get_session),
     tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
 ) -> list[CollectorStatus]:
-    """Return the status of all data collectors for a given tenant."""
+    """Return the status of all data collectors for a given tenant.
+
+    A cloud that was never connected has no collection to report: its collectors
+    say ``not_connected`` instead of borrowing the last Microsoft run's success.
+    """
+    from unimonitor.onboarding.service import connected_providers
+
     tenant = await _resolve_tenant(db, tenant_id)
+    connected = await connected_providers(db, tenant.id)
 
     # Get the last collection run per assessment
     result = await db.execute(
@@ -271,7 +279,13 @@ async def get_collectors(
 
     statuses: list[CollectorStatus] = []
     for defn in COLLECTOR_DEFINITIONS:
-        if last_run:
+        provider = defn.get("provider", "microsoft")
+        is_connected = provider in connected
+        if not is_connected:
+            last_status = "not_connected"
+            last_run_time = None
+            duration = None
+        elif last_run:
             last_status = "success" if last_run.status == AssessmentStatus.COMPLETED.value else last_run.status
             last_run_time = last_run.started_at
             duration = last_run.duration_seconds
@@ -285,12 +299,13 @@ async def get_collectors(
                 name=defn["name"],
                 display_name=defn["display_name"],
                 description=defn["description"],
-                provider=defn.get("provider", "microsoft"),
+                provider=provider,
+                connected=is_connected,
                 last_run=last_run_time,
                 last_status=last_status,
                 last_duration_seconds=duration,
                 next_scheduled=(last_run_time + timedelta(minutes=max(1, get_settings().COLLECTION_INTERVAL_MINUTES)) if last_run_time else None),
-                enabled=True,
+                enabled=is_connected,
             )
         )
     return statuses
@@ -555,7 +570,8 @@ async def collect_now(
         resource_id=run.id,
         payload={"trigger": "manual"},
     )
-    await db.flush()
+    # The job runs in its own session; commit so it can see the run row.
+    await db.commit()
 
     task_id: str | None = None
     try:
@@ -577,9 +593,9 @@ async def collect_now(
         run.error_message = f"Could not queue collection: {exc}"
         tenant.last_collection_status = "failed"
         tenant.last_collection_error = str(exc)[:500]
-        await db.flush()
+        await db.commit()
         raise HTTPException(status_code=503, detail="Could not queue collection; is a worker running?") from exc
-    await db.flush()
+    await db.commit()
 
     return CollectNowResponse(
         task_id=task_id,

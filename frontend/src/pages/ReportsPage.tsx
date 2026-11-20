@@ -17,6 +17,8 @@ type Report = {
 type RunReportSummary = {
   run_id: string
   assessment_id: string
+  assessment_name: string
+  trigger: string
   tenant_id: string
   status: string
   security_score: number | null
@@ -130,10 +132,11 @@ export default function ReportsPage() {
                 background: 'var(--color-surface-2)', color: 'var(--color-text)', outline: 'none',
               }}
             >
-              <option value="">Select a completed run…</option>
+              <option value="">Select a run…</option>
               {(runsData?.items || []).map((run: RunReportSummary) => (
                 <option key={run.run_id} value={run.run_id}>
-                  {new Date(run.started_at).toLocaleDateString()} —{' '}
+                  {run.trigger === 'scheduled' ? 'Continuous monitoring' : (run.assessment_name || 'Manual assessment')}
+                  {' — '}{new Date(run.started_at).toLocaleDateString()} —{' '}
                   {run.total_controls_checked} controls
                   {run.security_score != null ? ` · Score ${run.security_score.toFixed(0)}%` : ''}
                   {run.report_id ? ' ✓ Report ready' : ''}
@@ -141,7 +144,7 @@ export default function ReportsPage() {
               ))}
             </select>
             <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>
-              Run an assessment first to generate a report from its findings.
+              Includes continuous-monitoring runs as well as manual assessments.
             </div>
           </div>
 

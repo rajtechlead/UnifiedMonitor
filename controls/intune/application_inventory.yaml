@@ -79,6 +79,7 @@ controls:
     severity: HIGH
     category: applications
     service: intune
+    ms_zt_tests: ["21779"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.8"
@@ -124,6 +125,7 @@ controls:
     severity: HIGH
     category: applications
     service: intune
+    ms_zt_tests: ["41052", "51018"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.19"

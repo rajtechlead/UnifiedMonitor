@@ -27,7 +27,9 @@ DEFAULT_SOURCE = ROOT / "reference" / "zerotrustassessment" / "src" / "powershel
 DEFAULT_OUTPUT = ROOT / "unimonitor" / "zerotrust" / "microsoft_tests.py"
 
 _ATTRIBUTE = re.compile(r"\[ZtTest\((.*?)\)\]", re.DOTALL)
-_FIELD = re.compile(r"(\w+)\s*=\s*('(?:[^']|'')*'|\([^)]*\)|\d+)")
+# Unrolled PowerShell single-quoted string: linear, unlike (?:[^']|'')*, which
+# backtracks super-linearly on long unterminated input.
+_FIELD = re.compile(r"(\w+)\s*=\s*('[^']*(?:''[^']*)*'|\([^)]*\)|\d+)")
 
 # Upstream pillars whose spelling differs from UniMonitor's pillar ids.
 _PILLARS = {

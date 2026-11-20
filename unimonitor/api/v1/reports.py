@@ -184,7 +184,7 @@ async def list_reports(
             )
         items = [ReportStatusResponse.model_validate(r) for r in reports]
         return ReportListResponse(items=items, total=total)
-    except Exception:  # noqa: S110
+    except Exception:  # noqa: S110  # NOSONAR - the in-memory store below is the fallback
         pass
 
     # In-memory fallback
@@ -210,6 +210,8 @@ class RunReportSummary(BaseModel):
 
     run_id: str
     assessment_id: str
+    assessment_name: str = ""
+    trigger: str = "manual"
     tenant_id: str
     status: str
     security_score: float | None
@@ -250,9 +252,11 @@ async def list_report_runs(
         from sqlalchemy import func, select
 
         from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.assessment import AssessmentRun
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun
 
         async with async_session_factory() as session:
+            # Manual and continuous-monitoring runs alike: any finished run has
+            # findings to report on.
             stmt = select(AssessmentRun).where(AssessmentRun.status.in_(["completed", "failed"]))
             if tenant_id:
                 stmt = stmt.where(AssessmentRun.tenant_id == tenant_id)
@@ -270,6 +274,10 @@ async def list_report_runs(
             result = await session.execute(stmt)
             runs = result.scalars().all()
 
+            names = dict(
+                (await session.execute(select(Assessment.id, Assessment.name).where(Assessment.id.in_([run.assessment_id for run in runs])))).all()
+            )
+
             # Resolve associated reports from in-memory store (or DB)
             items: list[RunReportSummary] = []
             for run in runs:
@@ -285,6 +293,8 @@ async def list_report_runs(
                     RunReportSummary(
                         run_id=run.id,
                         assessment_id=run.assessment_id,
+                        assessment_name=names.get(run.assessment_id, ""),
+                        trigger=run.trigger or "manual",
                         tenant_id=run.tenant_id,
                         status=run.status,
                         security_score=run.security_score,
@@ -331,7 +341,7 @@ async def get_report_status(
             report = (await session.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
             if report:
                 return ReportStatusResponse.model_validate(report)
-    except Exception:  # noqa: S110
+    except Exception:  # noqa: S110  # NOSONAR - the in-memory store below is the fallback
         pass
 
     # In-memory

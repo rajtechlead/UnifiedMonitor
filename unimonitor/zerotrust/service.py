@@ -190,14 +190,17 @@ async def _microsoft_checks(db: AsyncSession, tenant_id: str) -> list[dict[str, 
     checks: list[dict[str, Any]] = []
     for test in MICROSOFT_TESTS:
         backing = by_test.get(test.id, [])
+        # Aggregate only the controls that have evidence: a `not_run` sibling must
+        # not hide the one control that did report a result.
         statuses = [_STATUS_TO_RESULT.get(states.get(control.id, ""), "not_run") for control in backing]
+        evidence = [status for status in statuses if status != "not_run"]
         checks.append(
             {
                 "check_id": test.id,
                 "title": test.title,
                 "pillar": test.pillar,
                 "severity": test.severity,
-                "status": _worst_status(statuses),
+                "status": _worst_status(evidence),
                 "category": test.category,
                 "remediation": next((steps for control in backing if (steps := _remediation_steps(control))), []),
                 "reference": "",

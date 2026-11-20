@@ -6,6 +6,7 @@ type CollectorStatus = {
   name: string
   display_name: string
   provider: string
+  connected: boolean
   last_run: string | null
   last_status: string | null
   last_duration_seconds: number | null
@@ -26,8 +27,8 @@ function StatusIcon({ status }: { status: string }) {
   return <AlertCircle size={16} color="#F59E0B" />
 }
 
-function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) => void }) {
-  const status = c.last_status || 'never run'
+function CollectorRow({ c, onRun }: Readonly<{ c: CollectorStatus; onRun: (name: string) => void }>) {
+  const status = c.connected === false ? 'not connected' : (c.last_status || 'never run')
   return (
     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
       <td style={{ padding: '10px 12px' }}>
@@ -47,6 +48,9 @@ function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) 
         {c.last_duration_seconds != null ? `${c.last_duration_seconds.toFixed(1)}s` : '—'}
       </td>
       <td style={{ padding: '10px 12px' }}>
+        {c.connected === false ? (
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Connect in Settings</span>
+        ) : (
         <button
           onClick={() => onRun(c.name)}
           style={{
@@ -59,6 +63,7 @@ function CollectorRow({ c, onRun }: { c: CollectorStatus; onRun: (name: string) 
           <RefreshCw size={12} />
           Run
         </button>
+        )}
       </td>
     </tr>
   )

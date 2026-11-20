@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { dashboardApi } from '../hooks/useApi'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts'
 
@@ -12,12 +13,16 @@ type FrameworkCoverage = {
 
 const scoreColor = (pct: number) => (pct >= 80 ? '#10B981' : pct >= 60 ? '#F59E0B' : '#EF4444')
 
-function FrameworkBar({ fw }: { fw: FrameworkCoverage }) {
+function FrameworkBar({ fw }: Readonly<{ fw: FrameworkCoverage }>) {
   const pct = Math.round(fw.coverage_pct)
   return (
-    <div style={{ marginBottom: 16 }}>
+    <Link
+      to={`/compliance/${fw.framework_id}`}
+      style={{ display: 'block', marginBottom: 16, color: 'inherit', textDecoration: 'none' }}
+      title={`Open ${fw.framework_name} controls and evidence`}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 500 }}>{fw.framework_name}</span>
+        <span style={{ fontSize: 13, fontWeight: 500 }}>{fw.framework_name} →</span>
         <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(pct) }}>{pct}%</span>
       </div>
       <div style={{ height: 8, background: 'var(--color-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
@@ -26,7 +31,7 @@ function FrameworkBar({ fw }: { fw: FrameworkCoverage }) {
       <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>
         {fw.controls_passed} / {fw.controls_total} mapped controls passing
       </div>
-    </div>
+    </Link>
   )
 }
 
@@ -39,7 +44,8 @@ export default function ComplianceDashboard() {
   const frameworks: FrameworkCoverage[] = compliance?.frameworks ?? []
   const overall: number = compliance?.overall_compliance_score ?? 0
 
-  const radarData = frameworks.slice(0, 8).map(fw => ({
+  // Every framework UniMonitor monitors, not an arbitrary first eight.
+  const radarData = frameworks.map(fw => ({
     subject: fw.framework_name,
     score: Math.round(fw.coverage_pct),
   }))
@@ -62,7 +68,7 @@ export default function ComplianceDashboard() {
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Compliance Dashboard</h1>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-          GRC framework coverage across {frameworks.length} active frameworks
+          GRC framework coverage across {frameworks.length} monitored frameworks
         </p>
       </div>
 
@@ -91,8 +97,8 @@ export default function ComplianceDashboard() {
       }}>
         <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>Compliance Radar</div>
         {radarData.length > 0 ? (
-          <ResponsiveContainer width="100%" height={300}>
-            <RadarChart data={radarData}>
+          <ResponsiveContainer width="100%" height={Math.max(300, radarData.length * 22)}>
+            <RadarChart data={radarData} outerRadius="72%">
               <PolarGrid stroke="var(--color-border)" />
               <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
               <Radar dataKey="score" stroke="var(--color-brand)" fill="var(--color-brand)" fillOpacity={0.25} />

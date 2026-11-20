@@ -62,6 +62,22 @@ export const zerotrustApi = {
   script: () => api.get('/zerotrust/script', { responseType: 'text' }).then((r) => r.data),
 }
 
+export const grcApi = {
+  frameworks: () => api.get('/grc/frameworks').then((r) => r.data),
+  frameworkControls: (frameworkId: string, tenantId?: string) =>
+    api
+      .get(`/grc/frameworks/${frameworkId}/controls`, { params: tenantId ? { tenant_id: tenantId } : {} })
+      .then((r) => r.data),
+}
+
+export const usersApi = {
+  list: () => api.get('/users').then((r) => r.data),
+  create: (data: Record<string, unknown>) => api.post('/users', data).then((r) => r.data),
+  setRole: (id: string, role: string) => api.put(`/users/${id}/role`, { role }).then((r) => r.data),
+  setActive: (id: string, is_active: boolean) => api.put(`/users/${id}`, { is_active }).then((r) => r.data),
+  remove: (id: string) => api.delete(`/users/${id}`),
+}
+
 export const findingsApi = {
   list: (params?: Record<string, unknown>) =>
     api.get('/findings', { params }).then((r) => r.data),
@@ -73,6 +89,8 @@ export const findingsApi = {
     api.post(`/findings/${id}/triage`, data).then((r) => r.data),
   history: (id: string) => api.get(`/findings/${id}/history`).then((r) => r.data),
   timeline: (id: string) => api.get(`/findings/${id}/timeline`).then((r) => r.data),
+  summary: (tenantId?: string) =>
+    api.get('/findings/summary', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
   priority: (tenantId?: string) =>
     api.get('/findings/priority', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
   getRemediation: (id: string) =>

@@ -106,14 +106,35 @@ async def login_local(
 
 
 @router.get("/sso")
-async def sso_status() -> dict[str, bool]:
+async def sso_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
     """Whether "Sign in with Microsoft" can work on this install.
 
-    The login page hides the button when no Entra app is configured, instead of
-    sending the browser to Microsoft with an empty client id.
+    The setup wizard stores the Entra app in the database, not in .env, so a
+    configured Microsoft connection must enable the button even though the
+    settings singleton only picks it up on the next restart.
     """
     settings = get_settings()
-    return {"enabled": bool(settings.ENTRA_CLIENT_ID and settings.ENTRA_REDIRECT_URI)}
+    if settings.ENTRA_CLIENT_ID and settings.ENTRA_REDIRECT_URI:
+        return {"enabled": True}
+
+    from sqlalchemy import select
+
+    from unimonitor.db.models.cloud_connection import CloudConnection
+
+    row = (
+        (await db.execute(select(CloudConnection).where(CloudConnection.provider == "microsoft", CloudConnection.status == "connected")))
+        .scalars()
+        .first()
+    )
+    if row is None or not bool(settings.ENTRA_REDIRECT_URI):
+        return {"enabled": False}
+    import json
+
+    try:
+        config = json.loads(row.config or "{}")
+    except ValueError:
+        config = {}
+    return {"enabled": bool(config.get("client_id"))}
 
 
 @router.get("/login")

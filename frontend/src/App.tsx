@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 import ExecutiveDashboard from './pages/ExecutiveDashboard'
 import SecurityDashboard from './pages/SecurityDashboard'
 import ComplianceDashboard from './pages/ComplianceDashboard'
+import FrameworkPage from './pages/FrameworkPage'
 import RiskDashboard from './pages/RiskDashboard'
 import SocDashboard from './pages/SocDashboard'
 import CloudDashboard from './pages/CloudDashboard'
@@ -24,6 +25,7 @@ import AssessmentsPage from './pages/AssessmentsPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
 import AboutPage from './pages/AboutPage'
+import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthStore } from './store/authStore'
 
@@ -93,6 +95,8 @@ export default function App() {
             <Route path="clouds/:providerId" element={<RouteErrorBoundary><CloudProviderPage /></RouteErrorBoundary>} />
             <Route path="security" element={<RouteErrorBoundary><SecurityDashboard /></RouteErrorBoundary>} />
             <Route path="compliance" element={<RouteErrorBoundary><ComplianceDashboard /></RouteErrorBoundary>} />
+            <Route path="compliance/:frameworkId" element={<RouteErrorBoundary><FrameworkPage /></RouteErrorBoundary>} />
+            <Route path="users" element={<RouteErrorBoundary><UsersPage /></RouteErrorBoundary>} />
             <Route path="risk" element={<RouteErrorBoundary><RiskDashboard /></RouteErrorBoundary>} />
             <Route path="soc" element={<RouteErrorBoundary><SocDashboard /></RouteErrorBoundary>} />
             <Route path="audit" element={<RouteErrorBoundary><AuditPage /></RouteErrorBoundary>} />

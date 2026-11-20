@@ -200,6 +200,14 @@ async def first_tenant(session: AsyncSession) -> Tenant | None:
     return (await session.execute(select(Tenant).limit(1))).scalar_one_or_none()
 
 
+async def connected_providers(session: AsyncSession, tenant_id: str | None = None) -> set[str]:
+    """Providers with a completed connection — the only ones that can have data."""
+    stmt = select(CloudConnection.provider).where(CloudConnection.status == "connected")
+    if tenant_id is not None:
+        stmt = stmt.where(CloudConnection.tenant_id == tenant_id)
+    return set((await session.execute(stmt)).scalars())
+
+
 async def has_admin(session: AsyncSession) -> bool:
     count = await session.scalar(select(func.count()).select_from(AppUser).where(AppUser.role == "admin"))
     return bool(count)

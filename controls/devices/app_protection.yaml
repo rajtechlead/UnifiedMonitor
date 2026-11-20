@@ -50,6 +50,7 @@ controls:
     severity: HIGH
     category: devices
     service: intune
+    ms_zt_tests: ["24871"]
     compliance_mapping:
       iso27001_2022:
         - "A.8.7"

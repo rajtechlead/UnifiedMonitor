@@ -118,6 +118,7 @@ controls:
     severity: MEDIUM
     category: defender
     service: defender_identity
+    ms_zt_tests: ["41004"]
     compliance_mapping:
       iso27001_2022:
         - "A.5.15"

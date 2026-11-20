@@ -242,13 +242,14 @@ async def trigger_run(
     if not assessment:
         raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
-    # Create the run record
+    # Create the run record. Commit before dispatch: the in-process job opens its
+    # own session, so an uncommitted row made it fail and the run stayed pending.
     run = await repo.create_run(
         assessment_id=assessment_id,
         trigger="manual",
         triggered_by=current_user.id,
     )
-    await db.flush()
+    await db.commit()
 
     # Dispatch on Celery, or in-process when this install has no worker
     task_id = f"local-{run.id}"
@@ -268,10 +269,11 @@ async def trigger_run(
             triggered_by=current_user.id,
         )
         await repo.update_run(run.id, task_id=task_id)
+        await db.commit()
     except Exception as exc:
         logger.warning("celery_dispatch_failed", error=str(exc))
-        # Store the local task id; the run stays pending for now
-        await repo.update_run(run.id, task_id=task_id)
+        await repo.update_run(run.id, task_id=task_id, status="failed", error_message=f"Could not queue run: {exc}"[:2000])
+        await db.commit()
 
     logger.info("assessment_run_triggered", run_id=run.id, task_id=task_id, by=current_user.id)
     return TriggerRunResponse(

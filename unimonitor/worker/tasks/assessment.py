@@ -42,6 +42,8 @@ async def run_assessment_now(
     from unimonitor.db.models.tenant import Tenant
     from unimonitor.grc.engine import AssessmentEngine
 
+    logger.info("Assessment job", run_id=run_id, assessment_id=assessment_id, triggered_by=triggered_by)
+
     async with async_session_factory() as db:
         result = await db.execute(select(AssessmentRun).where(AssessmentRun.id == run_id))
         run = result.scalar_one_or_none()
@@ -89,6 +91,8 @@ async def run_collector_now(
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.models.tenant import Tenant
     from unimonitor.graph.collector_registry import CollectorRegistry
+
+    logger.info("Collector job", tenant_id=tenant_id, collector=collector_name, triggered_by=triggered_by)
 
     async with async_session_factory() as db:
         result = await db.execute(select(Tenant).where(Tenant.id == tenant_id))

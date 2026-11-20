@@ -25,8 +25,15 @@ class TestCisoDashboard:
         assert r.status_code == 401
 
     async def test_top_risks_exclude_implemented_and_label_provider(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        from unimonitor.db.models.cloud_connection import CloudConnection
         from unimonitor.db.models.finding import Finding
 
+        db_session.add_all(
+            [
+                CloudConnection(tenant_id=tenant.id, provider="aws", account="111", display_name="AWS", status="connected"),
+                CloudConnection(tenant_id=tenant.id, provider="gcp", account="proj", display_name="GCP", status="connected"),
+            ]
+        )
         db_session.add_all(
             [
                 Finding(

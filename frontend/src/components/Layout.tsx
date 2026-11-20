@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Shield, CheckCircle, AlertTriangle,
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
   BarChart3, Activity, ScrollText, Cloud, ShieldAlert, ShieldCheck,
-  Bell, KeyRound, RefreshCw, Search, ListChecks, Info,
+  Bell, KeyRound, RefreshCw, Search, ListChecks, Info, Users,
 } from 'lucide-react'
 import SearchPalette from './SearchPalette'
 import { useAuthStore } from '../store/authStore'
@@ -101,6 +101,22 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav style={{ flex: 1, padding: '8px 0', overflowY: 'auto' }}>
+          {user?.role === 'admin' && (
+            <NavLink
+              to="/users"
+              style={({ isActive }) => ({
+                display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+                color: isActive ? 'var(--color-brand)' : 'var(--color-text-secondary)',
+                background: isActive ? 'rgba(23, 118, 210, 0.08)' : 'none',
+                borderLeft: isActive ? '3px solid var(--color-brand)' : '3px solid transparent',
+                textDecoration: 'none', fontSize: 14, fontWeight: isActive ? 600 : 400,
+                transition: 'all 0.15s', whiteSpace: 'nowrap', overflow: 'hidden',
+              })}
+            >
+              <Users size={18} style={{ flexShrink: 0 }} />
+              {sidebarOpen && 'Users'}
+            </NavLink>
+          )}
           {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}

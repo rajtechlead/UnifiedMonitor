@@ -42,8 +42,8 @@ export default function LicensesPage() {
   if (isError || !data) {
     return (
       <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-        Licence posture is unavailable. Check the Microsoft connection and that the app can read
-        <code> Organization.Read.All</code>.
+        Licence posture is unavailable. Check the Microsoft connection and that the app can read{' '}
+        <code>Organization.Read.All</code>.
         <div style={{ fontSize: 11, marginTop: 6 }}>{String((error as Error)?.message || '')}</div>
       </div>
     )

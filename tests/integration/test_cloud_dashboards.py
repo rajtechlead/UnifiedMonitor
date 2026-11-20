@@ -29,8 +29,15 @@ class TestCloudAggregate:
         assert all(not p["connected"] for p in data["providers"])
 
     async def test_aggregate_counts_findings(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        from unimonitor.db.models.cloud_connection import CloudConnection
         from unimonitor.db.models.finding import Finding
 
+        db_session.add_all(
+            [
+                CloudConnection(tenant_id=tenant.id, provider="aws", account="111", display_name="AWS", status="connected"),
+                CloudConnection(tenant_id=tenant.id, provider="gcp", account="proj", display_name="GCP", status="connected"),
+            ]
+        )
         db_session.add(
             Finding(
                 tenant_id=tenant.id,
@@ -93,8 +100,10 @@ class TestCloudProviderDetail:
         assert r.status_code == 404
 
     async def test_provider_detail_lists_findings(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        from unimonitor.db.models.cloud_connection import CloudConnection
         from unimonitor.db.models.finding import Finding
 
+        db_session.add(CloudConnection(tenant_id=tenant.id, provider="aws", account="111", display_name="AWS", status="connected"))
         db_session.add(
             Finding(
                 tenant_id=tenant.id,

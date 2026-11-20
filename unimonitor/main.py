@@ -179,7 +179,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         try:
             await collection_task
         except asyncio.CancelledError:
-            pass
+            raise
     from unimonitor.core.cache import close_cache
 
     await close_cache()
@@ -243,15 +243,6 @@ def create_app() -> FastAPI:
         )
         return response
 
-    # Added last, so CORS also wraps error responses from the handlers below.
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.UNIMONITOR_CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
     # ── Exception handlers ───────────────────────────────────
     @app.exception_handler(GraphAPIError)
     async def graph_api_error_handler(request: Request, exc: GraphAPIError) -> JSONResponse:
@@ -308,6 +299,15 @@ def create_app() -> FastAPI:
         @app.get("/setup", include_in_schema=False)
         async def frontend_not_built() -> HTMLResponse:
             return HTMLResponse(MISSING_FRONTEND_HTML, status_code=503)
+
+    # Added last so every response — handlers, SPA shell and 404s — carries CORS.
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.UNIMONITOR_CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app
 

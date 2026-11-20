@@ -42,6 +42,9 @@ class FindingResponse(BaseModel):
     last_seen_at: datetime
     resolved_at: datetime | None
     ai_remediation: dict | None = None
+    # Remediation carried by the control definition — always available, unlike the
+    # AI guidance which only exists once it has been generated.
+    remediation: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -136,6 +139,27 @@ class PaginatedFindings(BaseModel):
 # ── Endpoints ────────────────────────────────────────────────
 
 VALID_STATES = {"implemented", "partially_implemented", "not_implemented", "not_applicable"}
+
+
+def _control_remediation() -> dict[str, str]:
+    """Remediation guidance per control id, from the control library."""
+    from unimonitor.grc.control_loader import ControlLoader
+
+    guidance: dict[str, str] = {}
+    for control in ControlLoader().load_all():
+        text = "\n".join(control.remediation_steps) or control.remediation_summary
+        if text:
+            guidance[control.id] = text
+    return guidance
+
+
+def _with_remediation(finding, guidance: dict[str, str]) -> FindingResponse:
+    item = FindingResponse.model_validate(finding)
+    if not item.remediation:
+        item.remediation = guidance.get(finding.external_control_id)
+    return item
+
+
 VALID_SEVERITIES = {"informational", "low", "medium", "high", "critical"}
 
 
@@ -202,8 +226,9 @@ async def list_findings(
     )
 
     pages = max(1, (total + page_size - 1) // page_size)
+    guidance = _control_remediation()
     return PaginatedFindings(
-        items=[FindingResponse.model_validate(f) for f in findings],
+        items=[_with_remediation(f, guidance) for f in findings],
         total=total,
         page=page,
         page_size=page_size,
