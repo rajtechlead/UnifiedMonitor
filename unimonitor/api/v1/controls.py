@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from unimonitor.auth.dependencies import get_current_user
+from unimonitor.grc.frameworks import get_framework as get_framework_meta
+from unimonitor.grc.frameworks import list_frameworks as registry_frameworks
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -67,20 +69,10 @@ class PaginatedControls(BaseModel):
 
 # ── Supported frameworks registry ────────────────────────────
 
+# Single source of truth: the FRAMEWORKS registry carries each framework's
+# slug, display name and version, so this list can never drift from it.
 SUPPORTED_FRAMEWORKS = [
-    {"id": "iso27001-2022", "name": "ISO 27001:2022", "version": "2022"},
-    {"id": "iso42001", "name": "ISO 42001", "version": "2023"},
-    {"id": "nist-csf-2", "name": "NIST CSF 2.0", "version": "2.0"},
-    {"id": "nist-800-53-r5", "name": "NIST 800-53 Rev 5", "version": "Rev 5"},
-    {"id": "cis-controls-v8", "name": "CIS Controls v8", "version": "v8"},
-    {"id": "microsoft-zero-trust", "name": "Microsoft Zero Trust", "version": "2024"},
-    {"id": "cis-m365", "name": "CIS Microsoft 365 Benchmark", "version": "v3.1"},
-    {"id": "soc2", "name": "SOC 2", "version": "2017"},
-    {"id": "pci-dss-4", "name": "PCI-DSS 4.0", "version": "4.0"},
-    {"id": "hipaa", "name": "HIPAA", "version": "2024"},
-    {"id": "gdpr", "name": "GDPR", "version": "2018"},
-    {"id": "cpcsc", "name": "CPCSC", "version": "2024"},
-    {"id": "cmmc-2", "name": "CMMC 2.0", "version": "2.0"},
+    {"id": meta.slug, "name": meta.name, "version": meta.version, "mapping_note": meta.mapping_note} for meta in registry_frameworks()
 ]
 
 
@@ -125,8 +117,7 @@ async def list_controls(
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> PaginatedControls:
     """List all controls with filtering and pagination."""
-    from unimonitor.grc.control_loader import ControlLoader
-    from unimonitor.grc.frameworks import framework_keys
+    from unimonitor.grc.control_loader import ControlLoader, controls_for_framework
 
     controls = sorted(ControlLoader().load_all(), key=lambda item: item.id)
     if category:
@@ -136,8 +127,7 @@ async def list_controls(
     if severity:
         controls = [item for item in controls if item.severity.lower() == severity.lower()]
     if framework:
-        keys = framework_keys(framework)
-        controls = [item for item in controls if keys & set(item.compliance_mapping)]
+        controls = sorted(controls_for_framework(framework), key=lambda item: item.id)
     if search:
         needle = search.lower()
         controls = [item for item in controls if needle in item.id.lower() or needle in item.title.lower() or needle in item.description.lower()]
@@ -169,19 +159,19 @@ async def get_framework(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> FrameworkResponse:
     """Get a specific framework with all its controls."""
-    framework_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
+    framework_info = get_framework_meta(framework_id)
     if not framework_info:
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
 
     from unimonitor.grc.control_loader import controls_for_framework
 
-    controls = sorted(controls_for_framework(framework_id), key=lambda item: item.id)
+    controls = sorted(controls_for_framework(framework_info.slug), key=lambda item: item.id)
 
     return FrameworkResponse(
-        id=framework_info["id"],
-        name=framework_info["name"],
-        version=framework_info["version"],
-        description=f"{framework_info['name']} compliance framework controls",
+        id=framework_info.slug,
+        name=framework_info.name,
+        version=framework_info.version,
+        description=framework_info.description,
         total_controls=len(controls),
         controls=[
             FrameworkControlSummary(

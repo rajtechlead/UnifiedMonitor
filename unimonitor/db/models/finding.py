@@ -88,6 +88,8 @@ class Finding(Base):
     # Flags
     is_suppressed: Mapped[bool] = mapped_column(default=False)
     suppression_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Exceptions are time-boxed; an expired suppression is released on read.
+    suppression_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Triage workflow (acknowledge / snooze / assign / resolve)
     triage_status: Mapped[str] = mapped_column(String(32), default=TriageStatus.OPEN.value, index=True)
     assignee_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("app_users.id", ondelete="SET NULL"), nullable=True, index=True)

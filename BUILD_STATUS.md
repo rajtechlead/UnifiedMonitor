@@ -25,8 +25,12 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 663/663 | 138s; 8 warnings (AsyncMock coroutine never awaited inside mocks) |
-| Control library | ✅ 190 controls | 23 YAML files; unique ids, valid severities; every framework resolves through the canonical key map and a test asserts each framework lists all of its controls |
+| Test suite | ✅ 666/666 | 93s after caching the control library (was 329s); 8 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Control library | ✅ 190 controls | 23 YAML files; unique ids, valid severities; **33 frameworks** (CPCSC, 800-171, FedRAMP, NIS2, DORA, CCM, SCuBA, ISO extensions, AI frameworks, regional sets) all resolve to controls |
+| Framework mappings | ✅ | `grc/framework_mappings.py` holds explicit CPCSC/NIS2/DORA maps and derived crosswalks; `SUPPORTED_FRAMEWORKS` is generated from the registry so it cannot drift |
+| Exception lifecycle | ✅ | time-boxed suppression (`expires_in_days`), auto-release on read, migration `005` |
+| SIEM export | ✅ | `GET /findings/export/siem` (CEF / NDJSON), open findings only |
+| Posture snapshot API | ✅ | admin `GET/PUT /settings/posture-snapshot`; Settings-page editor still pending |
 | Zero Trust catalogues | ✅ | Microsoft 364 upstream tests + native Python catalogues: AWS 19, GCP 15, Workspace 14; mapping and evidence-gap endpoints covered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | First-run onboarding | ✅ 45 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account; sign-in client override; certificate expiry + rotation |

@@ -84,6 +84,28 @@ async def test_control_library_lists_all_controls(client: AsyncClient, auth_head
 
 
 @pytest.mark.asyncio
+async def test_every_supported_framework_has_controls(client: AsyncClient, auth_headers: dict) -> None:
+    """CPCSC and the 2026-framework additions must never be empty placeholders."""
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+    from unimonitor.grc.control_loader import controls_for_framework
+
+    assert len(SUPPORTED_FRAMEWORKS) >= 33
+    for framework in SUPPORTED_FRAMEWORKS:
+        controls = controls_for_framework(framework["id"])
+        assert controls, f"{framework['id']} has no mapped controls"
+        assert framework["mapping_note"] or controls, framework["id"]
+
+    # CPCSC is a family-level mapping of the 98 ITSP.10.171 requirements; its
+    # Level 1 criteria sit in the access-control, auth, media, physical,
+    # communications and integrity families.
+    cpcsc = controls_for_framework("cpcsc")
+    ids = {control.id for control in cpcsc}
+    assert {"CTRL-ENT-001", "CTRL-AWS-001", "CTRL-INT-001", "CTRL-DEF-001"} <= ids
+    # FedRAMP baselines derive from the NIST 800-53 mapping.
+    assert len(controls_for_framework("fedramp-moderate")) == len(controls_for_framework("nist-800-53-r5"))
+
+
+@pytest.mark.asyncio
 async def test_unknown_framework_is_404(client: AsyncClient, auth_headers: dict) -> None:
     response = await client.get("/api/v1/grc/frameworks/not-a-framework/controls", headers=auth_headers)
     assert response.status_code == 404

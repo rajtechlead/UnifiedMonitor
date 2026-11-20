@@ -9,7 +9,13 @@ Last Updated: 2026-11-20 UTC
 Derived from what comparable CSPM/GRC products support and from gaps visible in
 UniMonitor's own evidence-coverage report. Ordered by leverage, not effort.
 
-### Frameworks worth adding
+### Frameworks added (2026-11-20)
+
+All of the frameworks below are registered and mapped. Frameworks marked
+*derived* reuse an existing mapping until an official crosswalk is imported;
+their page and API carry that note. CPCSC is mapped at family level (17 families,
+98 ITSP.10.171 requirements, 13 Level 1 criteria) because the official requirement
+text is not redistributable.
 
 | Framework | Why | Note |
 |---|---|---|
@@ -24,10 +30,31 @@ UniMonitor's own evidence-coverage report. Ordered by leverage, not effort.
 | NIST AI RMF / ISO 42001 / EU AI Act | AI governance demand; ISO 42001 has 8 controls today | Copilot controls already exist as a starting point |
 | TISAX, Essential Eight, Cyber Essentials, CCPA/CPRA, CJIS, SWIFT CSP | Regional/sector requirement sets | Add when a target customer needs them |
 
-CPCSC is registered but has **zero mapped controls** (the only empty framework); it
-needs an official crosswalk before its page is meaningful.
+Shipped: CPCSC, NIST 800-171 r3, FedRAMP Low/Moderate/High, NIS2, DORA,
+CSA CCM v4, CISA SCuBA M365 + Workspace, ISO 27017/27018/27701, NIST AI RMF,
+EU AI Act, Essential Eight, Cyber Essentials, CCPA/CPRA, CJIS, SWIFT CSP, TISAX.
+The framework registry is now the single source of truth (`SUPPORTED_FRAMEWORKS`
+is generated from `FRAMEWORKS`), and a regression test asserts every framework
+resolves to at least one control.
 
-### Features worth building
+Still pending for a later round: CIS Foundations benchmark *rule packs* (the
+framework exists; the per-rule evaluators do not).
+
+### Features — status 2026-11-20
+
+Shipped this round:
+
+- **Exception lifecycle** — time-boxed risk acceptances (`expires_in_days`), an
+  expiry timestamp on the finding, and automatic release on read; migration `005`.
+- **Posture snapshot editor API** — admin `GET/PUT /settings/posture-snapshot`
+  writes the configured `UNIMONITOR_POSTURE_SNAPSHOT` atomically (UI editor still
+  to be added on the Settings page).
+- **SIEM export** — `GET /findings/export/siem` in CEF or JSON-lines, open
+  findings only, tenant/severity filters.
+- **Read-only auditor role** — already enforced by `require_compliance_access`;
+  the dedicated evidence portal is still pending.
+
+Still to build:
 
 1. **CIS benchmark rule packs** per platform (AWS/Azure/GCP/M365/Workspace) with
    pass/fail per rule and per-benchmark scores — the largest gap versus commercial CSPM.
@@ -43,12 +70,10 @@ needs an official crosswalk before its page is meaningful.
    sensitive bucket) instead of flat per-control lists.
 7. **Continuous evidence and auditor portal**: immutable evidence snapshots with retention,
    control-to-evidence packages per framework, and read-only auditor accounts.
-8. **Exception workflow**: time-bound risk acceptances with owner, justification and expiry,
-   excluded from scoring only while active (suppression exists but has no lifecycle).
-9. **Posture snapshot editor**: the engine already consumes `UNIMONITOR_POSTURE_SNAPSHOT`, but
-   operators need a UI to upload/maintain the snapshot for the ~85 M365 controls with no Graph API.
-10. **Ticketing and SIEM integrations**: Jira/ServiceNow issue sync and webhook/CEF export;
-    alert delivery exists but downstream workflow does not.
+8. ~~Exception workflow~~ — done (expiry + auto-release). Owner/justification fields exist
+   as reason; a dedicated owner field is still a nice-to-have.
+9. ~~Posture snapshot editor~~ — API done; wire the Settings-page editor.
+10. **Ticketing and SIEM integrations**: Jira/ServiceNow issue sync; the CEF/JSON export is done.
 11. **CIS/benchmark trend and SLA reporting**: control-level trends, mean time to remediate by
     severity, and scorecard export for executives (currently trend is score-only).
 12. **MSP multi-tenant rollup**: cross-tenant comparison, per-tenant branding and delegated

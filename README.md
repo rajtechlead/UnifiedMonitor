@@ -16,7 +16,7 @@ with a per-cloud view and an aggregate view across all of them.
 | Capability | Details |
 |---|---|
 | **Multi-Cloud Monitoring** | Real-time posture across Microsoft 365, AWS, Google Cloud and Google Workspace |
-| **GRC Assessments** | 13 frameworks: NIST CSF, ISO 27001, CIS Benchmarks, SOC 2, HIPAA, PCI-DSS, and more |
+| **GRC Assessments** | 33 frameworks: NIST CSF, ISO 27001/27017/27018/27701, CIS Benchmarks, SOC 2, HIPAA, PCI-DSS, NIS2, DORA, FedRAMP, NIST 800-171, CPCSC, and more |
 | **190 Security Controls** | Pre-built controls mapped to each provider's native services — no manual configuration needed |
 | **AI Remediation** | Azure OpenAI GPT-4o powered remediation plans with rule-based fallback |
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |

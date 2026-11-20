@@ -16,6 +16,7 @@ from unimonitor.api.v1.notifications import router as notifications_router
 from unimonitor.api.v1.onboarding import router as onboarding_router
 from unimonitor.api.v1.reports import router as reports_router
 from unimonitor.api.v1.search import router as search_router
+from unimonitor.api.v1.settings import router as settings_router
 from unimonitor.api.v1.tenants import router as tenants_router
 from unimonitor.api.v1.users import router as users_router
 from unimonitor.api.v1.zerotrust import router as zerotrust_router
@@ -36,6 +37,7 @@ api_v1_router.include_router(monitoring_router, prefix="/monitoring", tags=["Mon
 api_v1_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 api_v1_router.include_router(onboarding_router, prefix="/onboarding", tags=["Setup"])
 api_v1_router.include_router(search_router, prefix="/search", tags=["Search"])
+api_v1_router.include_router(settings_router, prefix="/settings", tags=["Settings"])
 api_v1_router.include_router(zerotrust_router, prefix="/zerotrust", tags=["Zero Trust Assessment"])
 
 __all__ = ["api_v1_router"]

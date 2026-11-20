@@ -6,6 +6,7 @@ and resolves framework mappings.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -354,13 +355,58 @@ def _normalise(raw: dict, path: Path) -> dict:
     }
 
 
-def controls_for_framework(framework_id: str) -> list[ControlDefinition]:
-    """Every control mapped to a framework, using the canonical key aliases.
+@lru_cache(maxsize=1)
+def all_controls() -> tuple[ControlDefinition, ...]:
+    """Load the control library once per process.
+
+    The YAML files are deployment content, not request data; reloading 190 files
+    for every framework on the dashboard made a 33-framework page take seconds.
+    """
+    return tuple(ControlLoader().load_all())
+
+
+def controls_for_framework(framework_id: str, _seen: set[str] | None = None) -> list[ControlDefinition]:
+    """Every control mapped to a framework, including explicit/derived mappings.
 
     Framework pages, coverage maths and exports all call this, so the count a
-    framework advertises is always the list it renders.
+    framework advertises is always the list it renders. YAML mappings are the
+    primary source; :mod:`unimonitor.grc.framework_mappings` adds frameworks that
+    are listed explicitly (CPCSC, NIS2, DORA) or derived from another framework.
     """
+    from unimonitor.grc.framework_mappings import derivation, explicit_control_ids
     from unimonitor.grc.frameworks import framework_keys
+    from unimonitor.grc.pillars import pillar_for
 
+    seen = set(_seen or ())
+    if framework_id in seen:
+        return []
+    seen.add(framework_id)
+
+    controls = all_controls()
+    by_id = {control.id: control for control in controls}
     keys = framework_keys(framework_id)
-    return [control for control in ControlLoader().load_all() if keys & set(control.compliance_mapping)]
+    selected: dict[str, ControlDefinition] = {control.id: control for control in controls if keys & set(control.compliance_mapping)}
+    for control_id in explicit_control_ids(framework_id):
+        if control_id in by_id:
+            selected.setdefault(control_id, by_id[control_id])
+
+    rule = derivation(framework_id)
+    if rule:
+        if rule.get("source"):
+            pool = controls_for_framework(rule["source"], seen)
+        else:
+            pool = list(controls)
+        if rule.get("pillars"):
+            wanted = set(rule["pillars"])
+            pool = [
+                control
+                for control in pool
+                if any(pillar_for(str(mapping)) in wanted for mapping in control.compliance_mapping.get("zero_trust", []) or [])
+            ]
+        if rule.get("services"):
+            services = set(rule["services"])
+            pool = [control for control in pool if control.service in services]
+        for control in pool:
+            selected.setdefault(control.id, control)
+
+    return list(selected.values())

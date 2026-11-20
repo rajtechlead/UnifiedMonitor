@@ -6,8 +6,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Annotated, Any, Literal
 
 import structlog
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
@@ -38,6 +38,7 @@ class FindingResponse(BaseModel):
     snoozed_until: datetime | None = None
     is_suppressed: bool
     suppression_reason: str | None
+    suppression_expires_at: datetime | None = None
     first_detected_at: datetime
     last_seen_at: datetime
     resolved_at: datetime | None
@@ -76,6 +77,9 @@ class StateUpdateRequest(BaseModel):
 
 class SuppressRequest(BaseModel):
     reason: str
+    # An exception without an end date is a permanent blind spot; allow both, but
+    # make the time-boxed form the easy one.
+    expires_in_days: int | None = Field(default=None, ge=1, le=365)
 
 
 class TriageRequest(BaseModel):
@@ -163,6 +167,38 @@ def _with_remediation(finding, guidance: dict[str, str]) -> FindingResponse:
 VALID_SEVERITIES = {"informational", "low", "medium", "high", "critical"}
 
 
+def _cef_severity(severity: str) -> int:
+    return {"informational": 2, "low": 4, "medium": 6, "high": 8, "critical": 10}.get(severity.lower(), 5)
+
+
+def _cef_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ").replace("\r", " ")
+
+
+async def _release_expired_suppressions(db: AsyncSession) -> int:
+    """Clear time-boxed exceptions whose end date has passed."""
+    from sqlalchemy import update
+
+    from unimonitor.db.models.finding import Finding
+
+    now = datetime.now(UTC)
+    result = await db.execute(
+        update(Finding)
+        .where(
+            Finding.is_suppressed.is_(True),
+            Finding.suppression_expires_at.is_not(None),
+            Finding.suppression_expires_at <= now,
+        )
+        .values(is_suppressed=False, suppression_reason=None, suppression_expires_at=None)
+    )
+    if result.rowcount:
+        # The request-scoped session commits at the end of the request; flushing
+        # keeps this usable inside callers that manage their own transaction.
+        await db.flush()
+        logger.info("suppressions_expired", count=result.rowcount)
+    return int(result.rowcount or 0)
+
+
 @router.get("/summary", response_model=FindingSummaryResponse)
 async def findings_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -172,6 +208,7 @@ async def findings_summary(
     """Return aggregated finding counts by severity, state, and category."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
+    await _release_expired_suppressions(db)
     repo = FindingRepository(db)
     summary = await repo.get_summary(tenant_id=tenant_id)
 
@@ -183,6 +220,77 @@ async def findings_summary(
         suppressed_count=summary.get("suppressed_count", 0),
         tenant_id=tenant_id,
     )
+
+
+@router.get("/export/siem")
+async def export_siem(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+    severity: str | None = Query(default=None),
+    fmt: Literal["cef", "json"] = Query(default="cef", alias="format"),
+    limit: int = Query(default=1000, ge=1, le=5000),
+) -> Response:
+    """Export open findings for a SIEM (CEF or JSON lines).
+
+    Only unsuppressed, unresolved findings are exported: implemented and
+    not-applicable controls are posture, not events. The export is intentionally
+    stateless so a collector can poll it on its own schedule.
+    """
+    import json as _json
+
+    from sqlalchemy import select
+
+    from unimonitor.db.models.finding import Finding
+
+    await _release_expired_suppressions(db)
+    stmt = select(Finding).where(
+        Finding.is_suppressed.is_(False),
+        Finding.state.in_(["not_implemented", "partially_implemented"]),
+    )
+    if tenant_id:
+        stmt = stmt.where(Finding.tenant_id == tenant_id)
+    if severity:
+        if severity.lower() not in VALID_SEVERITIES:
+            raise HTTPException(status_code=400, detail=f"Invalid severity '{severity}'")
+        stmt = stmt.where(Finding.severity == severity.upper())
+    stmt = stmt.order_by(Finding.risk_score.desc(), Finding.last_seen_at.desc()).limit(limit)
+    rows = (await db.execute(stmt)).scalars().all()
+
+    if fmt == "json":
+        payload = [
+            {
+                "id": row.id,
+                "tenant_id": row.tenant_id,
+                "control": row.external_control_id,
+                "title": row.title,
+                "severity": row.severity,
+                "state": row.state,
+                "category": row.category,
+                "service": row.service,
+                "risk_score": row.risk_score,
+                "first_detected_at": row.first_detected_at.isoformat() if row.first_detected_at else None,
+                "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
+            }
+            for row in rows
+        ]
+        body = "\n".join(_json.dumps(item, separators=(",", ":")) for item in payload)
+        return Response(content=body, media_type="application/x-ndjson")
+
+    lines = []
+    for row in rows:
+        lines.append(
+            "CEF:0|UniMonitor|UniMonitor|1.0|"
+            f"{_cef_escape(row.external_control_id)}|{_cef_escape(row.title)}|"
+            f"{_cef_severity(row.severity)}|"
+            f"src=unimonitor cs1Label=TenantId cs1={_cef_escape(row.tenant_id)} "
+            f"cs2Label=Category cs2={_cef_escape(row.category)} "
+            f"cs3Label=Service cs3={_cef_escape(row.service)} "
+            f"cs4Label=State cs4={_cef_escape(row.state)} "
+            f"cn1Label=RiskScore cn1={row.risk_score} "
+            f"end={int(row.last_seen_at.timestamp() * 1000) if row.last_seen_at else 0}"
+        )
+    return Response(content="\n".join(lines), media_type="text/plain")
 
 
 @router.get("", response_model=PaginatedFindings)
@@ -204,6 +312,8 @@ async def list_findings(
 ) -> PaginatedFindings:
     """List findings with filtering and pagination."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
+
+    await _release_expired_suppressions(db)
 
     if severity and severity.lower() not in VALID_SEVERITIES:
         raise HTTPException(status_code=422, detail=f"Invalid severity: {severity}")
@@ -453,17 +563,19 @@ async def suppress_finding(
     if not finding:
         raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
+    expires_at = datetime.now(UTC) + timedelta(days=body.expires_in_days) if body.expires_in_days else None
     finding = await repo.update(
         finding_id,
         is_suppressed=True,
         suppression_reason=body.reason,
+        suppression_expires_at=expires_at,
     )
     await repo.add_history(
         finding_id=finding_id,
         previous_state=finding.state,
         new_state="suppressed",
         changed_by=current_user.id,
-        comment=f"Suppressed: {body.reason}",
+        comment=f"Suppressed: {body.reason}" + (f" (expires {expires_at.date().isoformat()})" if expires_at else ""),
     )
 
     logger.info("finding_suppressed", finding_id=finding_id, by=current_user.id)
@@ -488,6 +600,7 @@ async def unsuppress_finding(
         finding_id,
         is_suppressed=False,
         suppression_reason=None,
+        suppression_expires_at=None,
     )
     await repo.add_history(
         finding_id=finding_id,
