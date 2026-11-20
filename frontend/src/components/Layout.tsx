@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Shield, CheckCircle, AlertTriangle,
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
   BarChart3, Activity, ScrollText, Cloud, ShieldAlert, ShieldCheck,
-  Bell, KeyRound, RefreshCw, Search, ListChecks, Info, Users,
+  Bell, KeyRound, RefreshCw, Search, ListChecks, Info, Users, GitBranch,
 } from 'lucide-react'
 import SearchPalette from './SearchPalette'
 import { useAuthStore } from '../store/authStore'
@@ -16,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/clouds', icon: Cloud, label: 'Clouds' },
   { to: '/zero-trust', icon: ShieldCheck, label: 'Zero Trust' },
   { to: '/zero-trust/assessment', icon: ListChecks, label: 'ZT Assessment' },
+  { to: '/zero-trust/mapping', icon: GitBranch, label: 'ZT Mapping' },
   { to: '/security', icon: Shield, label: 'Security' },
   { to: '/compliance', icon: CheckCircle, label: 'Compliance' },
   { to: '/risk', icon: BarChart3, label: 'Risk' },

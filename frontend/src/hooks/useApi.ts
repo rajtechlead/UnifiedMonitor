@@ -59,6 +59,8 @@ export const zerotrustApi = {
   evaluate: (platform: string) =>
     api.post('/zerotrust/run', { platform }).then((r) => r.data),
   evaluateAll: () => api.post('/zerotrust/run-all').then((r) => r.data),
+  mapping: (source: string) => api.get('/zerotrust/mapping', { params: { source } }).then((r) => r.data),
+  evidenceGaps: (source: string) => api.get('/zerotrust/evidence-gaps', { params: { source } }).then((r) => r.data),
   script: () => api.get('/zerotrust/script', { responseType: 'text' }).then((r) => r.data),
 }
 

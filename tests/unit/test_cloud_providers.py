@@ -94,6 +94,28 @@ AWS_SESSION = _BotoSession(
         "guardduty": {"list_detectors": {"DetectorIds": ["det-1"]}},
         "config": {"describe_configuration_recorders": {"ConfigurationRecorders": [{"name": "default", "recording": True}]}},
         "securityhub": {"describe_hub": {"HubArn": "arn:aws:securityhub:us-east-1:1:hub/default"}},
+        "ec2": {
+            "describe_security_groups": {
+                "SecurityGroups": [
+                    {
+                        "GroupId": "sg-1",
+                        "GroupName": "internal",
+                        "IpPermissions": [{"FromPort": 443, "ToPort": 443, "IpProtocol": "tcp", "IpRanges": [{"CidrIp": "10.0.0.0/8"}]}],
+                    }
+                ]
+            },
+            "describe_flow_logs": {"FlowLogs": [{"ResourceId": "vpc-1", "FlowLogStatus": "ACTIVE"}]},
+        },
+        "kms": {
+            "list_keys": {"Keys": [{"KeyId": "key-1"}]},
+            "describe_key": {"KeyMetadata": {"KeyManager": "CUSTOMER", "Enabled": True}},
+            "get_key_rotation_status": {"KeyRotationEnabled": True},
+        },
+        "ssm": {
+            "describe_instance_information": {"InstanceInformationList": [{"InstanceId": "i-1", "PingStatus": "Online", "IsLatestVersion": True}]}
+        },
+        "accessanalyzer": {"list_analyzers": {"analyzers": [{"name": "default", "status": "ACTIVE"}]}},
+        "organizations": {"list_policies": {"Policies": [{"Name": "guardrails", "Type": "SERVICE_CONTROL_POLICY"}]}},
     }
 )
 
@@ -120,8 +142,32 @@ def test_aws_controls_evaluate(aws_data):
         "CTRL-AWS-006",
         "CTRL-AWS-007",
         "CTRL-AWS-008",
+        "CTRL-AWS-009",
+        "CTRL-AWS-010",
+        "CTRL-AWS-011",
+        "CTRL-AWS-012",
+        "CTRL-AWS-013",
+        "CTRL-AWS-014",
     ):
         assert evaluate(cid, aws_data) == "implemented", cid
+
+
+def test_aws_zero_trust_controls_detect_gaps(aws_data):
+    assert (
+        evaluate(
+            "CTRL-AWS-009",
+            {**aws_data, "aws_security_groups": [{"GroupId": "sg-open", "IpPermissions": [{"FromPort": 22, "ToPort": 22, "Cidrs": ["0.0.0.0/0"]}]}]},
+        )
+        == "not_implemented"
+    )
+    assert evaluate("CTRL-AWS-010", {**aws_data, "aws_flow_logs": []}) == "not_implemented"
+    assert evaluate("CTRL-AWS-011", {**aws_data, "aws_kms_keys": [{"KeyId": "k", "Enabled": True, "RotationEnabled": False}]}) == "not_implemented"
+    assert (
+        evaluate(
+            "CTRL-AWS-013", {**aws_data, "aws_managed_instances": [{"InstanceId": "i", "PingStatus": "ConnectionLost", "IsLatestVersion": False}]}
+        )
+        == "not_implemented"
+    )
 
 
 def test_aws_controls_detect_failure():
@@ -191,6 +237,11 @@ GCP_ROUTES = {
     "cryptoKeys": {"cryptoKeys": [{"name": "key-a", "rotationPeriod": "7776000s"}]},
     "getOrgPolicy": {"constraints": [{"name": "constraints/compute.requireShieldedVm"}]},
     "aggregated/subnetworks": {"items": {"regions/us-central1": {"subnetworks": [{"name": "sn-1", "enableFlowLogs": True}]}}},
+    "global/backendServices": {"items": [{"name": "internal-app", "iap": {"enabled": True}}]},
+    "securitycenter.googleapis.com": {"sources": [{"name": "organizations/1/sources/2", "displayName": "built-in"}]},
+    "accessLevels": {"accessLevels": [{"name": "corp-network"}]},
+    "servicePerimeters": {"servicePerimeters": [{"name": "sensitive", "status": {"resources": ["projects/1"]}}]},
+    "accessPolicies": {"accessPolicies": [{"name": "accessPolicies/1"}]},
 }
 
 
@@ -214,6 +265,10 @@ def test_gcp_controls_evaluate(gcp_data):
         "CTRL-GCP-006",
         "CTRL-GCP-007",
         "CTRL-GCP-008",
+        "CTRL-GCP-009",
+        "CTRL-GCP-010",
+        "CTRL-GCP-011",
+        "CTRL-GCP-012",
     ):
         assert evaluate(cid, gcp_data) == "implemented", cid
     # the sample has one user-managed key: reported as partial, not a pass

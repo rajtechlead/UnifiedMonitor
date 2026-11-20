@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, Download, Play, Search, Upload } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { AlertTriangle, ArrowRight, CheckCircle2, ChevronDown, ChevronRight, Download, Play, Search, Upload } from 'lucide-react'
 import { zerotrustApi } from '../hooks/useApi'
 
 type Check = {
@@ -198,6 +199,7 @@ export default function ZeroTrustAssessmentPage() {
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 600 }}>{platform.platform}</span>
+            <span style={{ fontSize: 11, color: 'var(--color-brand)' }}>Open architecture page →</span>
             <span style={{ fontSize: 22, fontWeight: 700, color: platform.has_run ? scoreColour(platform.score) : '#94A3B8' }}>
               {platform.has_run ? `${Math.round(platform.score)}%` : '—'}
             </span>
@@ -207,6 +209,13 @@ export default function ZeroTrustAssessmentPage() {
           </button>
         ))}
       </div>
+
+      <Link
+        to={`/zero-trust/platform/${source}`}
+        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--color-brand)' }}
+      >
+        Open the {selected?.platform ?? source} architecture page <ArrowRight size={13} />
+      </Link>
 
       {/* Actions */}
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>

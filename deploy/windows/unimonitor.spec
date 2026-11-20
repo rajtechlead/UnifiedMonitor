@@ -83,7 +83,6 @@ hiddenimports = collect_submodules("celery") + collect_submodules("kombu") + [
     "unimonitor.db.session",
     "unimonitor.grc.control_loader",
     "unimonitor.grc.scoring",
-    "unimonitor.grc.crosswalk",
     "unimonitor.worker.celery_app",
     "unimonitor.core.cache",
     "unimonitor.core.logging",

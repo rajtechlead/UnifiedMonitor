@@ -1,11 +1,12 @@
-"""
-Unit tests for grc/crosswalk.py and additional calculate_scores / calculate_framework_coverage
-in grc/scoring.py that aren't yet covered by test_scoring.py.
+"""Additional calculate_scores / calculate_framework_coverage coverage.
+
+The core finding-scoring cases live in ``test_scoring.py``; these are the run-level
+roll-up branches that file does not exercise.
 """
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -205,147 +206,3 @@ def _make_ctrl(ctrl_id, compliance_mapping):
     ctrl.id = ctrl_id
     ctrl.compliance_mapping = compliance_mapping
     return ctrl
-
-
-class TestFrameworkCrosswalk:
-    def test_find_by_reference_match(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("ISO.C1", {"iso_27001": ["A.9.1", "A.9.2"]})
-        cw = FrameworkCrosswalk([ctrl])
-        found = cw.find_by_reference("iso_27001", "A.9.1")
-        assert len(found) == 1
-        assert found[0].id == "ISO.C1"
-
-    def test_find_by_reference_no_match(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("ISO.C1", {"iso_27001": ["A.9.1"]})
-        cw = FrameworkCrosswalk([ctrl])
-        found = cw.find_by_reference("iso_27001", "A.99.99")
-        assert found == []
-
-    def test_find_by_reference_unknown_framework(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("ISO.C1", {"iso_27001": ["A.9.1"]})
-        cw = FrameworkCrosswalk([ctrl])
-        found = cw.find_by_reference("soc2", "CC1.1")
-        assert found == []
-
-    def test_all_frameworks(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("C1", {"iso_27001": ["A.1"], "soc2": ["CC1"]})
-        cw = FrameworkCrosswalk([ctrl])
-        fws = cw.all_frameworks()
-        assert "iso_27001" in fws
-        assert "soc2" in fws
-
-    def test_coverage_for_framework(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("C1", {"iso_27001": ["A.1", "A.2"]})
-        cw = FrameworkCrosswalk([ctrl])
-        coverage = cw.coverage_for_framework("iso_27001")
-        assert "A.1" in coverage
-        assert "A.2" in coverage
-
-    def test_coverage_for_missing_framework(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("C1", {"iso_27001": ["A.1"]})
-        cw = FrameworkCrosswalk([ctrl])
-        coverage = cw.coverage_for_framework("nonexistent")
-        assert coverage == {}
-
-    def test_string_ref_handled(self):
-        """compliance_mapping refs given as a plain string (not list) should work."""
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl = _make_ctrl("C1", {"iso_27001": "A.9.1"})
-        cw = FrameworkCrosswalk([ctrl])
-        found = cw.find_by_reference("iso_27001", "A.9.1")
-        assert len(found) == 1
-
-    def test_multiple_controls_same_reference(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        ctrl_a = _make_ctrl("C1", {"iso_27001": ["A.9.1"]})
-        ctrl_b = _make_ctrl("C2", {"iso_27001": ["A.9.1"]})
-        cw = FrameworkCrosswalk([ctrl_a, ctrl_b])
-        found = cw.find_by_reference("iso_27001", "A.9.1")
-        assert len(found) == 2
-
-    def test_empty_controls(self):
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
-
-        cw = FrameworkCrosswalk([])
-        assert cw.all_frameworks() == []
-        assert cw.find_by_reference("iso_27001", "A.1") == []
-
-
-# ---------------------------------------------------------------------------
-# Module-level functions in crosswalk.py
-# ---------------------------------------------------------------------------
-
-
-class TestCrosswalkFunctions:
-    def test_crosswalk_for_control_returns_dict(self):
-        """crosswalk_for_control should return a dict (even for unknown IDs)."""
-        from unimonitor.grc.crosswalk import crosswalk_for_control
-
-        result = crosswalk_for_control("NONEXISTENT_ID")
-        assert isinstance(result, dict)
-
-    def test_get_crosswalk_index_caches(self):
-        """get_crosswalk_index returns same object on second call (caching)."""
-        import unimonitor.grc.crosswalk as cw_module
-
-        # Reset cache
-        cw_module._crosswalk_index = None
-        from unimonitor.grc.crosswalk import get_crosswalk_index
-
-        idx1 = get_crosswalk_index()
-        idx2 = get_crosswalk_index()
-        assert idx1 is idx2
-
-    def test_controls_for_framework_returns_list(self):
-        from unimonitor.grc.crosswalk import controls_for_framework
-
-        result = controls_for_framework("nonexistent_fw")
-        assert isinstance(result, list)
-
-    def test_gap_analysis_returns_structure(self):
-        from unimonitor.grc.crosswalk import gap_analysis
-
-        result = gap_analysis({}, "nonexistent_fw")
-        assert "framework_id" in result
-        assert "coverage_percent" in result
-        assert "gaps_by_severity" in result
-
-    def test_gap_analysis_counts_implementations(self):
-        from unimonitor.grc.crosswalk import gap_analysis
-
-        # Build minimal mock controls
-        mock_ctrl = {"id": "C1", "name": "Test", "category": "cat", "severity": "high", "frameworks": ["test_fw"]}
-        with patch("unimonitor.grc.crosswalk.controls_for_framework", return_value=[mock_ctrl]):
-            result = gap_analysis({"C1": "implemented"}, "test_fw")
-        assert result["implemented"] == 1
-        assert result["not_implemented"] == 0
-
-    def test_gap_analysis_identifies_gaps(self):
-        from unimonitor.grc.crosswalk import gap_analysis
-
-        mock_ctrl = {
-            "id": "C1",
-            "name": "MFA",
-            "category": "access",
-            "severity": "critical",
-            "remediation_summary": "Enable MFA",
-            "frameworks": ["test_fw"],
-        }
-        with patch("unimonitor.grc.crosswalk.controls_for_framework", return_value=[mock_ctrl]):
-            result = gap_analysis({}, "test_fw")  # no findings → all not_implemented
-        assert result["not_implemented"] == 1
-        assert len(result["gaps_by_severity"]["critical"]) == 1

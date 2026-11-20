@@ -67,6 +67,41 @@ def _make_run(run_id="run-001"):
     return run
 
 
+def _control_with_data(keys: tuple[str, ...]):
+    """A control whose evaluate function reads the given data keys."""
+    ctrl = _make_control_def()
+    condition = " and ".join(f"data.get({key!r})" for key in keys)
+    ctrl._evaluate_code = f"def evaluate(data):\n    return 'implemented' if {condition} else 'not_implemented'"
+    ctrl.run_evaluate = MagicMock(side_effect=lambda data: "implemented" if all(data.get(k) for k in keys) else "not_implemented")
+    return ctrl
+
+
+class TestEvidenceCoverage:
+    def test_control_without_any_collected_data_is_not_applicable(self):
+        """No collector data must not become a fabricated failure."""
+        from unimonitor.db.models.finding import FindingState
+
+        engine, _ = _make_engine()
+        ctrl = _control_with_data(keys=("conditionalAccessPolicies",))
+
+        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+
+        assert finding.state == FindingState.NOT_APPLICABLE.value
+        ctrl.run_evaluate.assert_not_called()
+        coverage = next(item for item in finding.evidence if item.evidence_type == "data_coverage")
+        assert '"missing": ["conditionalAccessPolicies"]' in coverage.content
+
+    def test_control_with_collected_data_is_evaluated_and_records_coverage(self):
+        engine, _ = _make_engine()
+        ctrl = _control_with_data(keys=("conditionalAccessPolicies",))
+
+        finding = _run(engine._evaluate_control(ctrl, {"conditionalAccessPolicies": [{"id": "1"}]}, "run-001"))
+
+        assert finding.state == "implemented"
+        coverage = next(item for item in finding.evidence if item.evidence_type == "data_coverage")
+        assert '"missing": []' in coverage.content
+
+
 # ---------------------------------------------------------------------------
 # _evaluate_control — the core logic unit
 # ---------------------------------------------------------------------------

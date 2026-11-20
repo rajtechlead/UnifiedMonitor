@@ -325,3 +325,122 @@ controls:
         - action: "Set a sampling rate and aggregation interval that match the retention budget."
         - action: "Export flow logs to the central logging project."
 
+  - id: CTRL-GCP-009
+    title: "Internal Applications Are Published Through Identity-Aware Proxy"
+    description: >
+      Backend services exposed to users should sit behind IAP so access is decided
+      from identity and device context rather than network reachability.
+    severity: HIGH
+    category: identity_aware_access
+    service: gcp
+    compliance_mapping:
+      zero_trust:
+        - "identity.verify_explicitly"
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.AA-03"
+      nist_800_53_r5:
+        - "AC-17"
+      soc2:
+        - "CC6.6"
+    evaluate: |
+      services = data.get("gcp_backend_services")
+      if not services:
+          return "not_applicable"
+      protected = [item for item in services if (item.get("iap") or {}).get("enabled") is True]
+      if len(protected) == len(services):
+          return "implemented"
+      return "partially_implemented" if protected else "not_implemented"
+    remediation:
+      summary: "Enable IAP on backend services and remove public load balancer access."
+      steps:
+        - action: "Enable IAP on each backend service and grant roles/iap.httpsResourceAccessor to the right groups."
+        - action: "Use IAP TCP forwarding for SSH/RDP instead of public IP addresses."
+
+  - id: CTRL-GCP-010
+    title: "Access Levels Define Device and Network Context"
+    description: >
+      Context-Aware Access decisions need at least one access level built from
+      device and network attributes; without one, IAP can only check identity.
+    severity: HIGH
+    category: identity_aware_access
+    service: gcp
+    compliance_mapping:
+      zero_trust:
+        - "identity.context"
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.AA-03"
+      soc2:
+        - "CC6.6"
+    evaluate: |
+      levels = data.get("gcp_access_levels")
+      if levels is None:
+          return "not_applicable"
+      return "implemented" if levels else "not_implemented"
+    remediation:
+      summary: "Create access levels and bind them to IAP-protected applications."
+      steps:
+        - action: "Create access levels for corporate network, encrypted device and screen lock."
+        - action: "Attach the levels to IAP, VPC Service Controls and Workspace apps."
+
+  - id: CTRL-GCP-011
+    title: "VPC Service Controls Perimeters Protect Sensitive Projects"
+    description: >
+      A service perimeter stops data in sensitive projects from being copied out
+      through APIs, closing the exfiltration path a zero trust network model
+      assumes is breached.
+    severity: HIGH
+    category: network_security
+    service: gcp
+    compliance_mapping:
+      zero_trust:
+        - "network.segmentation"
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.IR-01"
+      soc2:
+        - "CC6.6"
+    evaluate: |
+      perimeters = data.get("gcp_service_perimeters")
+      if perimeters is None:
+          return "not_applicable"
+      enforced = [item for item in perimeters if item.get("status", {}).get("resources")]
+      return "implemented" if enforced else "not_implemented"
+    remediation:
+      summary: "Create a service perimeter around projects holding sensitive data."
+      steps:
+        - action: "Create an access policy and a regular service perimeter with the sensitive projects as resources."
+        - action: "Add ingress/egress rules only for the APIs the workloads genuinely need."
+
+  - id: CTRL-GCP-012
+    title: "Security Command Center Sources Are Configured"
+    description: >
+      Security Command Center must have at least one source so findings from
+      built-in detectors and integrated scanners reach the SOC.
+    severity: HIGH
+    category: security_operations
+    service: gcp
+    compliance_mapping:
+      zero_trust:
+        - "secops.detection"
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      sources = data.get("gcp_scc_sources")
+      if sources is None:
+          return "not_applicable"
+      return "implemented" if sources else "not_implemented"
+    remediation:
+      summary: "Enable Security Command Center and route its findings to the SOC."
+      steps:
+        - action: "Activate Security Command Center at organization level and enable the Premium tier where required."
+        - action: "Export findings to Pub/Sub or the SIEM and alert on HIGH/CRITICAL severity."
+

@@ -2,11 +2,38 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-19 UTC
+Last Updated: 2026-11-20 UTC
 
 ## Current Session Commits (2026-11-18)
 
 - `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
+
+### Session 2026-11-20 — native multi-cloud Zero Trust catalogues and evidence coverage
+
+The Microsoft Zero Trust page is no longer the only architecture view. Each platform
+has its own Python catalogue (no PowerShell required) scored from the evidence the
+collectors already hold:
+
+- `unimonitor/zerotrust/platform_tests.py`: AWS 19 tests, Google Cloud 15, Google
+  Workspace 14, each naming the control ids that answer it plus remediation and a
+  reference. Derived from AWS Prescriptive Guidance/Well-Architected, the Google Cloud
+  zero trust blueprint and Workspace security guidance, aligned to CISA ZTMM pillars.
+- `cloud_checks` scores every catalogue test from its backing controls (worst result
+  among controls that have evidence) and still appends controls no test maps.
+- UI: `/zero-trust/mapping` (test-to-control map, unmapped tests/controls) and
+  `/zero-trust/platform/:platform` (pillars, tests, evidence gaps per platform);
+  `/zero-trust/assessment` links to both.
+- Evidence coverage: the engine records a `data_coverage` evidence row per control
+  (expected keys, missing keys) and marks a control `not_applicable` when no collector
+  returned any of its data — no more fabricated failures. `GET /zerotrust/evidence-gaps`
+  lists controls/tests without evidence and the collector/key that is missing.
+- Collectors: AWS now gathers security groups, flow logs, KMS rotation, SSM managed
+  instances, Access Analyzer and Organization SCPs; Google Cloud gathers backend
+  services (IAP), Access Context Manager levels/perimeters and Security Command Center
+  sources; Intune and SharePoint expose the normalised keys the controls read.
+- 10 new controls (AWS-009…014, GCP-009…012) map those tests to real evidence.
+- Dead code: removed `unimonitor/grc/crosswalk.py` (a second, broken crosswalk engine;
+  the API uses `ControlLoader`), renamed its scoring tests to `test_scoring_rollups.py`.
 
 ### Session 2026-11-18 — sign-in fix, Settings parity, SonarQube blockers
 

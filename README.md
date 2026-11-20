@@ -17,14 +17,16 @@ with a per-cloud view and an aggregate view across all of them.
 |---|---|
 | **Multi-Cloud Monitoring** | Real-time posture across Microsoft 365, AWS, Google Cloud and Google Workspace |
 | **GRC Assessments** | 13 frameworks: NIST CSF, ISO 27001, CIS Benchmarks, SOC 2, HIPAA, PCI-DSS, and more |
-| **180 Security Controls** | Pre-built controls mapped to each provider's native services — no manual configuration needed |
+| **190 Security Controls** | Pre-built controls mapped to each provider's native services — no manual configuration needed |
 | **AI Remediation** | Azure OpenAI GPT-4o powered remediation plans with rule-based fallback |
 | **Secret Management** | Azure Key Vault / AWS Secrets Manager / encrypted local vault — no plaintext secrets |
 | **Multi-tenant** | Isolate assessments per tenant/cloud account (MSP-ready) |
 | **Reporting** | PDF, DOCX, Excel, HTML, JSON, CSV — aggregate summary plus colour-coded per-cloud sections |
-| **Dashboards** | Executive, CISO, Zero Trust, Zero Trust Assessment, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Alerts, Assessments, Reports, Licences, Service Health, Data Collection |
-| **Zero Trust view** | Coverage per Microsoft Zero Trust pillar, grouped from each control's `zero_trust` mapping |
-| **Zero Trust Assessment** | Microsoft's 364 PowerShell checks imported from `ZeroTrustAssessmentReport.json`, plus AWS, Google Cloud and Google Workspace controls, with per-result remediation and pillar scores for all four platforms |
+| **Dashboards** | Executive, CISO, Zero Trust, Zero Trust Assessment, Zero Trust Mapping, Multi-Cloud aggregate, per-provider cloud views, Security, Compliance, Risk, SOC, Audit, Findings, Alerts, Assessments, Reports, Licences, Service Health, Data Collection |
+| **Zero Trust view** | Coverage per Zero Trust pillar, grouped from each control's `zero_trust` mapping |
+| **Zero Trust Assessment** | Microsoft's 364 upstream checks plus native Python catalogues for AWS (19 tests), Google Cloud (15) and Google Workspace (14), with per-result remediation, pillar scores and a per-platform architecture page |
+| **Zero Trust Mapping** | Every test in a platform catalogue with the UniMonitor control that supplies its evidence, the unmapped tests, and the controls no test tracks |
+| **Evidence coverage** | Per-control expected data keys, what the collector returned, and which controls/tests still lack evidence (`GET /zerotrust/evidence-gaps`) |
 | **Cloud remediation** | Every AWS, GCP and Google Workspace control carries the remediation summary and steps the assessment page shows |
 | **Triage & ROI queue** | Acknowledge, snooze, assign and resolve findings; the highest impact-per-effort fixes are ranked first |
 | **Investigation timeline** | Per-finding history and collected evidence in one ordered list |
@@ -45,8 +47,8 @@ and dashboard. The aggregate view rolls them up side by side.
 | Provider | Collector | Controls | Credentials |
 |---|---|---|---|
 | Microsoft 365 | Entra ID, Intune, Defender, Purview, Exchange, SharePoint, Teams, Copilot | 158 controls + all 364 Zero Trust tests | Entra app registration (`TENANT_CLIENT_ID` / `TENANT_CLIENT_SECRET`) |
-| Amazon Web Services | `aws` (boto3) | 8 | `AWS_REGION` + standard AWS credential chain |
-| Google Cloud Platform | `gcp` (REST) | 8 | `GCP_PROJECT_ID`, `GCP_ACCESS_TOKEN` |
+| Amazon Web Services | `aws` (boto3) | 14 | `AWS_REGION` + standard AWS credential chain |
+| Google Cloud Platform | `gcp` (REST) | 12 | `GCP_PROJECT_ID`, `GCP_ACCESS_TOKEN` |
 | Google Workspace | `google_workspace` (Admin SDK REST) | 6 | `GOOGLE_WORKSPACE_CUSTOMER_ID`, `GOOGLE_ACCESS_TOKEN` |
 
 Provider dashboards live at `/clouds` (aggregate) and `/clouds/<provider>` in the

@@ -11,6 +11,7 @@ GRC Engine — orchestrates assessment runs:
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import UTC, datetime
 from typing import Any
 
@@ -22,6 +23,7 @@ from unimonitor.db.models.finding import Finding, FindingEvidence, FindingSeveri
 from unimonitor.graph.collector_registry import CollectorRegistry
 from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
 from unimonitor.grc.scoring import calculate_scores
+from unimonitor.zerotrust.coverage import expected_keys
 
 logger = get_logger(__name__)
 
@@ -185,26 +187,37 @@ class AssessmentEngine:
         state = FindingState.NOT_IMPLEMENTED.value
         evidence_text: str | None = None
 
-        try:
-            raw = control_def.run_evaluate(eval_data)
-            # Normalise the return value
-            status_map = {
-                "implemented": FindingState.IMPLEMENTED.value,
-                "pass": FindingState.IMPLEMENTED.value,
-                "partially_implemented": FindingState.PARTIALLY_IMPLEMENTED.value,
-                "warning": FindingState.PARTIALLY_IMPLEMENTED.value,
-                "not_implemented": FindingState.NOT_IMPLEMENTED.value,
-                "fail": FindingState.NOT_IMPLEMENTED.value,
-                "not_applicable": FindingState.NOT_APPLICABLE.value,
-            }
-            state = status_map.get(str(raw).lower(), FindingState.NOT_IMPLEMENTED.value)
-        except Exception as exc:
-            logger.debug(
-                "Control eval error",
-                extra={"control": control_id, "error": str(exc)},
-            )
-            state = FindingState.NOT_IMPLEMENTED.value
-            evidence_text = f"Evaluation error: {exc}"
+        # What the collector supplied for this control. A control whose entire
+        # expected data set is absent has no evidence: it is not_applicable, never
+        # a fabricated failure (and never a pass).
+        keys = sorted(expected_keys(control_def))
+        missing = [key for key in keys if eval_data.get(key) in (None, "", [], {})]
+        coverage_text = json.dumps({"keys": keys, "missing": missing}) if keys else None
+
+        if keys and len(missing) == len(keys):
+            state = FindingState.NOT_APPLICABLE.value
+            evidence_text = f"No collected data for: {', '.join(missing)}"
+
+        if not (keys and len(missing) == len(keys)):
+            try:
+                raw = control_def.run_evaluate(eval_data)
+                status_map = {
+                    "implemented": FindingState.IMPLEMENTED.value,
+                    "pass": FindingState.IMPLEMENTED.value,
+                    "partially_implemented": FindingState.PARTIALLY_IMPLEMENTED.value,
+                    "warning": FindingState.PARTIALLY_IMPLEMENTED.value,
+                    "not_implemented": FindingState.NOT_IMPLEMENTED.value,
+                    "fail": FindingState.NOT_IMPLEMENTED.value,
+                    "not_applicable": FindingState.NOT_APPLICABLE.value,
+                }
+                state = status_map.get(str(raw).lower(), FindingState.NOT_IMPLEMENTED.value)
+            except Exception as exc:
+                logger.debug(
+                    "Control eval error",
+                    extra={"control": control_id, "error": str(exc)},
+                )
+                state = FindingState.NOT_IMPLEMENTED.value
+                evidence_text = f"Evaluation error: {exc}"
 
         # Determine severity (YAML uses uppercase; model stores lowercase)
         raw_sev = (control_def.severity or "MEDIUM").upper()
@@ -248,12 +261,21 @@ class AssessmentEngine:
             risk_score=risk_score,
         )
 
-        if evidence_text:
-            evidence = FindingEvidence(
-                evidence_type="api_evaluation",
-                source=f"control:{control_id}",
-                content=evidence_text[:10000],
+        if coverage_text:
+            finding.evidence.append(
+                FindingEvidence(
+                    evidence_type="data_coverage",
+                    source=f"control:{control_id}",
+                    content=coverage_text[:10000],
+                )
             )
-            finding.evidence = [evidence]
+        if evidence_text:
+            finding.evidence.append(
+                FindingEvidence(
+                    evidence_type="api_evaluation",
+                    source=f"control:{control_id}",
+                    content=evidence_text[:10000],
+                )
+            )
 
         return finding

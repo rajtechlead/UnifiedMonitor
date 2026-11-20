@@ -123,6 +123,68 @@ def _aws_snapshot(session: Any) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         data["aws_securityhub_enabled"] = False
 
+    # ── Zero Trust architecture evidence ──────────────────────────────────
+    try:
+        ec2 = session.client("ec2")
+        data["aws_security_groups"] = [
+            {
+                "GroupId": group.get("GroupId", ""),
+                "GroupName": group.get("GroupName", ""),
+                "IpPermissions": [
+                    {
+                        "FromPort": rule.get("FromPort"),
+                        "ToPort": rule.get("ToPort"),
+                        "IpProtocol": rule.get("IpProtocol", ""),
+                        "Cidrs": [rng.get("CidrIp", "") for rng in rule.get("IpRanges", [])],
+                    }
+                    for rule in group.get("IpPermissions", [])
+                ],
+            }
+            for group in ec2.describe_security_groups().get("SecurityGroups", [])
+        ]
+        data["aws_flow_logs"] = [
+            {"ResourceId": log.get("ResourceId", ""), "Status": log.get("FlowLogStatus", "")} for log in ec2.describe_flow_logs().get("FlowLogs", [])
+        ]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS network posture failed", error=str(exc))
+
+    try:
+        kms = session.client("kms")
+        keys = []
+        for entry in kms.list_keys().get("Keys", [])[:100]:
+            try:
+                metadata = kms.describe_key(KeyId=entry["KeyId"])["KeyMetadata"]
+                if metadata.get("KeyManager") != "CUSTOMER":
+                    continue
+                rotation = kms.get_key_rotation_status(KeyId=entry["KeyId"]).get("KeyRotationEnabled", False)
+                keys.append({"KeyId": entry["KeyId"], "Enabled": metadata.get("Enabled", False), "RotationEnabled": rotation})
+            except Exception as exc:  # noqa: BLE001
+                logger.debug("AWS KMS key skipped", key=entry.get("KeyId"), error=str(exc))
+        data["aws_kms_keys"] = keys
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS KMS failed", error=str(exc))
+
+    try:
+        managed = session.client("ssm").describe_instance_information().get("InstanceInformationList", [])
+        data["aws_managed_instances"] = [
+            {"InstanceId": row.get("InstanceId", ""), "PingStatus": row.get("PingStatus", ""), "IsLatestVersion": row.get("IsLatestVersion", False)}
+            for row in managed
+        ]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS Systems Manager failed", error=str(exc))
+
+    try:
+        analyzers = session.client("accessanalyzer").list_analyzers().get("analyzers", [])
+        data["aws_access_analyzers"] = [{"name": item.get("name", ""), "status": item.get("status", "")} for item in analyzers]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS Access Analyzer failed", error=str(exc))
+
+    try:
+        policies = session.client("organizations").list_policies(Filter="SERVICE_CONTROL_POLICY").get("Policies", [])
+        data["aws_organization_policies"] = [{"name": item.get("Name", ""), "type": item.get("Type", "")} for item in policies]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS Organizations failed", error=str(exc))
+
     return data
 
 
@@ -272,6 +334,26 @@ async def collect_gcp(
         subnetworks = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/aggregated/subnetworks", token)
         if subnetworks:
             data["gcp_subnetworks"] = list(subnetworks.get("items", {}).values())
+
+        # ── Zero Trust architecture evidence ──────────────────────────────
+        backends = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/global/backendServices", token)
+        if backends:
+            data["gcp_backend_services"] = [{"name": item.get("name", ""), "iap": item.get("iap", {})} for item in backends.get("items", [])]
+
+        scc = await _rest(client, f"https://securitycenter.googleapis.com/v1/projects/{project_id}/sources", token)
+        if scc:
+            data["gcp_scc_sources"] = [{"name": item.get("name", ""), "displayName": item.get("displayName", "")} for item in scc.get("sources", [])]
+
+        access_policies = await _rest(client, "https://accesscontextmanager.googleapis.com/v1/accessPolicies", token)
+        policies = access_policies.get("accessPolicies", []) if access_policies else []
+        if policies:
+            policy_name = policies[0].get("name", "")
+            data["gcp_access_levels"] = (
+                await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/accessLevels", token)
+            ).get("accessLevels", [])
+            data["gcp_service_perimeters"] = (
+                await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/servicePerimeters", token)
+            ).get("servicePerimeters", [])
     finally:
         if owns_client:
             await client.aclose()

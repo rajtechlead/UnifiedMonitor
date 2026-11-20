@@ -279,14 +279,12 @@ class TestGRCJourney:
         assert not broken, "Controls with broken evaluate:\n" + "\n".join(broken)
 
     async def test_framework_crosswalk_finds_nist_controls(self):
-        """FrameworkCrosswalk can find controls mapped to NIST CSF DE.CM-01."""
+        """The control library can find controls mapped to NIST CSF DE.CM-01."""
         from unimonitor.grc.control_loader import ControlLoader
-        from unimonitor.grc.crosswalk import FrameworkCrosswalk
 
         controls = ControlLoader().load_all()
-        cw = FrameworkCrosswalk(controls)
         # DE.CM-01 is mapped by multiple Defender / Intune controls
-        results = cw.find_by_reference("nist_csf_2", "DE.CM-01")
+        results = [control for control in controls if "DE.CM-01" in (control.compliance_mapping.get("nist_csf_2") or [])]
         assert len(results) > 0, "Expected controls mapped to nist_csf_2 / DE.CM-01"
 
     async def test_scoring_compute_score_basic(self):

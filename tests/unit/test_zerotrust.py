@@ -12,6 +12,40 @@ from unimonitor.zerotrust.normalise import normalise_checks, pillar_for_text, su
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# ── Platform catalogues and evidence coverage ────────────────────────────────
+
+
+def test_platform_catalogues_are_internally_consistent() -> None:
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.pillars import PILLAR_IDS
+    from unimonitor.zerotrust.platform_tests import PLATFORM_TESTS, tests_for
+
+    control_ids = {control.id for control in ControlLoader().load_all()}
+    for platform, tests in PLATFORM_TESTS.items():
+        assert tests_for(platform) == tests
+        assert len({test.id for test in tests}) == len(tests), platform
+        for test in tests:
+            assert test.id.startswith(platform[:3].upper()) or platform == "google_workspace"
+            assert test.pillar in PILLAR_IDS, test.id
+            assert test.remediation, test.id
+            assert set(test.control_ids) <= control_ids, test.id
+            assert test.severity in {"critical", "high", "medium", "low"}
+
+
+def test_cloud_controls_are_covered_by_a_collector() -> None:
+    """Every AWS/GCP/Workspace control key is produced by the cloud collectors."""
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.zerotrust.coverage import static_missing_keys
+
+    cloud_services = {"aws", "gcp", "google_workspace"}
+    gaps = {
+        control.id: static_missing_keys(control)
+        for control in ControlLoader().load_all()
+        if control.service in cloud_services and static_missing_keys(control)
+    }
+    assert gaps == {}
+
+
 # ── Normalisation ────────────────────────────────────────────────────────────
 
 
@@ -243,10 +277,47 @@ async def test_cloud_checks_use_findings_and_remediation(client, auth_headers, d
     body = response.json()
     assert body["run"]["source"] == "aws"
     by_id = {check["check_id"]: check for check in body["checks"]}
-    assert by_id["CTRL-AWS-001"]["status"] == "fail"
-    assert by_id["CTRL-AWS-001"]["remediation"]
-    # A control with no finding is not scored as passing.
-    assert by_id["CTRL-AWS-002"]["status"] == "not_run"
+    # AWS is scored from its native catalogue, not one row per control.
+    assert "AWS-ZT-001" in by_id
+    assert by_id["AWS-ZT-001"]["status"] == "fail"
+    assert by_id["AWS-ZT-001"]["remediation"]
+    # A test with no finding is not scored as passing.
+    assert by_id["AWS-ZT-002"]["status"] == "not_run"
+    # An architecture test with no collector behind it is still reported.
+    assert by_id["AWS-ZT-004"]["status"] == "not_run"
+
+
+@pytest.mark.asyncio
+async def test_mapping_lists_controls_behind_each_test(client, auth_headers) -> None:
+    response = await client.get("/api/v1/zerotrust/mapping?source=google_workspace", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+
+    assert body["total_tests"] == 14
+    assert body["mapped_tests"] == 6
+    assert {control["id"] for control in body["unmapped_controls"]} == set()
+    two_step = next(test for test in body["tests"] if test["check_id"] == "GWS-ZT-001")
+    assert [control["id"] for control in two_step["controls"]] == ["CTRL-GWS-001"]
+    assert body["catalogue"].startswith("Google Workspace")
+
+
+@pytest.mark.asyncio
+async def test_evidence_gaps_report_what_to_collect(client, auth_headers, db_session, tenant) -> None:
+    response = await client.get("/api/v1/zerotrust/evidence-gaps?source=aws", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    platform = body["platforms"][0]
+
+    assert platform["source"] == "aws"
+    # No assessment has run, so nothing has evidence yet.
+    assert platform["tests_evidenced"] == 0
+    assert platform["controls_lacking"] == platform["controls_total"] == 14
+    gap = next(item for item in platform["gaps"] if item["check_id"] == "AWS-ZT-004")
+    assert "No UniMonitor control" in gap["reason"]
+    control = next(item for item in platform["controls"] if item["id"] == "CTRL-AWS-001")
+    assert control["collector"] == "collect_aws"
+    assert control["expected_keys"] == ["aws_root_mfa_enabled"]
+    assert control["missing_keys"] == []
 
 
 @pytest.mark.asyncio

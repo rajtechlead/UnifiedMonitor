@@ -327,3 +327,227 @@ controls:
         - action: "Enable cross-region and cross-account aggregation."
         - action: "Route critical findings to the ticket queue used by the operations team."
 
+  - id: CTRL-AWS-009
+    title: "Security Groups Do Not Expose Management Ports to the Internet"
+    description: >
+      No security group may allow ingress from 0.0.0.0/0 or ::/0 to SSH (22),
+      RDP (3389), database ports (3306, 5432, 1433, 27017) or other management
+      services. Access is brokered by SSM Session Manager or a private bastion.
+    severity: CRITICAL
+    category: network_security
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "network.segmentation"
+      iso27001_2022:
+        - "A.8.20"
+      nist_csf_2:
+        - "PR.IR-01"
+      nist_800_53_r5:
+        - "SC-7"
+      cis_controls_v8:
+        - "12.2"
+      soc2:
+        - "CC6.6"
+    evaluate: |
+      groups = data.get("aws_security_groups")
+      if not groups:
+          return "not_applicable"
+      management_ports = {22, 3389, 3306, 5432, 1433, 27017, 6379, 9200}
+      exposed = []
+      for group in groups:
+          for rule in group.get("IpPermissions") or []:
+              public = any(cidr in ("0.0.0.0/0", "::/0") for cidr in rule.get("Cidrs") or [])
+              if not public:
+                  continue
+              low = rule.get("FromPort")
+              high = rule.get("ToPort")
+              if low is None or high is None:
+                  # Protocol -1 means all ports.
+                  exposed.append(group.get("GroupId", ""))
+                  continue
+              if any(low <= port <= high for port in management_ports):
+                  exposed.append(group.get("GroupId", ""))
+      return "not_implemented" if exposed else "implemented"
+    remediation:
+      summary: "Remove public ingress on management ports and use SSM Session Manager instead."
+      steps:
+        - action: "Revoke the 0.0.0.0/0 ingress rules: aws ec2 revoke-security-group-ingress."
+        - action: "Use SSM Session Manager or a bastion in a private subnet for administrative access."
+        - action: "Enable an AWS Config rule or Security Hub control to alert on new public management ports."
+
+  - id: CTRL-AWS-010
+    title: "VPC Flow Logs Enabled and Active"
+    description: >
+      Network traffic in every VPC must be logged so lateral movement and data
+      exfiltration can be investigated. At least one flow log must be ACTIVE and
+      none may be in a failed state.
+    severity: HIGH
+    category: network_security
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "network.logging"
+      iso27001_2022:
+        - "A.8.16"
+      nist_csf_2:
+        - "DE.CM-01"
+      nist_800_53_r5:
+        - "AU-12"
+      cis_controls_v8:
+        - "13.6"
+      soc2:
+        - "CC7.2"
+    evaluate: |
+      logs = data.get("aws_flow_logs")
+      if logs is None:
+          return "not_applicable"
+      active = [log for log in logs if str(log.get("Status", "")).upper() == "ACTIVE"]
+      if not active:
+          return "not_implemented"
+      failed = [log for log in logs if str(log.get("Status", "")).upper() not in ("ACTIVE", "")]
+      return "partially_implemented" if failed else "implemented"
+    remediation:
+      summary: "Enable flow logs on every VPC and deliver them to the central log archive."
+      steps:
+        - action: "Create a flow log per VPC: aws ec2 create-flow-logs --resource-type VPC --traffic-type ALL."
+        - action: "Deliver to CloudWatch Logs or S3 with the retention policy of the log archive account."
+
+  - id: CTRL-AWS-011
+    title: "Customer-Managed KMS Keys Rotate Annually"
+    description: >
+      Every enabled customer-managed KMS key must have automatic rotation on, so
+      a leaked key is useful for at most one rotation period.
+    severity: MEDIUM
+    category: data_protection
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "data.encryption"
+      iso27001_2022:
+        - "A.8.24"
+      nist_csf_2:
+        - "PR.DS-01"
+      nist_800_53_r5:
+        - "SC-12"
+      soc2:
+        - "CC6.1"
+    evaluate: |
+      keys = data.get("aws_kms_keys")
+      if keys is None:
+          return "not_applicable"
+      enabled = [key for key in keys if key.get("Enabled", True)]
+      if not enabled:
+          return "not_applicable"
+      rotating = [key for key in enabled if key.get("RotationEnabled")]
+      if len(rotating) == len(enabled):
+          return "implemented"
+      return "partially_implemented" if rotating else "not_implemented"
+    remediation:
+      summary: "Enable annual rotation on every customer-managed key."
+      steps:
+        - action: "aws kms enable-key-rotation --key-id <key-id> for each customer-managed key."
+        - action: "Prefer AWS-managed keys only where the workload has no compliance requirement for customer keys."
+
+  - id: CTRL-AWS-012
+    title: "Organizations Apply Service Control Policies"
+    description: >
+      Service control policies are the account-level guardrail for a zero trust
+      identity plane: they bound what even an administrator can do, including
+      disabling logging or using unapproved Regions.
+    severity: HIGH
+    category: identity_governance
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "identity.governance"
+      iso27001_2022:
+        - "A.5.15"
+      nist_csf_2:
+        - "PR.AA-05"
+      nist_800_53_r5:
+        - "AC-6"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      policies = data.get("aws_organization_policies")
+      if policies is None:
+          return "not_applicable"
+      return "implemented" if policies else "not_implemented"
+    remediation:
+      summary: "Enable Organizations and attach guardrail SCPs to every account."
+      steps:
+        - action: "Attach a deny-list SCP that blocks disabling CloudTrail/GuardDuty and restricts Regions."
+        - action: "Test SCPs in a sandbox account before rolling out at the root."
+
+  - id: CTRL-AWS-013
+    title: "Instances Are Managed and Patched by Systems Manager"
+    description: >
+      Every EC2 instance must be visible to Systems Manager, online and running a
+      supported agent version, so patch state and inventory are trustworthy.
+    severity: HIGH
+    category: endpoint_management
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "devices.health"
+      iso27001_2022:
+        - "A.8.8"
+      nist_csf_2:
+        - "PR.PS-02"
+      nist_800_53_r5:
+        - "SI-2"
+      cis_controls_v8:
+        - "7.3"
+      soc2:
+        - "CC7.1"
+    evaluate: |
+      instances = data.get("aws_managed_instances")
+      if instances is None:
+          return "not_applicable"
+      if not instances:
+          return "not_implemented"
+      healthy = [
+          item
+          for item in instances
+          if str(item.get("PingStatus", "")).lower() == "online" and item.get("IsLatestVersion")
+      ]
+      if len(healthy) == len(instances):
+          return "implemented"
+      return "partially_implemented" if healthy else "not_implemented"
+    remediation:
+      summary: "Onboard instances to SSM and enforce a patch baseline."
+      steps:
+        - action: "Attach the AmazonSSMManagedInstanceCore policy to instance roles."
+        - action: "Create a patch baseline and maintenance window per environment."
+
+  - id: CTRL-AWS-014
+    title: "IAM Access Analyzer Enabled"
+    description: >
+      Access Analyzer identifies resources shared outside the account and unused
+      permissions, which is how a zero trust posture keeps converging on least
+      privilege.
+    severity: MEDIUM
+    category: identity_governance
+    service: aws
+    compliance_mapping:
+      zero_trust:
+        - "identity.least_privilege"
+      iso27001_2022:
+        - "A.5.15"
+      nist_csf_2:
+        - "PR.AA-05"
+      soc2:
+        - "CC6.3"
+    evaluate: |
+      analyzers = data.get("aws_access_analyzers")
+      if analyzers is None:
+          return "not_applicable"
+      active = [item for item in analyzers if str(item.get("status", "")).upper() == "ACTIVE"]
+      return "implemented" if active else "not_implemented"
+    remediation:
+      summary: "Enable IAM Access Analyzer in every Region and review external access."
+      steps:
+        - action: "Create an account-level analyzer: aws accessanalyzer create-analyzer --analyzer-name default --type ACCOUNT."
+        - action: "Triage active findings and archive reviewed ones with a reason."
+

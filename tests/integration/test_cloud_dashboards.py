@@ -22,8 +22,8 @@ class TestCloudAggregate:
         r = await client.get("/api/v1/dashboard/clouds", headers=auth_headers)
         data = r.json()
         by_id = {p["provider_id"]: p for p in data["providers"]}
-        assert by_id["aws"]["controls_total"] == 8
-        assert by_id["gcp"]["controls_total"] == 8
+        assert by_id["aws"]["controls_total"] == 14
+        assert by_id["gcp"]["controls_total"] == 12
         assert by_id["google_workspace"]["controls_total"] == 6
         assert by_id["microsoft"]["controls_total"] > 100
         assert all(not p["connected"] for p in data["providers"])
@@ -85,7 +85,7 @@ class TestCloudProviderDetail:
         assert r.status_code == 200
         data = r.json()
         assert data["provider"]["provider_id"] == "aws"
-        assert data["provider"]["controls_total"] == 8
+        assert data["provider"]["controls_total"] == 14
         assert data["provider"]["collectors"] == ["aws"]
         assert {s["service"] for s in data["services"]} == {"aws"}
         assert data["categories"]

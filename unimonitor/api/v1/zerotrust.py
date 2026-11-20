@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.core.audit import write_audit
 from unimonitor.db.session import get_db
-from unimonitor.zerotrust import service
+from unimonitor.zerotrust import coverage, service
 from unimonitor.zerotrust.normalise import PLATFORMS
 
 logger = structlog.get_logger(__name__)
@@ -97,6 +97,88 @@ class RunRequest(BaseModel):
 class RunAllResponse(BaseModel):
     runs: list[RunResponse]
     skipped: list[str] = []
+
+
+class MappingControl(BaseModel):
+    id: str
+    title: str
+    service: str
+    pillar: str
+
+
+class MappingTest(BaseModel):
+    check_id: str
+    title: str
+    pillar: str
+    category: str
+    severity: str
+    controls: list[MappingControl] = []
+
+
+class MappingResponse(BaseModel):
+    source: str
+    platform: str
+    catalogue: str
+    tests: list[MappingTest]
+    total_tests: int
+    mapped_tests: int
+    unmapped_tests: int
+    total_controls: int
+    unmapped_controls: list[MappingControl]
+
+
+class GapControl(BaseModel):
+    id: str
+    title: str
+    service: str
+    pillar: str
+    collector: str
+    expected_keys: list[str]
+    missing_keys: list[str]
+    uncollected_keys: list[str]
+    state: str | None
+    has_finding: bool
+    has_evidence: bool
+
+
+class GapTest(BaseModel):
+    check_id: str
+    title: str
+    pillar: str
+    reason: str
+    controls: list[GapControl] = []
+
+
+class PlatformGaps(BaseModel):
+    source: str
+    platform: str
+    tests_total: int
+    tests_evidenced: int
+    controls_total: int
+    controls_lacking: int
+    gaps: list[GapTest]
+    controls: list[GapControl]
+
+
+class GapsResponse(BaseModel):
+    platforms: list[PlatformGaps]
+    generated_at: datetime
+
+
+def _gap_control(item: Any) -> GapControl:
+    return GapControl(
+        id=item.id,
+        title=item.title,
+        service=item.service,
+        pillar=item.pillar,
+        collector=item.collector,
+        expected_keys=item.expected_keys,
+        missing_keys=item.missing_keys,
+        uncollected_keys=item.uncollected_keys,
+        state=item.state,
+        has_finding=item.has_finding,
+        has_evidence=item.has_evidence,
+    )
 
 
 async def _resolve_tenant(db: AsyncSession, tenant_id: str | None) -> str:
@@ -235,6 +317,109 @@ async def zerotrust_checks(
         needle = q.lower()
         rows = [row for row in rows if needle in row.title.lower() or needle in row.check_id.lower()]
     return rows
+
+
+@router.get("/mapping", response_model=MappingResponse)
+async def zerotrust_mapping(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    source: SourceLiteral = Query(default="microsoft"),
+) -> MappingResponse:
+    """The platform's test catalogue with the controls that supply its evidence.
+
+    This is the mapping view: every test row, whether a control backs it, and the
+    controls no test consumes. Microsoft's 364 upstream tests are mapped through
+    ``ms_zt_tests``; the AWS/GCP/Workspace catalogues declare their control ids.
+    """
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.zerotrust.service import PLATFORM_SERVICES, _control_pillar
+
+    catalogue_name, tests = service.catalogue_for(source)
+    services = set(PLATFORM_SERVICES.get(source, (source,)))
+    controls = [control for control in ControlLoader().load_all() if control.service in services]
+    by_id = {
+        control.id: MappingControl(
+            id=control.id,
+            title=control.title,
+            service=control.service,
+            pillar=_control_pillar(control.compliance_mapping) or "infrastructure",
+        )
+        for control in controls
+    }
+
+    rows: list[MappingTest] = []
+    used: set[str] = set()
+    for test in tests:
+        if source == "microsoft":
+            mapped_ids = [control.id for control in controls if test.id in control.ms_zt_tests]
+        else:
+            mapped_ids = [control_id for control_id in test.control_ids if control_id in by_id]
+        used.update(mapped_ids)
+        rows.append(
+            MappingTest(
+                check_id=test.id,
+                title=test.title,
+                pillar=test.pillar,
+                category=test.category,
+                severity=test.severity,
+                controls=[by_id[control_id] for control_id in mapped_ids],
+            )
+        )
+
+    mapped_tests = sum(1 for row in rows if row.controls)
+    return MappingResponse(
+        source=source,
+        platform=PLATFORMS.get(source, source),
+        catalogue=catalogue_name,
+        tests=rows,
+        total_tests=len(rows),
+        mapped_tests=mapped_tests,
+        unmapped_tests=len(rows) - mapped_tests,
+        total_controls=len(controls),
+        unmapped_controls=[item for control_id, item in by_id.items() if control_id not in used],
+    )
+
+
+@router.get("/evidence-gaps", response_model=GapsResponse)
+async def zerotrust_evidence_gaps(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: AsyncSession = Depends(get_db),
+    tenant_id: str | None = Query(default=None),
+    source: str = Query(default="all"),
+) -> GapsResponse:
+    """Which tests and controls lack collected evidence, and what to collect."""
+    tenant = await _resolve_tenant(db, tenant_id)
+    if source == "all":
+        sources = list(PLATFORMS)
+    elif source in PLATFORMS:
+        sources = [source]
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown platform '{source}'.")
+
+    platforms: list[PlatformGaps] = []
+    for name in sources:
+        result = await coverage.platform_coverage(db, tenant, name)
+        platforms.append(
+            PlatformGaps(
+                source=result.source,
+                platform=result.platform,
+                tests_total=result.tests_total,
+                tests_evidenced=result.tests_evidenced,
+                controls_total=result.controls_total,
+                controls_lacking=result.controls_lacking,
+                gaps=[
+                    GapTest(
+                        check_id=gap.check_id,
+                        title=gap.title,
+                        pillar=gap.pillar,
+                        reason=gap.reason,
+                        controls=[_gap_control(item) for item in gap.controls],
+                    )
+                    for gap in result.gaps
+                ],
+                controls=[_gap_control(item) for item in result.controls],
+            )
+        )
+    return GapsResponse(platforms=platforms, generated_at=datetime.now().astimezone())
 
 
 @router.get("/runs", response_model=list[RunResponse])

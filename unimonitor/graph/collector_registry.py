@@ -157,6 +157,8 @@ async def _collect_intune(gc: GraphClient) -> dict[str, Any]:
         _safe_get(gc, "/deviceManagement/windowsAutopilotDeviceIdentities?$top=10", "autopilotDevices"),
         _safe_get(gc, "/deviceAppManagement/mobileApps?$top=100", "mobileApps"),
         _safe_get(gc, "/deviceManagement/windowsQualityUpdateProfiles", "windowsUpdatePolicies"),
+        _safe_get(gc, "/deviceManagement/deviceEnrollmentConfigurations", "deviceEnrollmentConfigurations"),
+        _safe_get(gc, "/deviceManagement/configurationPolicies", "configurationPolicies"),
     ]
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
@@ -164,6 +166,22 @@ async def _collect_intune(gc: GraphClient) -> dict[str, Any]:
             data.update(r)
 
     data.update(await collect_intune_extended(gc))
+    # The control library reads normalised intune_* keys; expose the Graph results
+    # under those names instead of asking every control to know the API spelling.
+    aliases = {
+        "intune_compliance_policies": "deviceCompliancePolicies",
+        "intune_device_configurations": "deviceConfigurations",
+        "intune_security_baselines": "securityBaselines",
+        "intune_app_protection_policies": "appProtectionPolicies",
+        "intune_enrollment_restrictions": "deviceEnrollmentConfigurations",
+        "intune_endpoint_security_configs": "configurationPolicies",
+        "intune_update_rings": "windowsUpdatePolicies",
+    }
+    for target, source in aliases.items():
+        if source in data:
+            data[target] = data[source]
+    if "managedDevices" in data:
+        data["intune_managed_device_count"] = len(data["managedDevices"])
     return data
 
 
@@ -243,6 +261,9 @@ async def _collect_sharepoint(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
+    # Control library spelling for the same SharePoint data.
+    data.setdefault("sharePointSettings", data.get("sharepointSettings"))
+    data.setdefault("sharePointSites", data.get("sites", []))
     return data
 
 

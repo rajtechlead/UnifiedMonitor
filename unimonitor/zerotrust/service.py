@@ -14,7 +14,8 @@ from unimonitor.grc.control_loader import ControlLoader
 from unimonitor.grc.pillars import pillar_for
 from unimonitor.zerotrust.microsoft import TEST_IDS
 from unimonitor.zerotrust.microsoft import TESTS as MICROSOFT_TESTS
-from unimonitor.zerotrust.normalise import PLATFORMS, normalise_checks, summarise
+from unimonitor.zerotrust.normalise import normalise_checks, summarise
+from unimonitor.zerotrust.platform_tests import PlatformTest, tests_for
 
 # Imports arrive on a schedule; keep only the newest snapshots so the table and
 # the executive score do not accumulate every historical export.
@@ -55,10 +56,6 @@ PLATFORM_SERVICES: dict[str, tuple[str, ...]] = {
 
 # Worst-case ordering used when several controls back one upstream test.
 _STATUS_PRIORITY = ("fail", "warn", "pass", "not_run", "not_applicable")
-
-
-def _platform_name(source: str) -> str:
-    return PLATFORMS.get(source, source)
 
 
 def _worst_status(statuses: list[str]) -> str:
@@ -190,29 +187,45 @@ async def _microsoft_checks(db: AsyncSession, tenant_id: str) -> list[dict[str, 
     checks: list[dict[str, Any]] = []
     for test in MICROSOFT_TESTS:
         backing = by_test.get(test.id, [])
-        # Aggregate only the controls that have evidence: a `not_run` sibling must
-        # not hide the one control that did report a result.
-        statuses = [_STATUS_TO_RESULT.get(states.get(control.id, ""), "not_run") for control in backing]
-        evidence = [status for status in statuses if status != "not_run"]
-        checks.append(
-            {
-                "check_id": test.id,
-                "title": test.title,
-                "pillar": test.pillar,
-                "severity": test.severity,
-                "status": _worst_status(evidence),
-                "category": test.category,
-                "remediation": next((steps for control in backing if (steps := _remediation_steps(control))), []),
-                "reference": "",
-            }
-        )
+        checks.append(_catalogue_check(test.id, test.title, test.pillar, test.severity, test.category, backing, states))
 
-    # A control the catalogue does not cover (or maps to an id that no longer
-    # exists upstream) must not disappear from the assessment.
+    mapped_controls = {control.id for test_id in TEST_IDS for control in by_test.get(test_id, [])}
     for control in controls:
-        if not any(test_id in TEST_IDS for test_id in control.ms_zt_tests):
+        if control.id not in mapped_controls:
             checks.append(_control_check(control, states.get(control.id)))
     return checks
+
+
+def _catalogue_check(
+    check_id: str,
+    title: str,
+    pillar: str,
+    severity: str,
+    category: str,
+    backing: list[Any],
+    states: dict[str, str],
+    fallback_remediation: list[str] | None = None,
+) -> dict[str, Any]:
+    """Score one catalogue row from the findings of the controls behind it.
+
+    Only controls that actually reported a result are aggregated: a sibling with
+    no evidence must not hide the one control that did.
+    """
+    statuses = [_STATUS_TO_RESULT.get(states.get(control.id, ""), "not_run") for control in backing]
+    evidence = [status for status in statuses if status != "not_run"]
+    return {
+        "check_id": check_id,
+        "title": title,
+        "pillar": pillar,
+        "severity": severity,
+        "status": _worst_status(evidence),
+        "category": category,
+        "remediation": next(
+            (steps for control in backing if (steps := _remediation_steps(control))),
+            fallback_remediation or [],
+        ),
+        "reference": "",
+    }
 
 
 def _control_check(control: Any, current_state: str | None) -> dict[str, Any]:
@@ -231,35 +244,51 @@ def _control_check(control: Any, current_state: str | None) -> dict[str, Any]:
 async def cloud_checks(db: AsyncSession, tenant_id: str, platform: str) -> list[dict[str, Any]]:
     """Evaluate the platform's checks against the tenant's latest findings.
 
-    Microsoft is served from the ported test catalogue; the other platforms use
-    their own control definitions. Either way the remediation text comes from the
-    control YAML, so every check carries a "what to do next".
+    Microsoft is served from the ported PowerShell catalogue; AWS, Google Cloud
+    and Google Workspace from their native Python catalogues. Either way the
+    remediation text comes from the control YAML where one backs the test, so
+    every check carries a "what to do next". A control the catalogue does not map
+    is appended under its own id so its finding is still visible.
     """
     if platform == "microsoft":
         return await _microsoft_checks(db, tenant_id)
 
     states = await _finding_states(db, tenant_id)
     services = PLATFORM_SERVICES.get(platform, (platform,))
-    checks: list[dict[str, Any]] = []
-    for control in ControlLoader().load_all():
-        if control.service not in services:
-            continue
-        current_state: str | None = states.get(control.id)
-        status = _STATUS_TO_RESULT.get(current_state or "", "not_run")
-        pillar = _control_pillar(control.compliance_mapping) or "infrastructure"
-        checks.append(
-            {
-                "check_id": control.id,
-                "title": control.title,
-                "pillar": pillar,
-                "severity": control.severity.lower(),
-                "status": status,
-                "category": control.service,
-                "remediation": _remediation_steps(control),
-                "reference": "",
-            }
+    controls = [control for control in ControlLoader().load_all() if control.service in services]
+    tests = tests_for(platform)
+
+    if not tests:
+        return [_control_check(control, states.get(control.id)) for control in controls]
+
+    by_id = {control.id: control for control in controls}
+    checks = [
+        _catalogue_check(
+            test.id,
+            test.title,
+            test.pillar,
+            test.severity,
+            test.category,
+            [by_id[cid] for cid in test.control_ids if cid in by_id],
+            states,
+            list(test.remediation),
         )
+        for test in tests
+    ]
+    mapped = {control_id for test in tests for control_id in test.control_ids}
+    checks.extend(_control_check(control, states.get(control.id)) for control in controls if control.id not in mapped)
     return checks
+
+
+def catalogue_for(platform: str) -> tuple[str, list[PlatformTest]]:
+    """Catalogue name and rows for a platform (Microsoft included)."""
+    if platform == "microsoft":
+        return "Microsoft Zero Trust Assessment", [
+            PlatformTest(test.id, test.title, test.pillar, test.category, test.severity, (), (), "") for test in MICROSOFT_TESTS
+        ]
+    from unimonitor.zerotrust.platform_tests import PLATFORM_CATALOGUE_NAMES
+
+    return PLATFORM_CATALOGUE_NAMES.get(platform, platform), list(tests_for(platform))
 
 
 async def list_runs(db: AsyncSession, tenant_id: str, limit: int = 50) -> list[ZeroTrustRun]:
@@ -284,7 +313,3 @@ async def run_checks(db: AsyncSession, run_id: str) -> list[ZeroTrustCheck]:
 def import_export(payload: Any) -> list[dict[str, Any]]:
     """Normalise an uploaded export; kept here so the API stays thin."""
     return normalise_checks(payload)
-
-
-def platform_label(source: str) -> str:
-    return _platform_name(source)
