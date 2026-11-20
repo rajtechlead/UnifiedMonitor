@@ -34,6 +34,14 @@ collectors already hold:
 - 10 new controls (AWS-009…014, GCP-009…012) map those tests to real evidence.
 - Dead code: removed `unimonitor/grc/crosswalk.py` (a second, broken crosswalk engine;
   the API uses `ControlLoader`), renamed its scoring tests to `test_scoring_rollups.py`.
+- Framework completeness: hyphenated API ids and underscored YAML keys (plus legacy
+  aliases) resolve through `grc.frameworks.FRAMEWORK_KEYS`, so Microsoft Zero Trust
+  (97), CIS M365 (82) and PCI-DSS (30) no longer listed zero controls. `/controls`,
+  `/controls/{id}` and `/controls/frameworks/{id}` were still importing a
+  non-existent `ControlLibrary`; they now read the YAML library. A regression test
+  asserts every framework lists exactly the controls mapped to it. CPCSC remains the
+  only framework with no mapped controls.
+- Docs: README development/build steps and BUILD_STATUS counts refreshed.
 
 ### Session 2026-11-18 — sign-in fix, Settings parity, SonarQube blockers
 

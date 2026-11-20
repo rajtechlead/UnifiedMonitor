@@ -38,6 +38,52 @@ async def test_framework_controls_report_state_and_evidence(client: AsyncClient,
 
 
 @pytest.mark.asyncio
+async def test_every_framework_lists_every_mapped_control(client: AsyncClient, auth_headers: dict) -> None:
+    """A framework page must never silently drop a control mapped to it."""
+    from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+    from unimonitor.grc.control_loader import controls_for_framework
+
+    coverage = await client.get("/api/v1/grc/frameworks", headers=auth_headers)
+    totals = {row["framework_id"]: row["controls_total"] for row in coverage.json()}
+
+    for framework in SUPPORTED_FRAMEWORKS:
+        expected = {control.id for control in controls_for_framework(framework["id"])}
+        response = await client.get(f"/api/v1/grc/frameworks/{framework['id']}/controls", headers=auth_headers)
+        assert response.status_code == 200, framework["id"]
+        listed = {row["external_id"] for row in response.json()}
+        assert listed == expected, f"{framework['id']} lists {len(listed)} of {len(expected)} controls"
+        assert totals[framework["id"]] == len(expected), framework["id"]
+
+    # Frameworks whose YAML key differs from their API id used to list nothing.
+    assert totals["microsoft-zero-trust"] == 97
+    assert totals["cis-m365"] == 82
+    assert totals["pci-dss-4"] == 30
+    assert totals["iso27001-2022"] == 190
+
+
+@pytest.mark.asyncio
+async def test_control_library_lists_all_controls(client: AsyncClient, auth_headers: dict) -> None:
+    """The control library endpoints read the YAML library and work end to end."""
+    from unimonitor.grc.control_loader import ControlLoader
+
+    total = len(ControlLoader().load_all())
+    listing = await client.get("/api/v1/controls", params={"page_size": 200}, headers=auth_headers)
+    assert listing.status_code == 200, listing.text
+    assert listing.json()["total"] == total
+
+    framework = await client.get("/api/v1/controls/frameworks/microsoft-zero-trust", headers=auth_headers)
+    assert framework.status_code == 200, framework.text
+    assert framework.json()["total_controls"] == 97
+
+    single = await client.get("/api/v1/controls/CTRL-AWS-001", headers=auth_headers)
+    assert single.status_code == 200, single.text
+    assert any(mapping["framework"] == "microsoft-zero-trust" for mapping in single.json()["framework_mappings"])
+
+    filtered = await client.get("/api/v1/controls", params={"framework": "pci-dss-4", "page_size": 200}, headers=auth_headers)
+    assert filtered.json()["total"] == 30
+
+
+@pytest.mark.asyncio
 async def test_unknown_framework_is_404(client: AsyncClient, auth_headers: dict) -> None:
     response = await client.get("/api/v1/grc/frameworks/not-a-framework/controls", headers=auth_headers)
     assert response.status_code == 404

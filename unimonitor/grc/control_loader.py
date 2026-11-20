@@ -44,6 +44,7 @@ class ControlDefinition:
     compliance_mapping: dict
     collector: str = ""
     data_path: str = ""
+    description: str = ""
     # Remediation ROI inputs: security impact (1–10) and effort/complexity (1–5).
     # Optional; findings fall back to the severity weight and an effort of 3.
     impact: int = 0
@@ -172,6 +173,7 @@ def _parse_list_format(ctrl: dict) -> ControlDefinition | None:
         compliance_mapping=ctrl.get("compliance_mapping", {}),
         collector=ctrl.get("collector", ""),
         data_path=ctrl.get("data_path", ""),
+        description=ctrl.get("description", "") or "",
         impact=int(ctrl.get("impact", 0) or 0),
         effort=int(ctrl.get("effort", 3) or 3),
         remediation_summary=remediation_summary,
@@ -224,6 +226,7 @@ def _parse_legacy_format(raw: dict, path: Path) -> ControlDefinition | None:
         category=service.title(),
         service=service,
         compliance_mapping=compliance,
+        description=str(metadata.get("description", "") or ""),
         _evaluate_code=eval_code,
     )
 
@@ -349,3 +352,15 @@ def _normalise(raw: dict, path: Path) -> dict:
         "compliance_mapping": compliance,
         "tags": metadata.get("tags", []),
     }
+
+
+def controls_for_framework(framework_id: str) -> list[ControlDefinition]:
+    """Every control mapped to a framework, using the canonical key aliases.
+
+    Framework pages, coverage maths and exports all call this, so the count a
+    framework advertises is always the list it renders.
+    """
+    from unimonitor.grc.frameworks import framework_keys
+
+    keys = framework_keys(framework_id)
+    return [control for control in ControlLoader().load_all() if keys & set(control.compliance_mapping)]

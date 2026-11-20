@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-18 UTC
+Last Updated: 2026-11-20 UTC
 
 ## Current Release Status
 
@@ -20,13 +20,14 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Vite | 5.4.21 |
 | PyInstaller | 6.22.3 (last Linux validation 2026-11-13) |
 
-## Backend Validation (measured 2026-11-17)
+## Backend Validation (measured 2026-11-20)
 
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 656/656 | 76s; 7 warnings (AsyncMock coroutine never awaited inside mocks) |
-| Control library | ✅ 180 controls | 21 YAML files; unique ids, valid severities, all framework keys registered |
+| Test suite | ✅ 663/663 | 138s; 8 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Control library | ✅ 190 controls | 23 YAML files; unique ids, valid severities; every framework resolves through the canonical key map and a test asserts each framework lists all of its controls |
+| Zero Trust catalogues | ✅ | Microsoft 364 upstream tests + native Python catalogues: AWS 19, GCP 15, Workspace 14; mapping and evidence-gap endpoints covered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | First-run onboarding | ✅ 45 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account; sign-in client override; certificate expiry + rotation |
 | Bundled UI | ✅ verify_bundled_ui.py | shell, hashed asset, `/setup` deep link, API precedence, 401/404 |
@@ -38,7 +39,7 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Windows installer | 🟡 PyInstaller ✅ on runner | freezes 1134 files and `--help` passes on `windows-latest`; NSIS step fixed (`makensis` PATH) and awaiting a green run |
 | Ruff check | ✅ CLEAN | 0 errors — was 157 on HEAD before this session |
 | Ruff format | ✅ CLEAN | all Python files |
-| mypy | ✅ CLEAN | 115 source files |
+| mypy | ✅ CLEAN | 122 source files |
 | SQLite validation | ✅ | in-memory SQLite for all tests |
 | PostgreSQL validation | ⬜ | not exercised this session |
 | Health endpoint | ✅ | covered by integration tests |
@@ -50,21 +51,21 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 
 | Test Type | Status | Count | Notes |
 |---|---|---|---|
-| Unit tests | ✅ PASS | 511 | across 25 files |
-| Integration tests | ✅ PASS | 101 | health, e2e journeys, dashboard, cloud, CISO, onboarding, report and SPA serving |
+| Unit tests | ✅ PASS | 511+ | across 26 files |
+| Integration tests | ✅ PASS | 122+ | health, e2e journeys, dashboard, cloud, CISO, onboarding, report, framework coverage, evidence gaps and SPA serving |
 | New this session | ✅ | +5 | `tests/integration/test_dashboard_views.py` |
 | Coverage | 🟡 62% | — | last measured at `79dfb98`; not re-measured |
 | UI / Playwright | ⬜ NOT RUN | 4 tests exist | browsers not installed here; CI job `playwright-e2e` |
 | Installer tests | ⬜ | — | Phase 5, Windows required |
 
-## Frontend Validation (measured 2026-11-16)
+## Frontend Validation (measured 2026-11-20)
 
 | Check | Status | Notes |
 |---|---|---|
 | npm ci | ✅ | clean install from lockfile |
 | ESLint | ✅ CLEAN | 0 warnings, `--max-warnings 0` |
 | TypeScript (`tsc`) | ✅ | no type errors |
-| Vite production build | ✅ | 2618 modules, 5.3s; charts chunk 452 kB (gzip 127 kB) |
+| Vite production build | ✅ | 5.2s; charts chunk 452 kB (gzip 127 kB) |
 | npm audit | ⚠️ | major-version advisories only; two majors still pending |
 | Playwright E2E smoke | ⬜ NOT RUN | CI only |
 
@@ -133,8 +134,8 @@ runtime install reports no known vulnerabilities (verified 2026-11-17).
 
 - [x] Backend Build Passes
 - [x] Frontend Build Passes
-- [x] Unit Tests Pass (481)
-- [x] Integration Tests Pass (84)
+- [x] Unit Tests Pass
+- [x] Integration Tests Pass (663 total)
 - [x] Lint Passes (ruff, format, mypy, ESLint)
 - [x] Security Scan Run (informational CVEs only)
 - [x] Docker Build Passes (CI, `1de7bcd`)

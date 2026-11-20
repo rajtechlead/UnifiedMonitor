@@ -172,11 +172,11 @@ async def framework_controls(
 
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.models.finding import Finding, FindingEvidence
-    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.control_loader import controls_for_framework
 
-    # Framework ids appear in control YAML with either dashes or underscores.
-    keys = {framework_id, framework_id.replace("-", "_")}
-    controls = [control for control in ControlLoader().load_all() if keys & set(control.compliance_mapping)]
+    # Canonical aliases: every control mapped to the framework, none dropped by a
+    # dash/underscore or legacy-key mismatch.
+    controls = controls_for_framework(framework_id)
 
     result = []
     async with async_session_factory() as session:
@@ -234,24 +234,26 @@ async def control_crosswalk(
     """Show how a control maps across all supported frameworks."""
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
     from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.frameworks import framework_id_for_key
 
     control = next((item for item in ControlLoader().load_all() if item.id == control_id), None)
     if control is None:
         raise HTTPException(status_code=404, detail=f"Control '{control_id}' not found")
 
-    names = {alias: fw["name"] for fw in SUPPORTED_FRAMEWORKS for alias in (fw["id"], fw["id"].replace("-", "_"))}
+    names = {fw["id"]: fw["name"] for fw in SUPPORTED_FRAMEWORKS}
     entries: list[CrosswalkEntry] = []
     for framework_key, references in control.compliance_mapping.items():
         if framework_key == "zero_trust":
             continue
+        framework_id = framework_id_for_key(framework_key) or framework_key.replace("_", "-")
         refs = references if isinstance(references, (list, tuple)) else [references]
         for reference in refs:
             entries.append(
                 CrosswalkEntry(
                     control_id=control.id,
                     control_name=control.title,
-                    framework_id=framework_key.replace("_", "-"),
-                    framework_name=names.get(framework_key, framework_key.replace("_", " ").title()),
+                    framework_id=framework_id,
+                    framework_name=names.get(framework_id, framework_id.replace("-", " ").title()),
                     framework_control_id=str(reference),
                     framework_control_name=control.title,
                 )

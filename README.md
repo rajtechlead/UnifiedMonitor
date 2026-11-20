@@ -89,8 +89,10 @@ See **[INSTALL.md](INSTALL.md)** for the full step-by-step guide.
 git clone https://github.com/rajtechlead/UniMonitor.git
 cd UniMonitor
 
-# 2. Install (Python 3.11+ required)
-pip install -e .
+# 2. Install (Python 3.12+ required)
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install -e ".[dev]"         # add ,production for boto3/AWS collectors
 
 # 3. Configure
 copy deploy\docker\.env.example .env
@@ -145,7 +147,7 @@ files, the database, Docker manifests, or installer assets.
 │                FastAPI + Python 3.11               │
 │  ┌──────────┐  ┌──────────┐  ┌──────────────────┐  │
 │  │ Auth/JWT │  │ Graph API│  │   GRC Engine     │  │
-│  │  (MSAL) │  │  Client  │  │ (67 controls)    │  │
+│  │  (MSAL) │  │  Client  │  │ (190 controls)   │  │
 │  └──────────┘  └──────────┘  └──────────────────┘  │
 │  ┌──────────────────────────────────────────────┐  │
 │  │          Secret Provider Abstraction         │  │
@@ -178,13 +180,46 @@ files, the database, Docker manifests, or installer assets.
 
 ## Development
 
+Python 3.12+ and Node 20+ are required. The frontend build is bundled into
+`unimonitor/static/` for the desktop/installer distribution; from source you can run
+the API and Vite dev server separately.
+
 ```bash
 git clone https://github.com/rajtechlead/UniMonitor.git
 cd UniMonitor
-pip install -e ".[dev]"
-pytest                                           # run the test suite
-UNIMONITOR_ENV=development unimonitor start --reload
+
+# Backend
+python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+pip install -e ".[dev,production]"                  # production = boto3 for AWS
+unimonitor db upgrade
+UNIMONITOR_ENV=development unimonitor start --reload # API on http://localhost:8000
+
+# Frontend (separate terminal; proxies /api to the backend)
+cd frontend
+npm ci
+npm run dev
 ```
+
+### Build and verify
+
+Run these before opening a pull request; CI runs the same commands.
+
+```bash
+# Backend checks
+ruff check unimonitor tests scripts
+ruff format --check unimonitor tests scripts
+mypy unimonitor
+pytest -q
+
+# Frontend checks
+cd frontend
+npx eslint src --max-warnings 0
+npm run build            # also refreshes unimonitor/static for a single-binary run
+```
+
+The test suite covers unit, integration and API tests and uses in-memory SQLite, so no
+external database or cloud account is needed. Live platform collection requires the
+credentials listed under [Monitored Cloud Providers](#monitored-cloud-providers).
 
 ---
 

@@ -71,6 +71,7 @@ export default function ZeroTrustMappingPage() {
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
           Every test in a platform catalogue and the UniMonitor control whose collected evidence answers it.
           A test with no control is an architecture gap; a control with no test is evidence nothing is tracking.
+          Controls are linked to their findings; the full framework lists live under Compliance.
         </p>
       </div>
 

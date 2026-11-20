@@ -84,6 +84,31 @@ SUPPORTED_FRAMEWORKS = [
 ]
 
 
+def _control_response(control: Any) -> ControlResponse:
+    """Serialise a YAML control, expanding every framework reference."""
+    from unimonitor.grc.frameworks import framework_id_for_key
+
+    mappings: list[ComplianceMapping] = []
+    for framework_key, references in control.compliance_mapping.items():
+        framework = framework_id_for_key(framework_key) or framework_key.replace("_", "-")
+        refs = references if isinstance(references, (list, tuple)) else [references]
+        mappings.extend(ComplianceMapping(framework=framework, control_id=control.id, control_name=str(reference)) for reference in refs)
+    return ControlResponse(
+        id=control.id,
+        external_id=control.id,
+        name=control.title,
+        description=control.description,
+        category=control.category,
+        service=control.service,
+        severity=control.severity.lower(),
+        is_active=True,
+        framework_mappings=mappings,
+        remediation_steps=list(control.remediation_steps),
+        references=[],
+        tags=[],
+    )
+
+
 # ── Endpoints ────────────────────────────────────────────────
 
 
@@ -100,25 +125,29 @@ async def list_controls(
     page_size: int = Query(default=50, ge=1, le=200),
 ) -> PaginatedControls:
     """List all controls with filtering and pagination."""
-    from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.control_loader import ControlLibrary
+    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.frameworks import framework_keys
 
-    async with async_session_factory() as session:
-        library = ControlLibrary(session)
-        controls, total = await library.list_controls(
-            category=category,
-            service=service,
-            severity=severity,
-            framework=framework,
-            search=search,
-            is_active=is_active,
-            page=page,
-            page_size=page_size,
-        )
+    controls = sorted(ControlLoader().load_all(), key=lambda item: item.id)
+    if category:
+        controls = [item for item in controls if item.category == category]
+    if service:
+        controls = [item for item in controls if item.service == service]
+    if severity:
+        controls = [item for item in controls if item.severity.lower() == severity.lower()]
+    if framework:
+        keys = framework_keys(framework)
+        controls = [item for item in controls if keys & set(item.compliance_mapping)]
+    if search:
+        needle = search.lower()
+        controls = [item for item in controls if needle in item.id.lower() or needle in item.title.lower() or needle in item.description.lower()]
 
+    total = len(controls)
+    start = (page - 1) * page_size
+    window = controls[start : start + page_size]
     pages = max(1, (total + page_size - 1) // page_size)
     return PaginatedControls(
-        items=[ControlResponse.model_validate(c) for c in controls],
+        items=[_control_response(item) for item in window],
         total=total,
         page=page,
         page_size=page_size,
@@ -144,12 +173,9 @@ async def get_framework(
     if not framework_info:
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
 
-    from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.control_loader import ControlLibrary
+    from unimonitor.grc.control_loader import controls_for_framework
 
-    async with async_session_factory() as session:
-        library = ControlLibrary(session)
-        controls = await library.get_controls_for_framework(framework_id)
+    controls = sorted(controls_for_framework(framework_id), key=lambda item: item.id)
 
     return FrameworkResponse(
         id=framework_info["id"],
@@ -159,13 +185,13 @@ async def get_framework(
         total_controls=len(controls),
         controls=[
             FrameworkControlSummary(
-                id=c.id,
-                external_id=c.external_id,
-                name=c.name,
-                category=c.category,
-                severity=c.severity,
+                id=control.id,
+                external_id=control.id,
+                name=control.title,
+                category=control.category,
+                severity=control.severity.lower(),
             )
-            for c in controls
+            for control in controls
         ],
     )
 
@@ -176,13 +202,10 @@ async def get_control(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> ControlResponse:
     """Get a specific control by ID."""
-    from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.control_loader import ControlLibrary
+    from unimonitor.grc.control_loader import ControlLoader
 
-    async with async_session_factory() as session:
-        library = ControlLibrary(session)
-        control = await library.get_control_by_id(control_id)
-        if not control:
-            raise HTTPException(status_code=404, detail="Control not found")
+    control = next((item for item in ControlLoader().load_all() if item.id.lower() == control_id.lower()), None)
+    if control is None:
+        raise HTTPException(status_code=404, detail="Control not found")
 
-    return ControlResponse.model_validate(control)
+    return _control_response(control)

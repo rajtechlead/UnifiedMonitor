@@ -182,6 +182,45 @@ FRAMEWORKS: dict[str, FrameworkMeta] = {
 }
 
 
+# The API and UI use hyphenated ids; control YAML uses underscored compliance keys,
+# and some frameworks have legacy aliases. Every framework lookup goes through this
+# map, so a framework can never silently list only a subset of its controls.
+FRAMEWORK_KEYS: dict[str, tuple[str, ...]] = {
+    "iso27001-2022": ("iso27001_2022", "iso_27001_2022"),
+    "iso42001": ("iso42001",),
+    "nist-csf-2": ("nist_csf_2", "nist_csf"),
+    "nist-800-53-r5": ("nist_800_53_r5", "nist_800_53"),
+    "cis-controls-v8": ("cis_controls_v8", "cis"),
+    "microsoft-zero-trust": ("zero_trust", "microsoft_zero_trust"),
+    "cis-m365": ("cis_m365_benchmark", "cis_m365"),
+    "soc2": ("soc2",),
+    "pci-dss-4": ("pci_dss_v4", "pci_dss_4", "pci_dss"),
+    "hipaa": ("hipaa",),
+    "gdpr": ("gdpr",),
+    "cpcsc": ("cpcsc", "cpcsc_2024"),
+    "cmmc-2": ("cmmc_2", "cmmc_2_0"),
+}
+
+
+def framework_keys(framework_id: str) -> set[str]:
+    """Every ``compliance_mapping`` key that belongs to a framework id."""
+    lowered = framework_id.strip().lower()
+    normalised = lowered.replace("-", "_")
+    keys = {lowered, normalised}
+    # Aliases are registered under the hyphenated id.
+    keys.update(FRAMEWORK_KEYS.get(lowered, ()) or FRAMEWORK_KEYS.get(normalised, ()))
+    return keys
+
+
+def framework_id_for_key(key: str) -> str | None:
+    """The canonical framework id for a ``compliance_mapping`` key."""
+    normalised = key.strip().lower().replace("-", "_")
+    for framework_id, aliases in FRAMEWORK_KEYS.items():
+        if normalised == framework_id.replace("-", "_") or normalised in aliases:
+            return framework_id
+    return None
+
+
 def get_framework(framework_id: str) -> FrameworkMeta | None:
     return FRAMEWORKS.get(framework_id)
 

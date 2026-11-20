@@ -2,7 +2,57 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-19 UTC
+Last Updated: 2026-11-20 UTC
+
+## Suggested roadmap — frameworks and features (2026-11-20)
+
+Derived from what comparable CSPM/GRC products support and from gaps visible in
+UniMonitor's own evidence-coverage report. Ordered by leverage, not effort.
+
+### Frameworks worth adding
+
+| Framework | Why | Note |
+|---|---|---|
+| NIS2 (EU 2022/2555) | Mandatory for EU essential/important entities; 24h/72h reporting clock | No controls yet; 10 Article 21 measures map well to existing policies |
+| DORA (EU 2025) | Financial entities and their ICT providers; third-party risk | Needs vendor/ICT register plus resilience testing evidence |
+| FedRAMP Low/Moderate/High | US federal baseline, built on NIST 800-53 which is already mapped | Mostly a crosswalk once 800-53 references are validated |
+| NIST 800-171 r3 | DoD supply chain; CMMC Level 2 basis | CMMC 2.0 is present; 800-171 adds the parent requirement set |
+| CSA CCM v4 + STAR | Cloud-specific control matrix used in vendor questionnaires | Crosswalk source for most other frameworks |
+| CISA SCuBA (M365 + Workspace) | Free, prescriptive cloud baselines auditors increasingly request | Fits the existing Microsoft/Workspace collectors almost directly |
+| CIS Foundations Benchmarks (AWS/Azure/GCP) | The de-facto CSPM rule library; far deeper than current cloud controls | Needs benchmark-rule evaluation, not just the CIS Controls framework |
+| ISO 27017 / 27018 / 27701 | Cloud security, cloud privacy, privacy extension | Extends the existing ISO 27001 mapping cheaply |
+| NIST AI RMF / ISO 42001 / EU AI Act | AI governance demand; ISO 42001 has 8 controls today | Copilot controls already exist as a starting point |
+| TISAX, Essential Eight, Cyber Essentials, CCPA/CPRA, CJIS, SWIFT CSP | Regional/sector requirement sets | Add when a target customer needs them |
+
+CPCSC is registered but has **zero mapped controls** (the only empty framework); it
+needs an official crosswalk before its page is meaningful.
+
+### Features worth building
+
+1. **CIS benchmark rule packs** per platform (AWS/Azure/GCP/M365/Workspace) with
+   pass/fail per rule and per-benchmark scores — the largest gap versus commercial CSPM.
+2. **DSPM / data classification**: discover sensitive data stores (S3/GCS/Drive/SharePoint),
+   label coverage, public-exposure paths; ties directly to the Data pillar already scored.
+3. **CIEM**: effective-permissions analysis (AWS IAM Access Analyzer findings, GCP IAM
+   recommender, Entra role assignments) with unused-permission and privilege-escalation paths.
+4. **AI-SPM**: inventory Copilot/Vertex/Azure OpenAI deployments, prompt/data exposure and
+   agent permissions; extends the existing `copilot_*` services.
+5. **Kubernetes and container posture**: CIS EKS/AKS/GKE benchmarks, admission control,
+   image signing/attestation — the catalogues already flag Binary Authorization as a gap.
+6. **Identity risk and attack paths**: join findings into graph paths (public SG → instance role →
+   sensitive bucket) instead of flat per-control lists.
+7. **Continuous evidence and auditor portal**: immutable evidence snapshots with retention,
+   control-to-evidence packages per framework, and read-only auditor accounts.
+8. **Exception workflow**: time-bound risk acceptances with owner, justification and expiry,
+   excluded from scoring only while active (suppression exists but has no lifecycle).
+9. **Posture snapshot editor**: the engine already consumes `UNIMONITOR_POSTURE_SNAPSHOT`, but
+   operators need a UI to upload/maintain the snapshot for the ~85 M365 controls with no Graph API.
+10. **Ticketing and SIEM integrations**: Jira/ServiceNow issue sync and webhook/CEF export;
+    alert delivery exists but downstream workflow does not.
+11. **CIS/benchmark trend and SLA reporting**: control-level trends, mean time to remediate by
+    severity, and scorecard export for executives (currently trend is score-only).
+12. **MSP multi-tenant rollup**: cross-tenant comparison, per-tenant branding and delegated
+    access; the data model is multi-tenant but the UI is single-tenant.
 
 ## Phase 10 — Repository merge (2026-11-18)
 

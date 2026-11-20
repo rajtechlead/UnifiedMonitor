@@ -219,7 +219,7 @@ async def compute_framework_coverage(
 
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
     from unimonitor.db.models.finding import Finding
-    from unimonitor.grc.control_loader import ControlLoader
+    from unimonitor.grc.control_loader import controls_for_framework
 
     stmt = select(Finding.external_control_id, Finding.state)
     if tenant_id:
@@ -227,14 +227,12 @@ async def compute_framework_coverage(
     rows = (await session.execute(stmt)).all()
     states: dict[str, str] = {row[0]: row[1] for row in rows}
 
-    controls = ControlLoader().load_all()
     result: dict[str, dict] = {}
     for fw in SUPPORTED_FRAMEWORKS:
         if framework_id and fw["id"] != framework_id:
             continue
-        # Framework ids are hyphenated in the API but underscored in control YAML.
-        keys = {fw["id"], fw["id"].replace("-", "_")}
-        mapped = [c for c in controls if keys & set(c.compliance_mapping)]
+        # One canonical lookup: hyphenated ids, underscored keys and legacy aliases.
+        mapped = controls_for_framework(fw["id"])
         counts = {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0}
         for ctrl in mapped:
             state = states.get(ctrl.id, FindingState.NOT_IMPLEMENTED.value)
