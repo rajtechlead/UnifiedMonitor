@@ -561,139 +561,80 @@ docker compose -f deploy/docker/docker-compose.yml down -v   # -v removes volume
 
 ## 9. Building the Windows Installer from Source Code
 
-This section explains how to reproduce the `UniMonitor-Setup-<version>-x64.exe` installer yourself.
+Pick the path that matches how much you want to do by hand.
 
-### Requirements
+### Option 1 — Let GitHub build it (no local setup)
 
-| Tool | Version | Download |
-|------|---------|----------|
-| Python | 3.11+ | https://python.org/downloads |
-| Node.js | 20 LTS | https://nodejs.org |
-| Git | any | https://git-scm.com |
-| PyInstaller | 6.15.0+ | `pip install "pyinstaller>=6.15.0"` |
-| NSIS | 3.x | https://nsis.sourceforge.io/Download |
+1. Open **Actions → Windows Installer** on the repository.
+2. Press **Run workflow**, type the version (for example `1.2.0`), press **Run**.
+3. When the run finishes, download `windows-installer-<version>` from the run's
+   **Artifacts** section. It contains the `.exe` and the portable zip.
 
-NSIS must be on your `PATH`. After installing, verify:
+Pushing a `v*.*.*` tag does the same thing automatically through the release
+workflow and attaches the installer to the GitHub Release.
 
-```cmd
-makensis /VERSION
-```
+### Option 2 — One command on Windows
 
-> **No Windows machine?** Run **Actions → Windows Installer → Run workflow**. The
-> `windows-installer.yml` job builds this same installer on `windows-latest` and attaches
-> `UniMonitor-Setup-<version>-x64.exe` plus a portable zip to the run. The `Release`
-> workflow does the same automatically on a `v*.*.*` tag.
-
-### Step-by-Step Build
-
-#### 1. Clone the repository
+Requirements: Windows 10/11 or Server 2019+, Python 3.12+, Node.js 20 LTS, and
+administrator rights once so NSIS can be installed if it is missing.
 
 ```powershell
 git clone https://github.com/rajtechlead/UniMonitor.git
 cd UniMonitor
+.\scripts\build-windows-installer.cmd
 ```
 
-#### 2. Create a build virtual environment
+(Or `powershell -ExecutionPolicy Bypass -File scripts\build-windows-installer.ps1`.)
+
+That single command does every step below: build venv, dependencies, frontend,
+icon, PyInstaller bundle, NSSM, NSIS (installing it via winget or chocolatey when
+missing), `makensis`, a `UniMonitor.exe --help` smoke test, and the portable zip.
+It stops with a non-zero exit code and a specific message if anything is missing.
+
+Outputs:
+
+| File | What it is |
+|------|------------|
+| `dist\UniMonitor-Setup-<version>-x64.exe` | The installer |
+| `dist\UniMonitor-<version>-x64-portable.zip` | Zip you can unpack and run |
+
+Options:
 
 ```powershell
-python -m venv .build-venv
-.\.build-venv\Scripts\Activate.ps1
+.\scripts\build-windows-installer.ps1 -Version 1.2.0      # override the version
+.\scripts\build-windows-installer.ps1 -SkipFrontend      # reuse unimonitor/static
+.\scripts\build-windows-installer.ps1 -SkipSmokeTest     # skip the exe smoke test
 ```
 
-#### 3. Install Python dependencies
+The version defaults to the one in `pyproject.toml`.
 
-```powershell
-pip install --upgrade pip
-pip install "pyinstaller>=6.15.0"
-pip install -e ".[all-secrets]"
-```
+### Option 3 — Step by step by hand
 
-#### 4. Build the React frontend
+Only needed when you are debugging the pipeline. These are the steps the script
+runs, in order.
 
-```powershell
-cd frontend
-npm ci                    # clean install from lockfile
-npm run build             # outputs to frontend/dist/
-cd ..
+1. `python -m venv .build-venv`, then `.\.build-venv\Scripts\Activate.ps1`.
+2. `pip install --upgrade pip` and
+   `pip install "pyinstaller>=6.16.0,<7" -e ".[production]"`.
+3. In `frontend`: `npm ci`, then `npm run build`.
+4. Copy `frontend\dist\*` into `unimonitor\static\`. NSIS also needs
+   `branding\icon.ico`; regenerate it with `python scripts/make_icon.py` if missing.
+5. `pyinstaller deploy/windows/unimonitor.spec --clean --noconfirm`
+   → `dist\UniMonitor\UniMonitor.exe`.
+6. Download NSSM 2.24, verify its hash, and copy `nssm-2.24\win64\nssm.exe`
+   into `dist\UniMonitor\`.
+7. Install NSIS 3.x and run
+   `makensis /V4 /DVERSION=1.2.0 deploy\windows\install.nsi`.
+8. Test: `dist\UniMonitor\UniMonitor.exe --help`, then
+   `dist\UniMonitor-Setup-1.2.0-x64.exe /S /D=C:\Temp\UniMonitorTest`.
 
-# Copy built assets to where FastAPI serves them
-xcopy /E /I /Y frontend\dist unimonitor\static
-```
-
-> The NSIS wizard and the executable icon come from `branding/icon.ico`, which is
-> checked in. If it is ever missing, regenerate it with `python scripts/make_icon.py`
-> — NSIS aborts the build without it.
-
-#### 5. Run PyInstaller
-
-```powershell
-pyinstaller deploy/windows/unimonitor.spec --clean --noconfirm
-```
-
-Output: `dist/UniMonitor/` — a self-contained folder with `UniMonitor.exe`.
-
-Verify it works:
-
-```powershell
-# Note: in PowerShell you must prefix with .\  to run a local exe
-.\dist\UniMonitor\UniMonitor.exe --version
-```
-
-#### 6. Download NSSM (Windows Service helper)
-
-NSSM is bundled so users can install UniMonitor as a Windows Service without extra tools:
-
-```powershell
-# Download NSSM 2.24 (stable)
-Invoke-WebRequest https://nssm.cc/release/nssm-2.24.zip -OutFile nssm.zip
-Expand-Archive nssm.zip -DestinationPath nssm_tmp
-Copy-Item nssm_tmp\nssm-2.24\win64\nssm.exe dist\UniMonitor\nssm.exe
-Remove-Item -Recurse nssm.zip, nssm_tmp
-```
-
-#### 7. Run NSIS to create the installer
-
-```powershell
-# Replace 1.0.0 with the actual version number
-makensis /V4 /DVERSION=1.0.0 deploy\windows\install.nsi
-```
-
-Output: `dist/UniMonitor-Setup-1.0.0-x64.exe`
-
-#### 8. Test the installer
-
-```powershell
-# Install silently to a temp directory (no service, no shortcuts)
-dist\UniMonitor-Setup-1.0.0-x64.exe /S /D=C:\Temp\UniMonitorTest
-
-# Verify
-C:\Temp\UniMonitorTest\UniMonitor.exe version
-
-# Uninstall silently
-C:\Temp\UniMonitorTest\Uninstall.exe /S
-```
-
-### Automated Build via GitHub Actions
-
-The release workflow (`.github/workflows/release.yml`) runs all the steps above automatically when you push a version tag:
-
-```powershell
-# Tag and push — triggers the workflow
-git tag v1.2.3
-git push origin v1.2.3
-```
-
-The workflow:
-1. Builds and pushes the Docker image to GHCR
-2. Builds `UniMonitor-Setup-<version>-x64.exe` on `windows-latest`
-3. Creates a GitHub Release and attaches the installer as a downloadable asset
-
-### Troubleshooting the Build
+### Troubleshooting the build
 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `ModuleNotFoundError` during PyInstaller | Hidden import missing | Add the module to `hiddenimports` in `deploy/windows/unimonitor.spec` |
-| `FileNotFoundError: branding/icon.ico` | Icon missing | Create `branding/icon.ico` or remove the `icon=` line from the `.spec` |
+| `FileNotFoundError: branding/icon.ico` | Icon missing | `python scripts/make_icon.py` |
+| `makensis` not recognized | NSIS missing or not on PATH | Re-run the script (it installs NSIS) or install NSIS 3.x |
 | NSIS `unable to open script` | Wrong working directory | Run `makensis` from the repo root |
 | `UniMonitor.exe` exits immediately | Missing `.env` or bad config | Check `C:\ProgramData\UniMonitor\logs\` |
 | Service won't start | Port 8000 in use | Edit `.env`: `API_PORT=8001` |

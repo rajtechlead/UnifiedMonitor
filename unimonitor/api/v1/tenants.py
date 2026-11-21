@@ -120,7 +120,7 @@ class TenantRollupResponse(BaseModel):
 # ── Endpoints ────────────────────────────────────────────────
 
 
-@router.get("", response_model=PaginatedTenants)
+@router.get("")
 async def list_tenants(
     current_user: Annotated[Any, Depends(require_role("admin"))],
     page: int = Query(default=1, ge=1),
@@ -151,7 +151,7 @@ async def list_tenants(
     )
 
 
-@router.post("", response_model=TenantResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_tenant(
     body: TenantCreate,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -182,7 +182,7 @@ async def create_tenant(
     return TenantResponse.model_validate(tenant)
 
 
-@router.get("/rollup", response_model=TenantRollupResponse)
+@router.get("/rollup")
 async def tenant_rollup(
     current_user: Annotated[Any, Depends(require_role("admin"))],
     include_coverage: bool = Query(default=True, description="Compute framework coverage per tenant"),
@@ -289,7 +289,7 @@ async def tenant_rollup(
     )
 
 
-@router.get("/{tenant_id}", response_model=TenantResponse)
+@router.get("/{tenant_id}")
 async def get_tenant(
     tenant_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -307,7 +307,7 @@ async def get_tenant(
     return TenantResponse.model_validate(tenant)
 
 
-@router.put("/{tenant_id}", response_model=TenantResponse)
+@router.put("/{tenant_id}")
 async def update_tenant(
     tenant_id: str,
     body: TenantUpdate,
@@ -352,7 +352,7 @@ async def delete_tenant(
     logger.info("tenant_deleted", tenant_id=tenant_id, by=current_user.id)
 
 
-@router.post("/{tenant_id}/test-connection", response_model=ConnectionTestResponse)
+@router.post("/{tenant_id}/test-connection")
 async def test_connection(
     tenant_id: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -429,7 +429,7 @@ async def test_connection(
         return ConnectionTestResponse(success=False, error=str(exc))
 
 
-@router.get("/{tenant_id}/health", response_model=TenantHealthResponse)
+@router.get("/{tenant_id}/health")
 async def tenant_health(
     tenant_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

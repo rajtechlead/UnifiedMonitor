@@ -56,8 +56,8 @@ SERVICE_COLLECTOR: dict[str, str] = {
 }
 
 # Data keys mix snake_case (cloud) and camelCase (Graph) spellings.
-_DATA_GET = re.compile(r"data(?:\.get\(\s*|\[\s*)[\"']([A-Za-z0-9_]+)[\"']")
-_QUOTED = re.compile(r"[\"']([A-Za-z][A-Za-z0-9_]{3,})[\"']")
+_DATA_GET = re.compile(r"data(?:\.get\(\s*|\[\s*)[\"'](\w+)[\"']")
+_QUOTED = re.compile(r"[\"']([A-Za-z]\w{3,})[\"']")
 
 
 def expected_keys(control: ControlDefinition) -> set[str]:

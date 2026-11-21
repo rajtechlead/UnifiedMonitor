@@ -9,11 +9,13 @@ type TopFinding = {
 }
 
 const LEVELS = [1, 2, 3, 4, 5]
-const cellColor = (count: number) =>
-  count === 0 ? 'var(--color-surface-2)'
-    : count <= 1 ? '#FDE68A'
-      : count <= 3 ? '#F59E0B'
-        : count <= 6 ? '#F97316' : '#EF4444'
+const cellColor = (count: number) => {
+  if (count === 0) return 'var(--color-surface-2)'
+  if (count <= 1) return '#FDE68A'
+  if (count <= 3) return '#F59E0B'
+  if (count <= 6) return '#F97316'
+  return '#EF4444'
+}
 
 export default function RiskDashboard() {
   const { data: risk, isLoading } = useQuery({

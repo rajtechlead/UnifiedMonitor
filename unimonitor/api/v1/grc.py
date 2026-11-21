@@ -97,7 +97,7 @@ class EvidenceUploadResponse(BaseModel):
 # ── Endpoints ────────────────────────────────────────────────
 
 
-@router.get("/frameworks", response_model=list[FrameworkCoverage])
+@router.get("/frameworks")
 async def list_frameworks_with_coverage(
     current_user: Annotated[Any, Depends(get_current_user)],
     tenant_id: str | None = Query(default=None),
@@ -127,7 +127,7 @@ async def list_frameworks_with_coverage(
     return result
 
 
-@router.get("/frameworks/{framework_id}/coverage", response_model=FrameworkCoverage)
+@router.get("/frameworks/{framework_id}/coverage")
 async def framework_coverage(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -261,7 +261,7 @@ async def control_crosswalk(
     return entries
 
 
-@router.get("/gap-analysis", response_model=GapAnalysisResponse)
+@router.get("/gap-analysis")
 async def gap_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
     tenant_id: str | None = Query(default=None),
@@ -325,7 +325,7 @@ async def gap_analysis(
     )
 
 
-@router.get("/risk-scoring", response_model=RiskScoringResponse)
+@router.get("/risk-scoring")
 async def risk_scoring(
     current_user: Annotated[Any, Depends(get_current_user)],
     tenant_id: str | None = Query(default=None),
@@ -355,7 +355,7 @@ async def risk_scoring(
     )
 
 
-@router.post("/evidence/{finding_id}", response_model=EvidenceUploadResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/evidence/{finding_id}", status_code=status.HTTP_201_CREATED)
 async def upload_evidence(
     finding_id: str,
     file: UploadFile = File(...),
@@ -408,7 +408,7 @@ async def upload_evidence(
     )
 
 
-@router.get("/evidence/{finding_id}", response_model=list[EvidenceResponse])
+@router.get("/evidence/{finding_id}")
 async def list_evidence(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

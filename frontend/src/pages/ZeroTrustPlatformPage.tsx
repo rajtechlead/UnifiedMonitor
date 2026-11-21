@@ -122,7 +122,7 @@ export default function ZeroTrustPlatformPage() {
         <Stat label="Failing / investigate" value={String(failing.length)} />
       </div>
 
-      {platform && platform.pillars.filter((pillar) => pillar.total > 0).length > 0 && (
+      {platform && platform.pillars.some((pillar) => pillar.total > 0) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
           {platform.pillars
             .filter((pillar) => pillar.total > 0)
@@ -211,7 +211,7 @@ export default function ZeroTrustPlatformPage() {
   )
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value }: Readonly<{ label: string; value: string }>) {
   return (
     <div style={cardStyle}>
       <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--color-text-muted)' }}>{label}</div>

@@ -66,7 +66,11 @@ type CisoResponse = {
   coverage_trend: TrendPoint[]
 }
 
-const scoreColor = (pct: number) => (pct >= 80 ? '#10B981' : pct >= 60 ? '#F59E0B' : '#EF4444')
+const scoreColor = (pct: number) => {
+  if (pct >= 80) return '#10B981'
+  if (pct >= 60) return '#F59E0B'
+  return '#EF4444'
+}
 
 const cardStyle = {
   background: 'var(--color-surface)',

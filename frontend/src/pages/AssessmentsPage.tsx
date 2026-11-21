@@ -37,14 +37,14 @@ const FRAMEWORK_LABELS: Record<string, string> = {
   hipaa: 'HIPAA', gdpr: 'GDPR', cmmc_2: 'CMMC 2.0',
 }
 
-function RunStatusIcon({ status }: { status: string }) {
+function RunStatusIcon({ status }: Readonly<{ status: string }>) {
   if (status === 'completed') return <CheckCircle size={14} color="#10B981" />
   if (status === 'failed') return <XCircle size={14} color="#EF4444" />
   if (status === 'running') return <Loader size={14} color="var(--color-brand)" />
   return <Clock size={14} color="#F59E0B" />
 }
 
-function AssessmentCard({ a }: { a: Assessment }) {
+function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
   const [expanded, setExpanded] = useState(false)
   const qc = useQueryClient()
 
@@ -57,7 +57,7 @@ function AssessmentCard({ a }: { a: Assessment }) {
   const runMutation = useMutation({
     mutationFn: () => assessmentsApi.run(a.id),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['assessments', a.id, 'runs'] })
+      void qc.invalidateQueries({ queryKey: ['assessments', a.id, 'runs'] })
     },
   })
 
@@ -194,7 +194,7 @@ export default function AssessmentsPage() {
       collectors: [],
     }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['assessments'] })
+      void qc.invalidateQueries({ queryKey: ['assessments'] })
       setShowNew(false)
       setNewName('')
     },

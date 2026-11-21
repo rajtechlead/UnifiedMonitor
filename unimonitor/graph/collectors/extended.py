@@ -367,7 +367,7 @@ async def collect_ediscovery(gc: GraphClient) -> dict[str, Any]:
 # ── Copilot Studio ─────────────────────────────────────────────────────────
 
 
-async def collect_copilot_studio(gc: GraphClient) -> dict[str, Any]:
+def collect_copilot_studio() -> dict[str, Any]:
     """Copilot Studio lives in the Power Platform admin API, not Graph.
 
     No key is emitted here on purpose; agents, DLP policies and connector usage

@@ -47,7 +47,7 @@ def _control_state(finding: Any) -> str:
     return finding.state
 
 
-@router.get("/frameworks/{framework_id}/requirements", response_model=RequirementCatalogue)
+@router.get("/frameworks/{framework_id}/requirements")
 async def framework_requirements(
     framework_id: str,
     current_user: Annotated[Any, Depends(require_compliance())],

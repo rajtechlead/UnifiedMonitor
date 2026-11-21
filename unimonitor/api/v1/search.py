@@ -31,7 +31,7 @@ class SearchResponse(BaseModel):
     hits: list[SearchHit]
 
 
-@router.get("", response_model=SearchResponse)
+@router.get("")
 async def global_search(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),

@@ -115,7 +115,7 @@ def _assessment_to_response(assessment, latest_run=None) -> AssessmentResponse:
 # ── Endpoints ────────────────────────────────────────────────
 
 
-@router.get("", response_model=PaginatedAssessments)
+@router.get("")
 async def list_assessments(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -135,7 +135,7 @@ async def list_assessments(
     return PaginatedAssessments(items=results, total=len(results))
 
 
-@router.post("", response_model=AssessmentResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_assessment(
     body: AssessmentCreate,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -158,7 +158,7 @@ async def create_assessment(
     return _assessment_to_response(assessment)
 
 
-@router.get("/{assessment_id}", response_model=AssessmentResponse)
+@router.get("/{assessment_id}")
 async def get_assessment(
     assessment_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -176,7 +176,7 @@ async def get_assessment(
     return _assessment_to_response(assessment, latest)
 
 
-@router.put("/{assessment_id}", response_model=AssessmentResponse)
+@router.put("/{assessment_id}")
 async def update_assessment(
     assessment_id: str,
     body: AssessmentUpdate,
@@ -228,7 +228,7 @@ async def delete_assessment(
     logger.info("assessment_deleted", assessment_id=assessment_id, by=current_user.id)
 
 
-@router.post("/{assessment_id}/run", response_model=TriggerRunResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{assessment_id}/run", status_code=status.HTTP_202_ACCEPTED)
 async def trigger_run(
     assessment_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -284,7 +284,7 @@ async def trigger_run(
     )
 
 
-@router.get("/{assessment_id}/runs", response_model=PaginatedRuns)
+@router.get("/{assessment_id}/runs")
 async def list_runs(
     assessment_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -306,7 +306,7 @@ async def list_runs(
     )
 
 
-@router.get("/{assessment_id}/runs/{run_id}", response_model=RunSummary)
+@router.get("/{assessment_id}/runs/{run_id}")
 async def get_run(
     assessment_id: str,
     run_id: str,

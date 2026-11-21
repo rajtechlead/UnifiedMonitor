@@ -90,7 +90,7 @@ class TicketSyncResponse(BaseModel):
 SEVERITY_ORDER = ["informational", "low", "medium", "high", "critical"]
 
 
-@router.get("", response_model=IntegrationsResponse)
+@router.get("")
 async def list_integrations(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> IntegrationsResponse:
@@ -119,7 +119,7 @@ async def _open_findings(db: Any, tenant_id: str | None, severity: str | None, l
     return list((await db.execute(stmt)).scalars().all())
 
 
-@router.post("/siem/{provider}/test", response_model=SendResponse)
+@router.post("/siem/{provider}/test")
 async def test_siem_connector(
     provider: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -134,7 +134,7 @@ async def test_siem_connector(
     return SendResponse(**receipt)
 
 
-@router.post("/siem/{provider}/send", response_model=SendResponse)
+@router.post("/siem/{provider}/send")
 async def push_to_siem(
     provider: str,
     body: SendRequest,
@@ -154,7 +154,7 @@ async def push_to_siem(
     return SendResponse(**receipt)
 
 
-@router.post("/ticketing/sync", response_model=TicketSyncResponse)
+@router.post("/ticketing/sync")
 async def sync_tickets(
     body: TicketSyncRequest,
     current_user: Annotated[Any, Depends(require_role("admin"))],

@@ -24,9 +24,10 @@
 |---|---|---|
 | Microsoft 365 tenant | Any plan | Business Premium or higher |
 | Microsoft Entra ID | Yes | With admin consent granted |
-| PostgreSQL | 14 | 16+ |
-| Redis | 6.2 | 7+ |
 | Outbound HTTPS | 443 | — |
+
+The Windows installer defaults to SQLite and needs no external database. The Docker
+and manual options use PostgreSQL 14+ (16+ recommended) and Redis 6.2+ (7+ recommended).
 
 ### Microsoft Entra ID App Registration
 Before installing, create an app registration in Entra ID:
@@ -61,41 +62,48 @@ Before installing, create an app registration in Entra ID:
 ### System Requirements
 - Windows Server 2019+ or Windows 10/11 (64-bit)
 - 4 GB RAM minimum (8 GB recommended)
-- 20 GB free disk space
-- .NET 4.8+ (for NSIS uninstaller; usually pre-installed)
-- PostgreSQL 14+ (must be installed separately before running the installer)
-- Redis 6.2+ (bundled option available, or use external Redis)
+- 2 GB free disk space (plus database growth)
+- Local Administrator rights for the installer and service setup
+- Outbound HTTPS 443 to the cloud APIs you monitor
+
+Python, Node.js, PostgreSQL and Redis are **not** required: the installer bundles a
+Python runtime and defaults to SQLite. Point `DATABASE_URL` at PostgreSQL and set
+`REDIS_URL` later if you need them.
 
 ### Installation Steps
 
-1. **Download** `UniMonitor-Setup.exe` from the [latest GitHub release](https://github.com/rajtechlead/UniMonitor/releases)
-2. **Run the installer** as Administrator
-3. Follow the Setup Wizard:
-   - Accept the licence agreement
-   - Choose install directory (default: `C:\Program Files\UniMonitor\`)
-   - Provide database connection string (PostgreSQL)
-   - Provide Redis connection string
-   - Provide Entra ID credentials (tenant ID, client ID, client secret)
-4. Click **Install**
-5. The installer will:
-   - Copy application files
-   - Create Windows Service `UniMonitorSvc`
-   - Run database migrations (`alembic upgrade head`)
-   - Start the service
-6. Click **Finish**
+1. Download `UniMonitor-Setup-<version>-x64.exe` from the
+   [latest GitHub release](https://github.com/rajtechlead/UniMonitor/releases).
+2. Right-click it and choose **Run as Administrator**.
+3. Accept the licence, pick the components (application, Windows Service,
+   shortcuts) and the install folder (default `C:\Program Files\UniMonitor`).
+4. Click **Install**. The installer copies the app, writes `.env`, registers the
+   `UniMonitor` service through NSSM and starts it.
+5. Finish, then open <http://localhost:8000/setup>. The setup wizard creates the
+   administrator account, the database and the platform connections.
 
 ### Verify Windows Service
 
 ```powershell
-Get-Service UniMonitorSvc
+Get-Service UniMonitor
 # Expected: Status Running
+sc.exe query UniMonitor
 ```
 
-### Installer Silent Mode (for GPO/SCCM deployment)
+### Silent Install (for GPO/SCCM)
 
 ```powershell
-.\UniMonitor-Setup.exe /S /DB_URL="postgresql+asyncpg://user:pass@host/db" /REDIS_URL="redis://host:6379/0" /TENANT_ID="<guid>" /CLIENT_ID="<guid>" /CLIENT_SECRET="<secret>"
+.\UniMonitor-Setup-1.2.0-x64.exe /S /D=C:\Program Files\UniMonitor
 ```
+
+Configuration is not passed on the command line; the installer writes a working
+`.env` and the setup wizard collects platform credentials in the browser.
+
+### Building the installer yourself
+
+See [INSTALL.md §9](../INSTALL.md#9-building-the-windows-installer-from-source-code).
+The short version is one command, `scripts\build-windows-installer.cmd`, or
+**Actions → Windows Installer → Run workflow** if you have no Windows machine.
 
 ---
 

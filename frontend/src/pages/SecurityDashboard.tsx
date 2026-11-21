@@ -21,7 +21,7 @@ type SeverityCounts = {
   total: number
 }
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status }: Readonly<{ status: string }>) {
   if (status === 'success') return <CheckCircle size={16} color="#10B981" />
   if (status === 'failed' || status === 'error') return <XCircle size={16} color="#EF4444" />
   return <AlertCircle size={16} color="#F59E0B" />
@@ -95,7 +95,7 @@ export default function SecurityDashboard() {
   const handleRunCollector = async (name: string) => {
     try {
       await monitoringApi.runCollector(name)
-      refetchCollectors()
+      void refetchCollectors()
     } catch {
       // best effort
     }
@@ -158,7 +158,7 @@ export default function SecurityDashboard() {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
           <div style={{ fontSize: 14, fontWeight: 600 }}>Data Collectors</div>
           <button
-            onClick={() => { refetchCollectors(); refetchHealth() }}
+            onClick={() => { void refetchCollectors(); void refetchHealth() }}
             style={{
               padding: '6px 12px', fontSize: 12, background: 'transparent',
               border: '1px solid var(--color-border)', borderRadius: 6,

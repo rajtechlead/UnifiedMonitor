@@ -32,7 +32,7 @@ function zeroTrustCaption(p: ZeroTrustScore): string {
   return `${p.passed}/${p.total} passing${seen}`
 }
 
-function ScoreGauge({ label, score, color }: { label: string; score: number; color: string }) {
+function ScoreGauge({ label, score, color }: Readonly<{ label: string; score: number; color: string }>) {
   const data = [{ value: score, fill: color }, { value: 100 - score, fill: 'var(--color-surface-2)' }]
   return (
     <div style={{
@@ -59,9 +59,9 @@ function ScoreGauge({ label, score, color }: { label: string; score: number; col
   )
 }
 
-function StatCard({ icon: Icon, label, value, sub, color }: {
+function StatCard({ icon: Icon, label, value, sub, color }: Readonly<{
   icon: React.ElementType; label: string; value: string | number; sub?: string; color: string
-}) {
+}>) {
   return (
     <div style={{
       background: 'var(--color-surface)', border: '1px solid var(--color-border)',

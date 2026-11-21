@@ -92,7 +92,7 @@ async def _tenant_for_run(run_id: str) -> str | None:
         return None
 
 
-@router.post("/generate", response_model=ReportStatusResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
 async def generate_report(
     body: ReportGenerateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -160,7 +160,7 @@ async def generate_report(
     return ReportStatusResponse(**{k: v for k, v in report_record.items() if k in ReportStatusResponse.model_fields})
 
 
-@router.get("", response_model=ReportListResponse)
+@router.get("")
 async def list_reports(
     current_user: Annotated[Any, Depends(get_current_user)],
     tenant_id: str | None = Query(default=None),
@@ -236,7 +236,7 @@ class PaginatedRunReports(BaseModel):
     page_size: int
 
 
-@router.get("/runs", response_model=PaginatedRunReports)
+@router.get("/runs")
 async def list_report_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
     tenant_id: str | None = Query(default=None),
@@ -324,7 +324,7 @@ async def list_report_runs(
         return PaginatedRunReports(items=[], total=0, page=page, page_size=page_size)
 
 
-@router.get("/{report_id}", response_model=ReportStatusResponse)
+@router.get("/{report_id}")
 async def get_report_status(
     report_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

@@ -176,10 +176,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Shutdown
     if collection_task is not None:
         collection_task.cancel()
-        try:
-            await collection_task
-        except asyncio.CancelledError:
-            raise
+        await collection_task
     from unimonitor.core.cache import close_cache
 
     await close_cache()

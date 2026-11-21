@@ -45,7 +45,7 @@ export default function UsersPage() {
     mutationFn: () => usersApi.create({ email: email.trim(), full_name: fullName.trim(), role }),
     onSuccess: () => {
       setEmail(''); setFullName(''); setRole('viewer'); setShowAdd(false); setError('')
-      refresh()
+      void refresh()
     },
     onError: (err: unknown) => {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -90,9 +90,9 @@ export default function UsersPage() {
             <Users size={18} /> Users &amp; Access
           </h1>
           <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-            Roles are stored in UniMonitor — no Entra ID changes needed. <strong>Admin</strong> = full access ·
-            <strong> Analyst</strong> = triage and assessments · <strong>Auditor</strong> = read-only compliance ·
-            <strong> Viewer</strong> = read-only.
+            Roles are stored in UniMonitor — no Entra ID changes needed.{' '}
+            <strong>Admin</strong> = full access · <strong>Analyst</strong> = triage and assessments ·{' '}
+            <strong>Auditor</strong> = read-only compliance · <strong>Viewer</strong> = read-only.
           </p>
         </div>
         <button

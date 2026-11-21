@@ -58,7 +58,7 @@ export default function CollectionPage() {
   })
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['monitoring'] })
+    void queryClient.invalidateQueries({ queryKey: ['monitoring'] })
   }
 
   const act = async (key: string, action: () => Promise<unknown>, done: string) => {

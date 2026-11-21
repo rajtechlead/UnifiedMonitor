@@ -296,7 +296,7 @@ async def _collect_copilot(gc: GraphClient) -> dict[str, Any]:
         if isinstance(r, dict):
             data.update(r)
 
-    data.update(await collect_copilot_studio(gc))
+    data.update(collect_copilot_studio())
     return data
 
 

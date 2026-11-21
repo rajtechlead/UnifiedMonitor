@@ -144,7 +144,7 @@ export default function AuditorPage() {
               </span>
             </div>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-              <input type="checkbox" checked={level1Only} onChange={(e) => setLevel1Only(e.target.checked)} />
+              <input type="checkbox" checked={level1Only} onChange={(e) => setLevel1Only(e.target.checked)} />{' '}
               Level 1 only
             </label>
           </div>

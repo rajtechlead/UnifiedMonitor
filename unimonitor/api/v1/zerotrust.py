@@ -231,7 +231,7 @@ def _check_response(check: Any) -> CheckResponse:
     )
 
 
-@router.get("/summary", response_model=SummaryResponse)
+@router.get("/summary")
 async def zerotrust_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -287,7 +287,7 @@ async def zerotrust_summary(
     )
 
 
-@router.get("/checks", response_model=list[CheckResponse])
+@router.get("/checks")
 async def zerotrust_checks(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -319,7 +319,7 @@ async def zerotrust_checks(
     return rows
 
 
-@router.get("/mapping", response_model=MappingResponse)
+@router.get("/mapping")
 async def zerotrust_mapping(
     current_user: Annotated[Any, Depends(get_current_user)],
     source: SourceLiteral = Query(default="microsoft"),
@@ -379,7 +379,7 @@ async def zerotrust_mapping(
     )
 
 
-@router.get("/evidence-gaps", response_model=GapsResponse)
+@router.get("/evidence-gaps")
 async def zerotrust_evidence_gaps(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -422,7 +422,7 @@ async def zerotrust_evidence_gaps(
     return GapsResponse(platforms=platforms, generated_at=datetime.now().astimezone())
 
 
-@router.get("/runs", response_model=list[RunResponse])
+@router.get("/runs")
 async def zerotrust_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -432,7 +432,7 @@ async def zerotrust_runs(
     return [_run_response(run) for run in await service.list_runs(db, tenant)]
 
 
-@router.post("/import", response_model=ImportResponse)
+@router.post("/import")
 async def zerotrust_import(
     body: ImportRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
@@ -477,7 +477,7 @@ async def zerotrust_import(
     return response
 
 
-@router.post("/run", response_model=ImportResponse)
+@router.post("/run")
 async def zerotrust_run_platform(
     body: RunRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
@@ -514,7 +514,7 @@ async def zerotrust_run_platform(
     return response
 
 
-@router.post("/run-all", response_model=RunAllResponse)
+@router.post("/run-all")
 async def zerotrust_run_all(
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
     db: AsyncSession = Depends(get_db),

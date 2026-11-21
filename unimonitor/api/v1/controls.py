@@ -104,7 +104,7 @@ def _control_response(control: Any) -> ControlResponse:
 # ── Endpoints ────────────────────────────────────────────────
 
 
-@router.get("", response_model=PaginatedControls)
+@router.get("")
 async def list_controls(
     current_user: Annotated[Any, Depends(get_current_user)],
     category: str | None = Query(default=None),
@@ -145,7 +145,7 @@ async def list_controls(
     )
 
 
-@router.get("/frameworks", response_model=list[dict])
+@router.get("/frameworks")
 async def list_frameworks(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> list[dict]:
@@ -153,7 +153,7 @@ async def list_frameworks(
     return SUPPORTED_FRAMEWORKS
 
 
-@router.get("/frameworks/{framework_id}", response_model=FrameworkResponse)
+@router.get("/frameworks/{framework_id}")
 async def get_framework(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -186,7 +186,7 @@ async def get_framework(
     )
 
 
-@router.get("/{control_id}", response_model=ControlResponse)
+@router.get("/{control_id}")
 async def get_control(
     control_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

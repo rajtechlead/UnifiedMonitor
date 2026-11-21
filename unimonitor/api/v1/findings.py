@@ -191,7 +191,7 @@ async def _release_expired_suppressions(db: AsyncSession) -> int:
     return int(result.rowcount or 0)
 
 
-@router.get("/summary", response_model=FindingSummaryResponse)
+@router.get("/summary")
 async def findings_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -258,7 +258,7 @@ async def export_siem(
     return Response(content="\n".join(finding_cef(row) for row in rows), media_type="text/plain")
 
 
-@router.get("", response_model=PaginatedFindings)
+@router.get("")
 async def list_findings(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -311,7 +311,7 @@ async def list_findings(
     )
 
 
-@router.get("/priority", response_model=PriorityQueueResponse)
+@router.get("/priority")
 async def priority_queue(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -368,7 +368,7 @@ async def priority_queue(
     return PriorityQueueResponse(items=items[:limit], total=total, tenant_id=tenant_id)
 
 
-@router.get("/{finding_id}", response_model=FindingResponse)
+@router.get("/{finding_id}")
 async def get_finding(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -385,7 +385,7 @@ async def get_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.patch("/{finding_id}/state", response_model=FindingResponse)
+@router.patch("/{finding_id}/state")
 async def update_finding_state(
     finding_id: str,
     body: StateUpdateRequest,
@@ -427,7 +427,7 @@ async def update_finding_state(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/{finding_id}/triage", response_model=FindingResponse)
+@router.post("/{finding_id}/triage")
 async def triage_finding(
     finding_id: str,
     body: TriageRequest,
@@ -480,7 +480,7 @@ async def triage_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.get("/{finding_id}/timeline", response_model=list[TimelineItem])
+@router.get("/{finding_id}/timeline")
 async def finding_timeline(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -513,7 +513,7 @@ async def finding_timeline(
     return timeline
 
 
-@router.post("/{finding_id}/suppress", response_model=FindingResponse)
+@router.post("/{finding_id}/suppress")
 async def suppress_finding(
     finding_id: str,
     body: SuppressRequest,
@@ -547,7 +547,7 @@ async def suppress_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/{finding_id}/unsuppress", response_model=FindingResponse)
+@router.post("/{finding_id}/unsuppress")
 async def unsuppress_finding(
     finding_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -617,7 +617,7 @@ async def trigger_ai_remediation(
         raise HTTPException(status_code=503, detail="Failed to dispatch AI remediation task") from exc
 
 
-@router.get("/{finding_id}/history", response_model=list[FindingHistoryItem])
+@router.get("/{finding_id}/history")
 async def get_finding_history(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

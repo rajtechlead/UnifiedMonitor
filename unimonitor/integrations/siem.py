@@ -27,6 +27,7 @@ from unimonitor.integrations.events import finding_cef, finding_event
 
 logger = get_logger(__name__)
 
+JSON_CONTENT_TYPE = "application/json"
 TIMEOUT_SECONDS = 10.0
 
 
@@ -168,6 +169,90 @@ def _event_payloads(events: list[dict[str, Any]], connector: Connector) -> list[
     return events
 
 
+def _datadog_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    site = settings.DATADOG_SITE or "datadoghq.com"
+    return (
+        f"https://api.{site}/api/v2/logs",
+        {"headers": {"DD-API-KEY": settings.DATADOG_API_KEY, "Content-Type": JSON_CONTENT_TYPE}, "json": payloads},
+    )
+
+
+def _splunk_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    url = settings.SPLUNK_HEC_URL.rstrip("/")
+    if not url.endswith("/services/collector/event"):
+        url = f"{url}/services/collector/event"
+    body = "".join(json.dumps({"index": settings.SPLUNK_INDEX, "sourcetype": "unimonitor:finding", "event": event}) for event in payloads)
+    return url, {
+        "headers": {"Authorization": f"Splunk {settings.SPLUNK_HEC_TOKEN}", "Content-Type": JSON_CONTENT_TYPE},
+        "content": body,
+    }
+
+
+def _elastic_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    lines: list[str] = []
+    for event in payloads:
+        lines.append(json.dumps({"index": {"_index": settings.ELASTIC_INDEX}}))
+        lines.append(json.dumps(event))
+    return (
+        f"{settings.ELASTIC_URL.rstrip('/')}/_bulk",
+        {
+            "headers": {"Authorization": f"ApiKey {settings.ELASTIC_API_KEY}", "Content-Type": "application/x-ndjson"},
+            "content": "\n".join(lines) + "\n",
+        },
+    )
+
+
+def _sentinel_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    url = (
+        f"{settings.AZURE_SENTINEL_DCR_ENDPOINT.rstrip('/')}"
+        f"/dataCollectionRules/{settings.AZURE_SENTINEL_DCR_RULE_ID}"
+        f"/streams/{settings.AZURE_SENTINEL_STREAM}?api-version=2023-01-01"
+    )
+    return url, {
+        "headers": {
+            "Authorization": f"Bearer {settings.AZURE_SENTINEL_ACCESS_TOKEN}",
+            "Content-Type": JSON_CONTENT_TYPE,
+        },
+        "json": payloads,
+    }
+
+
+def _ndjson_request(settings: Any, payloads: list[dict[str, Any]], connector: Any) -> tuple[str, dict[str, Any]]:
+    url = settings.WAZUH_INGEST_URL if connector.slug == "wazuh" else settings.SUMOLOGIC_HTTP_URL
+    return url, {
+        "headers": {"Content-Type": JSON_CONTENT_TYPE},
+        "content": "\n".join(json.dumps(event) for event in payloads),
+    }
+
+
+def _chronicle_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    return settings.CHRONICLE_INGEST_URL, {
+        "headers": {"Authorization": f"Bearer {settings.CHRONICLE_AUTH_TOKEN}", "Content-Type": JSON_CONTENT_TYPE},
+        "json": {"events": payloads},
+    }
+
+
+def _webhook_request(settings: Any, payloads: list[dict[str, Any]], _connector: Any) -> tuple[str, dict[str, Any]]:
+    headers = {"Content-Type": JSON_CONTENT_TYPE}
+    if settings.SIEM_WEBHOOK_TOKEN:
+        headers["Authorization"] = f"Bearer {settings.SIEM_WEBHOOK_TOKEN}"
+    return settings.SIEM_WEBHOOK_URL, {
+        "headers": headers,
+        "json": {"source": "unimonitor", "format": "json", "events": payloads},
+    }
+
+
+_REQUEST_BUILDERS = {
+    "datadog": _datadog_request,
+    "splunk": _splunk_request,
+    "elastic": _elastic_request,
+    "sentinel": _sentinel_request,
+    "ndjson": _ndjson_request,
+    "json": _chronicle_request,
+    "webhook": _webhook_request,
+}
+
+
 async def send_events(slug: str, events: list[dict[str, Any]]) -> dict[str, Any]:
     """Send finding events through one connector; returns a small receipt."""
     connector = get_connector(slug)
@@ -184,67 +269,13 @@ async def send_events(slug: str, events: list[dict[str, Any]]) -> dict[str, Any]
         _send_syslog(settings, events)
         return {"provider": slug, "sent": len(events)}
 
+    builder = _REQUEST_BUILDERS.get(connector.transport)
+    if builder is None:
+        raise IntegrationError(f"{connector.name} has an unsupported transport '{connector.transport}'")
+
+    url, request = builder(settings, payloads, connector)
     async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
-        if connector.transport == "datadog":
-            site = settings.DATADOG_SITE or "datadoghq.com"
-            response = await client.post(
-                f"https://api.{site}/api/v2/logs",
-                headers={"DD-API-KEY": settings.DATADOG_API_KEY, "Content-Type": "application/json"},
-                json=payloads,
-            )
-        elif connector.transport == "splunk":
-            url = settings.SPLUNK_HEC_URL.rstrip("/")
-            if not url.endswith("/services/collector/event"):
-                url = f"{url}/services/collector/event"
-            body = "".join(json.dumps({"index": settings.SPLUNK_INDEX, "sourcetype": "unimonitor:finding", "event": event}) for event in payloads)
-            response = await client.post(
-                url,
-                headers={"Authorization": f"Splunk {settings.SPLUNK_HEC_TOKEN}", "Content-Type": "application/json"},
-                content=body,
-            )
-        elif connector.transport == "elastic":
-            lines = []
-            for event in payloads:
-                lines.append(json.dumps({"index": {"_index": settings.ELASTIC_INDEX}}))
-                lines.append(json.dumps(event))
-            response = await client.post(
-                f"{settings.ELASTIC_URL.rstrip('/')}/_bulk",
-                headers={"Authorization": f"ApiKey {settings.ELASTIC_API_KEY}", "Content-Type": "application/x-ndjson"},
-                content="\n".join(lines) + "\n",
-            )
-        elif connector.transport == "sentinel":
-            url = (
-                f"{settings.AZURE_SENTINEL_DCR_ENDPOINT.rstrip('/')}"
-                f"/dataCollectionRules/{settings.AZURE_SENTINEL_DCR_RULE_ID}"
-                f"/streams/{settings.AZURE_SENTINEL_STREAM}?api-version=2023-01-01"
-            )
-            response = await client.post(
-                url,
-                headers={"Authorization": f"Bearer {settings.AZURE_SENTINEL_ACCESS_TOKEN}", "Content-Type": "application/json"},
-                json=payloads,
-            )
-        elif connector.transport == "ndjson":
-            url = settings.WAZUH_INGEST_URL if connector.slug == "wazuh" else settings.SUMOLOGIC_HTTP_URL
-            response = await client.post(
-                url,
-                headers={"Content-Type": "application/json"},
-                content="\n".join(json.dumps(event) for event in payloads),
-            )
-        elif connector.transport == "json":
-            response = await client.post(
-                settings.CHRONICLE_INGEST_URL,
-                headers={"Authorization": f"Bearer {settings.CHRONICLE_AUTH_TOKEN}", "Content-Type": "application/json"},
-                json={"events": payloads},
-            )
-        else:  # generic webhook
-            headers = {"Content-Type": "application/json"}
-            if settings.SIEM_WEBHOOK_TOKEN:
-                headers["Authorization"] = f"Bearer {settings.SIEM_WEBHOOK_TOKEN}"
-            response = await client.post(
-                settings.SIEM_WEBHOOK_URL,
-                headers=headers,
-                json={"source": "unimonitor", "format": "json", "events": payloads},
-            )
+        response = await client.post(url, **request)
 
     if response.status_code >= 400:
         detail = response.text[:300]

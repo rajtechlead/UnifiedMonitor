@@ -67,7 +67,7 @@ function remediationText(value: Finding['ai_remediation']): string {
   return JSON.stringify(value, null, 2)
 }
 
-function Timeline({ findingId }: { findingId: string }) {
+function Timeline({ findingId }: Readonly<{ findingId: string }>) {
   const { data, isLoading } = useQuery<TimelineItem[]>({
     queryKey: ['finding-timeline', findingId],
     queryFn: () => findingsApi.timeline(findingId),
@@ -147,8 +147,8 @@ export default function FindingsPage() {
   const totalPages = data?.pages || 1
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['findings'] })
-    queryClient.invalidateQueries({ queryKey: ['finding-priority'] })
+    void queryClient.invalidateQueries({ queryKey: ['findings'] })
+    void queryClient.invalidateQueries({ queryKey: ['finding-priority'] })
   }
 
   const handleTriage = async (id: string, status: string) => {
@@ -243,7 +243,7 @@ export default function FindingsPage() {
         </select>
         <select value={category} onChange={e => { setCategory(e.target.value); setPage(1) }} style={selectStyle}>
           <option value="">All Categories</option>
-          {Object.keys(summary?.by_category ?? {}).sort().map(cat => (
+          {Object.keys(summary?.by_category ?? {}).sort((a, b) => a.localeCompare(b)).map(cat => (
             <option key={cat} value={cat}>{cat}</option>
           ))}
         </select>

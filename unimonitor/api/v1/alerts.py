@@ -111,7 +111,7 @@ async def list_templates(current_user: Annotated[Any, Depends(get_current_user)]
     return [{**template, "metric_label": METRICS.get(template["metric"], template["metric"])} for template in ALERT_TEMPLATES]
 
 
-@router.get("/summary", response_model=AlertSummary)
+@router.get("/summary")
 async def alert_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -135,7 +135,7 @@ async def alert_summary(
     )
 
 
-@router.get("/policies", response_model=list[PolicyResponse])
+@router.get("/policies")
 async def list_policies(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -161,7 +161,7 @@ async def _tenant_for(db: AsyncSession, tenant_id: str | None) -> str:
     return first
 
 
-@router.post("/policies", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/policies", status_code=status.HTTP_201_CREATED)
 async def create_policy(
     body: PolicyRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -200,7 +200,7 @@ async def create_policy(
     return PolicyResponse.model_validate(policy)
 
 
-@router.post("/policies/from-template", response_model=PolicyResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/policies/from-template", status_code=status.HTTP_201_CREATED)
 async def create_policy_from_template(
     body: TemplateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -239,7 +239,7 @@ async def create_policy_from_template(
     return PolicyResponse.model_validate(policy)
 
 
-@router.put("/policies/{policy_id}", response_model=PolicyResponse)
+@router.put("/policies/{policy_id}")
 async def update_policy(
     policy_id: str,
     body: PolicyRequest,
@@ -294,7 +294,7 @@ async def evaluate_now(
     return {"tenant_id": target, "raised": len(raised), "alert_ids": [alert.id for alert in raised]}
 
 
-@router.get("", response_model=AlertPage)
+@router.get("")
 async def list_alerts(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -329,7 +329,7 @@ async def list_alerts(
     )
 
 
-@router.post("/{alert_id}/status", response_model=AlertResponse)
+@router.post("/{alert_id}/status")
 async def update_alert(
     alert_id: str,
     body: AlertUpdateRequest,

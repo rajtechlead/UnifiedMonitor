@@ -1,3 +1,23 @@
+## 2026-11-21 — installer build + SonarQube cleanup
+
+- ✅ Installer build is now one command: `scripts/build-windows-installer.cmd`
+  (PowerShell script beside it) creates the venv, installs PyInstaller and the
+  production extras, builds the frontend, regenerates the icon, freezes the app,
+  fetches NSSM with a printed SHA-256, installs NSIS via winget/choco when missing,
+  runs `makensis`, smoke-tests `UniMonitor.exe --help` and writes the portable zip.
+  INSTALL.md §9 now leads with the zero-setup GitHub Actions path and this command;
+  the manual steps are kept as debugging reference.
+- ✅ SonarQube pass: removed 85 redundant `response_model=` parameters, split the SIEM
+  transport chain into per-provider request builders (one JSON content-type constant),
+  removed duplicated literals (frameworks, platform tests, users, alembic), fixed the
+  `async`/unused-param pair in `collect_copilot_studio`, and cleared the frontend
+  floating promises, nested ternaries, sort comparators, read-only props and
+  `[object Object]` stringification reported in the CSV.
+- Remaining Sonar items are the large refactors (`S8410` Annotated dependencies,
+  `S8415` documented `responses=`, remaining `S3776` cognitive-complexity functions
+  and the remaining nested ternaries in ZeroTrust/Settings pages). They are cosmetic
+  or structural, not defects.
+
 # NEXT_ACTIONS.md
 
 Project: UnifiedMonitor

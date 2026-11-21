@@ -39,7 +39,7 @@ const FORMAT_LABELS: Record<string, string> = {
   html: 'HTML Report',
 }
 
-function StatusIcon({ status }: { status: string }) {
+function StatusIcon({ status }: Readonly<{ status: string }>) {
   if (status === 'completed') return <CheckCircle size={14} color="#10B981" />
   if (status === 'failed') return <XCircle size={14} color="#EF4444" />
   if (status === 'generating') return <Loader size={14} color="var(--color-brand)" />
@@ -68,7 +68,7 @@ export default function ReportsPage() {
   const generateMutation = useMutation({
     mutationFn: () => reportsApi.generate(selectedRunId, selectedFormats),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['reports'] })
+      void qc.invalidateQueries({ queryKey: ['reports'] })
       setShowNew(false)
       setSelectedRunId('')
     },

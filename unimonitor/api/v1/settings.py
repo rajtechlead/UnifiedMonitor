@@ -38,7 +38,7 @@ def _snapshot_path() -> Path | None:
     return Path(configured) if configured else None
 
 
-@router.get("/posture-snapshot", response_model=PostureSnapshotResponse)
+@router.get("/posture-snapshot")
 async def get_posture_snapshot(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> PostureSnapshotResponse:
@@ -51,7 +51,7 @@ async def get_posture_snapshot(
     )
 
 
-@router.put("/posture-snapshot", response_model=PostureSnapshotResponse)
+@router.put("/posture-snapshot")
 async def put_posture_snapshot(
     body: dict[str, Any],
     current_user: Annotated[Any, Depends(require_role("admin"))],

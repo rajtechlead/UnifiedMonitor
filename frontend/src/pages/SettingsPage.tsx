@@ -308,7 +308,7 @@ function PostureSnapshotEditor() {
     try {
       await api.put('/settings/posture-snapshot', parsed)
       setSaved(true)
-      refetch()
+      void refetch()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setError(detail || 'Could not save the posture snapshot.')
@@ -374,8 +374,9 @@ function IntegrationsPanel() {
     try {
       const response = await api.post(path, body)
       const sent = response.data.sent ?? response.data.created
-      setResult(`${label}: ${sent ?? 0} sent${response.data.errors ? `, ${response.data.errors} errors` : ''}`)
-      refetch()
+      const errors = response.data.errors ? `, ${response.data.errors} errors` : ''
+      setResult(`${label}: ${sent ?? 0} sent${errors}`)
+      void refetch()
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
       setResult(`${label}: ${detail || 'failed'}`)

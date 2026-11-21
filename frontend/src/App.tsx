@@ -33,7 +33,7 @@ import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthStore } from './store/authStore'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
+function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
   return <>{children}</>
@@ -43,7 +43,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  * Sends a fresh install to /setup: with no administrator and no platform connected
  * the dashboard has nothing to show. Once setup is complete the check stops running.
  */
-function SetupGate({ children }: { children: React.ReactNode }) {
+function SetupGate({ children }: Readonly<{ children: React.ReactNode }>) {
   const location = useLocation()
   const [needsSetup, setNeedsSetup] = useState<boolean | null>(null)
 
@@ -64,7 +64,7 @@ function SetupGate({ children }: { children: React.ReactNode }) {
  * RouteErrorBoundary resets the error boundary on every navigation.
  * Wrap each page-level route so a crash in one page doesn't lock the whole app.
  */
-function RouteErrorBoundary({ children }: { children: React.ReactNode }) {
+function RouteErrorBoundary({ children }: Readonly<{ children: React.ReactNode }>) {
   const location = useLocation()
   return (
     <ErrorBoundary resetKey={location.pathname}>

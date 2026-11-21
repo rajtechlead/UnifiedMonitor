@@ -26,6 +26,8 @@ class FrameworkMeta:
     mapping_note: str = ""
 
 
+_FEDRAMP_REVISION = "Rev 5"
+
 FRAMEWORKS: dict[str, FrameworkMeta] = {
     "iso27001_2022": FrameworkMeta(
         id="iso27001_2022",
@@ -69,7 +71,7 @@ FRAMEWORKS: dict[str, FrameworkMeta] = {
     "nist_800_53_r5": FrameworkMeta(
         id="nist_800_53_r5",
         name="NIST SP 800-53 Rev 5",
-        version="Rev 5",
+        version=_FEDRAMP_REVISION,
         description="Security and Privacy Controls for Information Systems and Organizations.",
         category="security",
         region="us",
@@ -217,7 +219,7 @@ _ADDITIONAL_FRAMEWORKS: list[tuple[str, str, str, str, str, str, str, int, list[
         "fedramp_low",
         "fedramp-low",
         "FedRAMP Low Baseline",
-        "Rev 5",
+        _FEDRAMP_REVISION,
         "FedRAMP authorization baseline for low-impact federal cloud systems.",
         "security",
         "us",
@@ -228,7 +230,7 @@ _ADDITIONAL_FRAMEWORKS: list[tuple[str, str, str, str, str, str, str, int, list[
         "fedramp_moderate",
         "fedramp-moderate",
         "FedRAMP Moderate Baseline",
-        "Rev 5",
+        _FEDRAMP_REVISION,
         "FedRAMP authorization baseline for moderate-impact federal cloud systems.",
         "security",
         "us",
@@ -239,7 +241,7 @@ _ADDITIONAL_FRAMEWORKS: list[tuple[str, str, str, str, str, str, str, int, list[
         "fedramp_high",
         "fedramp-high",
         "FedRAMP High Baseline",
-        "Rev 5",
+        _FEDRAMP_REVISION,
         "FedRAMP authorization baseline for high-impact federal cloud systems.",
         "security",
         "us",

@@ -18,11 +18,13 @@ from unimonitor.db.base import Base  # noqa: F401
 
 config = context.config
 
+_URL_OPTION = "sqlalchemy.url"
+
 # Override sqlalchemy.url from environment variable
 database_url = os.environ.get("DATABASE_URL", "sqlite+aiosqlite:///./unimonitor.db")
 # Alembic doesn't support async drivers for offline migrations; strip async prefix
 sync_url = database_url.replace("+asyncpg", "+psycopg2").replace("+aiosqlite", "")
-config.set_main_option("sqlalchemy.url", database_url)
+config.set_main_option(_URL_OPTION, database_url)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
@@ -32,7 +34,7 @@ target_metadata = Base.metadata
 
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode (generate SQL without DB connection)."""
-    url = config.get_main_option("sqlalchemy.url", sync_url)
+    url = config.get_main_option(_URL_OPTION, sync_url)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -52,7 +54,7 @@ def do_run_migrations(connection: Connection) -> None:
 async def run_async_migrations() -> None:
     """Run migrations with async engine."""
     configuration = config.get_section(config.config_ini_section, {})
-    configuration["sqlalchemy.url"] = database_url
+    configuration[_URL_OPTION] = database_url
     connectable = async_engine_from_config(
         configuration,
         prefix="sqlalchemy.",

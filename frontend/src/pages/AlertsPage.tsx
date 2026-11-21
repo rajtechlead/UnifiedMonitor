@@ -75,7 +75,7 @@ export default function AlertsPage() {
   })
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ['alerts'] })
+    void queryClient.invalidateQueries({ queryKey: ['alerts'] })
   }
 
   const run = async (action: () => Promise<unknown>) => {

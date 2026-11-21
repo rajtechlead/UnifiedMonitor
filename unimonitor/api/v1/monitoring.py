@@ -497,7 +497,7 @@ async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
     return response.data if isinstance(response.data, dict) else {"value": response.data}
 
 
-@router.get("/schedule", response_model=CollectionScheduleResponse)
+@router.get("/schedule")
 async def get_collection_schedule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_session),
@@ -526,7 +526,7 @@ async def get_collection_schedule(
     )
 
 
-@router.post("/collect", response_model=CollectNowResponse, status_code=status.HTTP_202_ACCEPTED)
+@router.post("/collect", status_code=status.HTTP_202_ACCEPTED)
 async def collect_now(
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: AsyncSession = Depends(get_session),
@@ -605,7 +605,7 @@ async def collect_now(
     )
 
 
-@router.get("/licensing", response_model=LicensingResponse)
+@router.get("/licensing")
 async def get_licensing(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_session),
@@ -659,7 +659,7 @@ async def get_licensing(
     )
 
 
-@router.get("/service-health", response_model=ServiceHealthResponse)
+@router.get("/service-health")
 async def get_service_health(
     current_user: Annotated[User, Depends(get_current_user)],
     db: AsyncSession = Depends(get_session),

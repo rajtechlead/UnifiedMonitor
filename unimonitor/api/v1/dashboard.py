@@ -349,7 +349,7 @@ async def _build_framework_coverage(db: AsyncSession, tenant_id: str | None) -> 
 # ── Endpoints ────────────────────────────────────────────────
 
 
-@router.get("/overview", response_model=OverviewResponse)
+@router.get("/overview")
 async def dashboard_overview(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -421,7 +421,7 @@ async def dashboard_overview(
     )
 
 
-@router.get("/executive", response_model=ExecutiveSummaryResponse)
+@router.get("/executive")
 async def dashboard_executive(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -463,7 +463,7 @@ async def dashboard_executive(
     )
 
 
-@router.get("/security", response_model=SecurityViewResponse)
+@router.get("/security")
 async def dashboard_security(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -506,7 +506,7 @@ async def dashboard_security(
     )
 
 
-@router.get("/compliance", response_model=ComplianceViewResponse)
+@router.get("/compliance")
 async def dashboard_compliance(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -524,7 +524,7 @@ async def dashboard_compliance(
     )
 
 
-@router.get("/risk", response_model=RiskViewResponse)
+@router.get("/risk")
 async def dashboard_risk(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -577,7 +577,7 @@ async def dashboard_risk(
     )
 
 
-@router.get("/soc", response_model=SocViewResponse)
+@router.get("/soc")
 async def dashboard_soc(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -598,7 +598,7 @@ async def dashboard_soc(
     )
 
 
-@router.get("/audit", response_model=AuditViewResponse)
+@router.get("/audit")
 async def dashboard_audit(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -653,7 +653,7 @@ async def dashboard_audit(
     )
 
 
-@router.get("/audit/verify", response_model=AuditChainResponse)
+@router.get("/audit/verify")
 async def verify_audit_chain(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -666,7 +666,7 @@ async def verify_audit_chain(
     return AuditChainResponse(**result)
 
 
-@router.get("/trends", response_model=TrendsResponse)
+@router.get("/trends")
 async def dashboard_trends(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -933,7 +933,7 @@ def _pillar_buckets(states: dict[str, str]) -> dict[str, dict[str, int]]:
     return buckets
 
 
-@router.get("/zero-trust", response_model=ZeroTrustResponse)
+@router.get("/zero-trust")
 async def dashboard_zero_trust(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -978,7 +978,7 @@ async def dashboard_zero_trust(
     return ZeroTrustResponse(pillars=pillars, overall_coverage_pct=overall, generated_at=datetime.now(UTC))
 
 
-@router.get("/clouds", response_model=CloudAggregateResponse)
+@router.get("/clouds")
 async def dashboard_clouds(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),
@@ -1021,7 +1021,7 @@ async def dashboard_clouds(
     )
 
 
-@router.get("/clouds/{provider_id}", response_model=CloudProviderDetailResponse)
+@router.get("/clouds/{provider_id}")
 async def dashboard_cloud_provider(
     provider_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -1148,7 +1148,7 @@ class CisoDashboardResponse(BaseModel):
     generated_at: datetime
 
 
-@router.get("/ciso", response_model=CisoDashboardResponse)
+@router.get("/ciso")
 async def dashboard_ciso(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: AsyncSession = Depends(get_db),

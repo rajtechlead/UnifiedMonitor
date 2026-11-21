@@ -30,6 +30,11 @@ type ChainCheck = {
   reason: string | null
 }
 
+const resourceLabel = (entry: AuditEntry) => {
+  if (!entry.resource_type) return '—'
+  return entry.resource_id ? `${entry.resource_type} · ${entry.resource_id.slice(0, 8)}` : entry.resource_type
+}
+
 export default function AuditPage() {
   const [source, setSource] = useState('')
   const { data: audit, isLoading } = useQuery({
@@ -43,7 +48,7 @@ export default function AuditPage() {
 
   const entries: AuditEntry[] = audit?.entries ?? []
   const cloudEvents: CloudEvent[] = audit?.cloud_events ?? []
-  const sources = Array.from(new Set(cloudEvents.map(event => event.source))).sort()
+  const sources = Array.from(new Set(cloudEvents.map(event => event.source))).sort((a, b) => a.localeCompare(b))
   const shownEvents = source ? cloudEvents.filter(event => event.source === source) : cloudEvents
 
   if (isLoading) {
@@ -193,9 +198,7 @@ export default function AuditPage() {
                   </td>
                   <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12 }}>{entry.action}</td>
                   <td style={{ padding: '10px 12px', color: 'var(--color-text-muted)' }}>
-                    {entry.resource_type
-                      ? `${entry.resource_type}${entry.resource_id ? ` · ${entry.resource_id.slice(0, 8)}` : ''}`
-                      : '—'}
+                    {resourceLabel(entry)}
                   </td>
                   <td style={{ padding: '10px 12px', color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
                     {entry.actor ?? 'system'}

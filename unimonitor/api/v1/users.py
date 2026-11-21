@@ -23,6 +23,8 @@ from unimonitor.db.session import get_db
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
+USER_NOT_FOUND = "User not found"
+
 Role = Literal["admin", "analyst", "auditor", "viewer"]
 
 
@@ -64,7 +66,7 @@ async def _active_admins(db: AsyncSession) -> int:
     return await db.scalar(select(func.count()).select_from(AppUser).where(AppUser.role == "admin", AppUser.is_active.is_(True))) or 0
 
 
-@router.get("", response_model=list[UserResponse])
+@router.get("")
 async def list_users(
     current_user: Annotated[Any, Depends(require_role("admin"))],
     db: AsyncSession = Depends(get_db),
@@ -74,7 +76,7 @@ async def list_users(
     return [_response(user) for user in users]
 
 
-@router.post("", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_user(
     body: UserCreate,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -120,7 +122,7 @@ async def create_user(
     return _response(user)
 
 
-@router.put("/{user_id}/role", response_model=UserResponse)
+@router.put("/{user_id}/role")
 async def update_role(
     user_id: str,
     body: RoleUpdate,
@@ -130,7 +132,7 @@ async def update_role(
     """Change a user's role, refusing to remove the last active administrator."""
     user = await db.get(AppUser, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     if user.role == "admin" and body.role != "admin" and await _active_admins(db) <= 1:
         raise HTTPException(status_code=409, detail="The last active administrator cannot be demoted.")
 
@@ -149,7 +151,7 @@ async def update_role(
     return _response(user)
 
 
-@router.put("/{user_id}", response_model=UserResponse)
+@router.put("/{user_id}")
 async def update_user(
     user_id: str,
     body: ActiveUpdate,
@@ -159,7 +161,7 @@ async def update_user(
     """Enable or disable sign-in for a user."""
     user = await db.get(AppUser, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     if user.id == current_user.id and not body.is_active:
         raise HTTPException(status_code=409, detail="You cannot disable your own account.")
     if user.role == "admin" and not body.is_active and await _active_admins(db) <= 1:
@@ -189,7 +191,7 @@ async def delete_user(
     """Remove access. The person's Microsoft 365 account is untouched."""
     user = await db.get(AppUser, user_id)
     if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail=USER_NOT_FOUND)
     if user.id == current_user.id:
         raise HTTPException(status_code=409, detail="You cannot remove your own account.")
     if user.role == "admin" and await _active_admins(db) <= 1:

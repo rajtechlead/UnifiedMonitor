@@ -91,7 +91,7 @@ export class ErrorBoundary extends Component<Props, State> {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-function DefaultFallback({ error, reset }: { error: Error; reset: () => void }) {
+function DefaultFallback({ error, reset }: Readonly<{ error: Error; reset: () => void }>) {
   const isDev = import.meta.env.DEV
 
   return (

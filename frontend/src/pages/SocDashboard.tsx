@@ -15,6 +15,12 @@ const SEVERITIES: Array<[keyof SeverityCounts, string, string]> = [
   ['informational', 'Informational', '#6B7280'],
 ]
 
+const formatCell = (value: unknown) => {
+  if (value == null) return '—'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
+
 export default function SocDashboard() {
   const { data: soc, isLoading } = useQuery({
     queryKey: ['dashboard', 'soc'],
@@ -126,14 +132,9 @@ export default function SocDashboard() {
             <tbody>
               {soc.incident_trend.map((row: Record<string, unknown>) => (
                 <tr key={Object.values(row).join('|')} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                  {Object.keys(soc.incident_trend[0]).map(k => {
-                    const value = row[k]
-                    return (
-                      <td key={k} style={{ padding: '10px 12px' }}>
-                        {value == null ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                      </td>
-                    )
-                  })}
+                  {Object.keys(soc.incident_trend[0]).map(k => (
+                    <td key={k} style={{ padding: '10px 12px' }}>{formatCell(row[k])}</td>
+                  ))}
                 </tr>
               ))}
             </tbody>

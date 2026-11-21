@@ -51,7 +51,7 @@ class UserProfile(BaseModel):
     is_active: bool = True
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 async def login_local(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
@@ -237,7 +237,7 @@ async def oauth_callback(
     )
 
 
-@router.post("/refresh", response_model=TokenResponse)
+@router.post("/refresh")
 async def refresh_token(
     body: RefreshRequest,
     db: AsyncSession = Depends(get_db),
@@ -306,7 +306,7 @@ async def logout(
     logger.info("user_logged_out", user_id=current_user.id)
 
 
-@router.get("/me", response_model=UserProfile)
+@router.get("/me")
 async def get_me(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> UserProfile:

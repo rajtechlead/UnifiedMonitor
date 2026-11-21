@@ -127,6 +127,28 @@ def test_windows_build_files_present(filename: str):
     assert (ROOT / "deploy" / "windows" / filename).exists()
 
 
+BUILD_SCRIPT = ROOT / "scripts" / "build-windows-installer.ps1"
+BUILD_WRAPPER = ROOT / "scripts" / "build-windows-installer.cmd"
+
+
+def test_one_command_build_script_covers_the_pipeline():
+    """The documented one-command build must actually run every packaging step."""
+    assert BUILD_SCRIPT.exists(), "scripts/build-windows-installer.ps1 missing"
+    assert BUILD_WRAPPER.exists(), "scripts/build-windows-installer.cmd missing"
+
+    script = BUILD_SCRIPT.read_text()
+    for expected in ("pyinstaller", "makensis", "nssm", "npm", "install.nsi", "icon.ico"):
+        assert expected in script, f"build script no longer handles {expected}"
+    assert "$LASTEXITCODE" in script, "the build must fail when a step fails"
+    assert "Set-StrictMode" in script
+
+
+def test_install_guide_points_at_the_one_command_build():
+    install = (ROOT / "INSTALL.md").read_text()
+    assert "build-windows-installer.cmd" in install
+    assert "build-windows-installer.ps1" in install
+
+
 def test_standalone_installer_workflow_is_dispatchable():
     workflow = yaml.safe_load(INSTALLER_WORKFLOW.read_text())
     triggers = workflow.get("on", workflow.get(True))
@@ -138,4 +160,5 @@ def test_standalone_installer_workflow_is_dispatchable():
     assert "if-no-files-found: error" in text
     assert "branding/icon.ico" in text, "workflow must fail fast when the NSIS icon is missing"
     assert "--help" in text, "workflow must smoke-test the frozen executable"
-    assert "makensis" in text and "UniMonitor-Setup-" in text
+    assert "makensis" in text
+    assert "UniMonitor-Setup-" in text
