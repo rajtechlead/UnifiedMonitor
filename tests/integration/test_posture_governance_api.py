@@ -123,3 +123,50 @@ async def test_scorecard_csv_download(client: AsyncClient, auth_headers: dict) -
 async def test_scorecard_requires_auth(client: AsyncClient) -> None:
     response = await client.get("/api/v1/reports/scorecard", params={"fmt": "csv"})
     assert response.status_code == 401
+
+
+async def test_control_snapshot_retention_prunes_only_past_the_window(db_session, tenant) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from sqlalchemy import select
+
+    from unimonitor.db.models.control_snapshot import ControlSnapshot
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.grc.control_trends import prune_control_snapshots
+
+    other = Tenant(tenant_id="other-entra-tenant", name="other")
+    db_session.add(other)
+    await db_session.flush()
+
+    now = datetime.now(UTC)
+    db_session.add_all(
+        [
+            ControlSnapshot(tenant_id=tenant.id, control_id="OLD", state="implemented", checked_at=now - timedelta(days=60)),
+            ControlSnapshot(tenant_id=tenant.id, control_id="NEW", state="implemented", checked_at=now - timedelta(days=1)),
+            ControlSnapshot(tenant_id=other.id, control_id="OTHER-OLD", state="implemented", checked_at=now - timedelta(days=60)),
+        ]
+    )
+    await db_session.flush()
+
+    removed = await prune_control_snapshots(db_session, tenant.id, 30)
+    await db_session.flush()
+
+    remaining = set(
+        (await db_session.execute(select(ControlSnapshot.control_id).where(ControlSnapshot.tenant_id.in_([tenant.id, other.id])))).scalars()
+    )
+    assert removed == 1
+    assert remaining == {"NEW", "OTHER-OLD"}, "the other tenant's history must not be pruned"
+
+
+async def test_control_snapshot_retention_zero_keeps_everything(db_session, tenant) -> None:
+    from datetime import UTC, datetime, timedelta
+
+    from unimonitor.db.models.control_snapshot import ControlSnapshot
+    from unimonitor.grc.control_trends import prune_control_snapshots
+
+    db_session.add(
+        ControlSnapshot(tenant_id=tenant.id, control_id="ANCIENT", state="implemented", checked_at=datetime.now(UTC) - timedelta(days=3650))
+    )
+    await db_session.flush()
+
+    assert await prune_control_snapshots(db_session, tenant.id, 0) == 0

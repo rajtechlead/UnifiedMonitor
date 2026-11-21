@@ -126,6 +126,9 @@ class Settings(BaseSettings):
     # assessment at this interval. Manual runs remain available in the UI.
     AUTO_COLLECTION_ENABLED: bool = True
     COLLECTION_INTERVAL_MINUTES: int = 15
+    # Control-level trend rows are pruned on every run so the table stays bounded.
+    # 0 keeps the full history (the table then grows with every collection).
+    CONTROL_SNAPSHOT_RETENTION_DAYS: int = 90
     REPORT_LOGO_PATH: str = "./branding/logo.png"
 
     # ── AI Remediation ───────────────────────────────────────

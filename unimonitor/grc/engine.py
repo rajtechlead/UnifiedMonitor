@@ -17,12 +17,14 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 from unimonitor.db.models.assessment import AssessmentRun, AssessmentStatus
 from unimonitor.db.models.control_snapshot import ControlSnapshot
 from unimonitor.db.models.finding import Finding, FindingEvidence, FindingSeverity, FindingState
 from unimonitor.graph.collector_registry import CollectorRegistry
 from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
+from unimonitor.grc.control_trends import prune_control_snapshots
 from unimonitor.grc.scoring import calculate_scores
 from unimonitor.zerotrust.coverage import expected_keys
 
@@ -141,6 +143,13 @@ class AssessmentEngine:
                         state=finding.state,
                     )
                 )
+
+            # 4c. Retention: snapshots are append-only, so prune past the window in
+            # the same transaction; otherwise the table grows with every collection.
+            retention_days = get_settings().CONTROL_SNAPSHOT_RETENTION_DAYS
+            pruned = await prune_control_snapshots(self.db, self.tenant_id, retention_days)
+            if pruned:
+                logger.info("Control snapshots pruned", extra={"rows": pruned, "retention_days": retention_days})
 
             # 5. Score the run
             scores = calculate_scores(findings)

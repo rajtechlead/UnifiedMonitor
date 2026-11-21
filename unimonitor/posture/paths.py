@@ -103,17 +103,17 @@ def _severity(identity: dict[str, Any], target: dict[str, Any]) -> tuple[str, st
     return "medium", f"access to a {target_type or 'resource'}"
 
 
-def _why(identity: dict[str, Any]) -> tuple[bool, str] | None:
-    """The first hop that makes the identity interesting, or None."""
+def _why(identity: dict[str, Any]) -> str | None:
+    """Why the identity is worth starting a path from, or None."""
     actions = actions_of(identity)
     if has_wildcard(actions):
-        return True, "wildcard permissions"
+        return "wildcard permissions"
     if is_privileged(identity):
-        return True, "administrative role"
+        return "administrative role"
     if not flag(identity, "mfa_enabled", "mfa", "strong_auth", default=False):
-        return True, "no MFA on the identity"
+        return "no MFA on the identity"
     if actions:
-        return True, "granted cloud permissions"
+        return "granted cloud permissions"
     return None
 
 
@@ -134,7 +134,7 @@ def analyse(resources: list[dict[str, Any]], edges: list[dict[str, Any]] | None 
             severity, impact = _severity(identity, target)
             target_name = resource_name(target)
             steps = (
-                f"identity {name} ({reason[1]})",
+                f"identity {name} ({reason})",
                 f"can reach {target.get('type', 'resource')} {target_name}",
                 f"impact: {impact}",
             )

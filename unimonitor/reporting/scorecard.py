@@ -27,6 +27,8 @@ CONTROL_COLUMNS = (
     "first_detected_at",
 )
 
+TABLE_STYLE = [("GRID", (0, 0), (-1, -1), 0.25, "grey"), ("BACKGROUND", (0, 0), (-1, 0), "whitesmoke")]
+
 MEDIA_TYPES = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -150,7 +152,6 @@ def to_xlsx(scorecard: dict[str, Any]) -> bytes:
 
 
 def to_pdf(scorecard: dict[str, Any]) -> bytes:
-    from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
@@ -169,7 +170,7 @@ def to_pdf(scorecard: dict[str, Any]) -> bytes:
     summary_rows.append(["---", "---"])
     summary_rows.extend([["findings " + severity, str(count)] for severity, count in scorecard["counts"].items()])
     summary_table = Table(summary_rows, hAlign="LEFT")
-    summary_table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke)]))
+    summary_table.setStyle(TableStyle(TABLE_STYLE))
     story.append(summary_table)
     story.append(Spacer(1, 16))
 
@@ -189,7 +190,7 @@ def to_pdf(scorecard: dict[str, Any]) -> bytes:
     )
     if len(framework_rows) > 1:
         table = Table(framework_rows, repeatRows=1, hAlign="LEFT")
-        table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke)]))
+        table.setStyle(TableStyle(TABLE_STYLE))
         story.extend([Paragraph("Framework coverage", styles["Heading2"]), table, Spacer(1, 16)])
 
     control_rows = [["Control", "Severity", "State", "Title"]]
@@ -201,7 +202,7 @@ def to_pdf(scorecard: dict[str, Any]) -> bytes:
         control_rows.append([row["external_control_id"], row["severity"], row["state"], row["title"][:80]])
     if len(control_rows) > 1:
         table = Table(control_rows, repeatRows=1, colWidths=[100, 60, 90, 420], hAlign="LEFT")
-        table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("BACKGROUND", (0, 0), (-1, 0), colors.whitesmoke)]))
+        table.setStyle(TableStyle(TABLE_STYLE))
         story.extend([Paragraph("Controls", styles["Heading2"]), table])
 
     document.build(story)

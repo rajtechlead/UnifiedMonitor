@@ -27,6 +27,12 @@ api.interceptors.response.use(
   }
 )
 
+/** Read the API's ``detail`` string, falling back to a caller-supplied message. */
+export function errorDetail(error: unknown, fallback: string): string {
+  const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof detail === 'string' ? detail : fallback
+}
+
 // ── API functions ────────────────────────────────────────────────────────────
 
 export const healthApi = {

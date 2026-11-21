@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Palette, Save } from 'lucide-react'
-import { api } from '../hooks/useApi'
+import { api, errorDetail } from '../hooks/useApi'
 
 type Branding = {
   portal_name: string
@@ -44,8 +44,7 @@ export default function BrandingPanel() {
       document.documentElement.style.setProperty('--color-brand', form.accent_colour)
     },
     onError: (error: unknown) => {
-      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-      setMessage(typeof detail === 'string' ? detail : 'Could not save branding.')
+      setMessage(errorDetail(error, 'Could not save branding.'))
     },
   })
 

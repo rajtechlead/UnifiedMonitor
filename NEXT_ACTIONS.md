@@ -11,6 +11,9 @@
   `control_snapshots` rows (migration 007); `GET /api/v1/grc/controls/trend` and
   `/controls/{id}/trend` return the series, transitions and improvement flag.
   One data point is reported as `insufficient_history`, never as a trend.
+  Rows are pruned in the same transaction every run
+  (`CONTROL_SNAPSHOT_RETENTION_DAYS`, default 90, `0` keeps history), scoped to
+  the running tenant so one policy cannot delete another tenant's series.
 - ✅ Scorecard export: `/api/v1/reports/scorecard?fmt=csv|xlsx|pdf` builds the file
   synchronously from stored findings and framework coverage; the Reports page
   exposes the three formats.

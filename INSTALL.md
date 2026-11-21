@@ -453,6 +453,7 @@ Collection runs on **Celery beat**: every active tenant's assessment is queued e
 ```bash
 AUTO_COLLECTION=true          # false = only on demand
 COLLECTION_INTERVAL_MINUTES=15
+CONTROL_SNAPSHOT_RETENTION_DAYS=90   # prune control-level history; 0 keeps it forever
 ```
 
 Start a beat process alongside the worker (`celery -A unimonitor.worker.celery_app beat`; the Docker

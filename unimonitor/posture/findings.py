@@ -54,13 +54,13 @@ def resource_name(resource: dict[str, Any]) -> str:
     return str(resource.get("name") or resource.get("id") or resource.get("arn") or "unnamed")
 
 
-def weighted_penalty(findings: list[dict[str, Any]]) -> int:
+def _penalty(findings: list[dict[str, Any]]) -> int:
     return sum(SEVERITY_WEIGHT.get(str(finding.get("severity", "")).lower(), 0) for finding in findings)
 
 
 def risk_score(findings: list[dict[str, Any]]) -> int:
     """0–100, where 100 means no finding was raised by this engine."""
-    return max(0, 100 - weighted_penalty(findings))
+    return max(0, 100 - _penalty(findings))
 
 
 def summarise(findings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -110,5 +110,4 @@ __all__ = [
     "risk_score",
     "sort_findings",
     "summarise",
-    "weighted_penalty",
 ]

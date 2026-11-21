@@ -440,3 +440,47 @@ class TestAssessmentEngineRun:
 
         # Fallback: all controls should run
         assert ctrl.run_evaluate.called
+
+
+class TestControlSnapshots:
+    """Every run must leave an immutable per-control row for the trend series."""
+
+    def test_run_appends_a_snapshot_per_evaluated_control(self):
+        from unimonitor.db.models.control_snapshot import ControlSnapshot
+
+        engine, db = _make_engine()
+        run = _make_run()
+        ctrls = [_make_control_def(ctrl_id="C1"), _make_control_def(ctrl_id="C2")]
+        loader = MagicMock()
+        loader.load_all.return_value = ctrls
+        registry = MagicMock()
+        registry.collect_all = AsyncMock(return_value={})
+
+        with (
+            patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
+            patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
+            patch("unimonitor.grc.engine.prune_control_snapshots", new=AsyncMock(return_value=0)) as prune,
+            patch(
+                "unimonitor.grc.engine.calculate_scores",
+                return_value={
+                    "security_score": 100.0,
+                    "compliance_score": 100.0,
+                    "risk_score": 0.0,
+                    "critical_count": 0,
+                    "high_count": 0,
+                    "medium_count": 0,
+                    "low_count": 0,
+                    "informational_count": 0,
+                },
+            ),
+        ):
+            _run(engine.run(run, frameworks=[]))
+
+        snapshots = [call.args[0] for call in db.add.call_args_list if isinstance(call.args[0], ControlSnapshot)]
+        assert {snapshot.control_id for snapshot in snapshots} == {"C1", "C2"}
+        assert all(snapshot.tenant_id == "tenant-001" for snapshot in snapshots)
+        assert all(snapshot.assessment_run_id == "run-001" for snapshot in snapshots)
+        assert all(snapshot.state == "implemented" for snapshot in snapshots)
+        # The retention hook runs in the same transaction as the inserts.
+        prune.assert_awaited_once()
+        assert prune.await_args.args[1] == "tenant-001"

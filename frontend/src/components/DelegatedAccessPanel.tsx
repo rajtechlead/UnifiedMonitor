@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Building2, Plus, Trash2 } from 'lucide-react'
-import { api } from '../hooks/useApi'
+import { api, errorDetail } from '../hooks/useApi'
 
 type Tenant = { id: string; name: string; display_name?: string | null }
 type User = { id: string; email: string; full_name?: string }
@@ -45,8 +45,7 @@ export default function DelegatedAccessPanel() {
       invalidate()
     },
     onError: (error: unknown) => {
-      const detail = (error as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
-      setMessage(typeof detail === 'string' ? detail : 'Could not grant access.')
+      setMessage(errorDetail(error, 'Could not grant access.'))
     },
   })
 
