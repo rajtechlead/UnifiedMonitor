@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { reportsApi } from '../hooks/useApi'
+import { api, reportsApi } from '../hooks/useApi'
 import { FileText, Download, Plus, CheckCircle, Clock, Loader, XCircle } from 'lucide-react'
 
 type Report = {
@@ -50,7 +50,23 @@ export default function ReportsPage() {
   const [showNew, setShowNew] = useState(false)
   const [selectedRunId, setSelectedRunId] = useState('')
   const [selectedFormats, setSelectedFormats] = useState<string[]>(['pdf', 'excel'])
+  const [scorecardMessage, setScorecardMessage] = useState('')
   const qc = useQueryClient()
+
+  const downloadScorecard = async (fmt: 'csv' | 'xlsx' | 'pdf') => {
+    try {
+      const response = await api.get('/reports/scorecard', { params: { fmt }, responseType: 'blob' })
+      const url = URL.createObjectURL(response.data as Blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `unimonitor-scorecard.${fmt}`
+      link.click()
+      URL.revokeObjectURL(url)
+      setScorecardMessage('')
+    } catch {
+      setScorecardMessage('Could not generate the scorecard.')
+    }
+  }
 
   const { data: reports, isLoading } = useQuery<{ items: Report[] }>({
     queryKey: ['reports'],
@@ -109,6 +125,25 @@ export default function ReportsPage() {
         >
           <Plus size={14} /> Generate Report
         </button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Control scorecard:</span>
+        {(['csv', 'xlsx', 'pdf'] as const).map((fmt) => (
+          <button
+            key={fmt}
+            onClick={() => void downloadScorecard(fmt)}
+            style={{
+              padding: '6px 12px', fontSize: 12, background: 'transparent',
+              border: '1px solid var(--color-border)', borderRadius: 7,
+              color: 'var(--color-text)', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}
+          >
+            <Download size={12} /> {fmt.toUpperCase()}
+          </button>
+        ))}
+        {scorecardMessage && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{scorecardMessage}</span>}
       </div>
 
       {/* Generate form */}

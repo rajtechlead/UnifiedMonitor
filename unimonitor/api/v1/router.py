@@ -16,6 +16,7 @@ from unimonitor.api.v1.integrations import router as integrations_router
 from unimonitor.api.v1.monitoring import router as monitoring_router
 from unimonitor.api.v1.notifications import router as notifications_router
 from unimonitor.api.v1.onboarding import router as onboarding_router
+from unimonitor.api.v1.posture import router as posture_router
 from unimonitor.api.v1.reports import router as reports_router
 from unimonitor.api.v1.search import router as search_router
 from unimonitor.api.v1.settings import router as settings_router
@@ -39,6 +40,7 @@ api_v1_router.include_router(audit_portal_router, prefix="/grc", tags=["Auditor 
 api_v1_router.include_router(integrations_router, prefix="/integrations", tags=["Integrations"])
 api_v1_router.include_router(monitoring_router, prefix="/monitoring", tags=["Monitoring"])
 api_v1_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
+api_v1_router.include_router(posture_router, prefix="/posture", tags=["Posture"])
 api_v1_router.include_router(onboarding_router, prefix="/onboarding", tags=["Setup"])
 api_v1_router.include_router(search_router, prefix="/search", tags=["Search"])
 api_v1_router.include_router(settings_router, prefix="/settings", tags=["Settings"])

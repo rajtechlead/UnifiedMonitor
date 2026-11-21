@@ -41,7 +41,9 @@ function AlreadyConfigured({ status, onGo }: Readonly<{ status: SetupStatus; onG
 }
 
 function StepHeader({ n, title, active, done }: Readonly<{ n: number; title: string; active: boolean; done: boolean }>) {
-  const badgeBackground = done ? '#22c55e' : active ? 'var(--color-brand)' : 'var(--color-surface-2)'
+  let badgeBackground = 'var(--color-surface-2)'
+  if (done) badgeBackground = '#22c55e'
+  else if (active) badgeBackground = 'var(--color-brand)'
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
       <div style={{

@@ -39,6 +39,12 @@ const severityColour: Record<string, string> = {
   low: '#64748B',
 }
 
+const filterLabel = (value: 'all' | 'mapped' | 'unmapped') => {
+  if (value === 'all') return 'All'
+  if (value === 'mapped') return 'Mapped'
+  return 'Unmapped'
+}
+
 export default function ZeroTrustMappingPage() {
   const [source, setSource] = useState('microsoft')
   const [filter, setFilter] = useState<'all' | 'mapped' | 'unmapped'>('all')
@@ -108,7 +114,7 @@ export default function ZeroTrustMappingPage() {
             </div>
             {(['all', 'mapped', 'unmapped'] as const).map((value) => (
               <button key={value} onClick={() => setFilter(value)} style={chip(filter === value)}>
-                {value === 'all' ? 'All' : value === 'mapped' ? 'Mapped' : 'Unmapped'}
+                {filterLabel(value)}
               </button>
             ))}
           </div>

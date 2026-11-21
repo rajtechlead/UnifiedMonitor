@@ -19,7 +19,11 @@ type ZeroTrustResponse = {
   overall_coverage_pct: number
 }
 
-const colourFor = (pct: number) => (pct >= 80 ? '#10B981' : pct >= 60 ? '#F59E0B' : '#EF4444')
+const colourFor = (pct: number) => {
+  if (pct >= 80) return '#10B981'
+  if (pct >= 60) return '#F59E0B'
+  return '#EF4444'
+}
 
 const statusCopy = {
   covered: { label: 'Covered', colour: '#10B981', Icon: ShieldCheck },

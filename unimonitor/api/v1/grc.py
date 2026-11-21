@@ -8,9 +8,11 @@ from typing import Annotated, Any
 import structlog
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -223,6 +225,47 @@ async def framework_controls(
                 }
             )
 
+    return result
+
+
+@router.get(
+    "/controls/trend",
+    responses={401: {"description": "Not authenticated"}},
+)
+async def controls_trend(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: str | None = Query(default=None),
+    days: int = Query(default=30, ge=1, le=365, description="Window in days"),
+    limit: int = Query(default=100, ge=1, le=500),
+    only_changed: bool = Query(default=False, description="Only controls whose state changed"),
+) -> dict[str, Any]:
+    """Control-level state series from the snapshots written by each run."""
+    from unimonitor.grc.control_trends import control_trends
+
+    return await control_trends(db, tenant_id, days=days, limit=limit, only_changed=only_changed)
+
+
+@router.get(
+    "/controls/{control_id}/trend",
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "No snapshots exist for this control in the window"},
+    },
+)
+async def single_control_trend(
+    control_id: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: str | None = Query(default=None),
+    days: int = Query(default=90, ge=1, le=365),
+) -> dict[str, Any]:
+    """State series for one control."""
+    from unimonitor.grc.control_trends import control_trend
+
+    result = await control_trend(db, tenant_id, control_id, days=days)
+    if not result["points"]:
+        raise HTTPException(status_code=404, detail=f"No snapshots for control '{control_id}' in the last {days} days")
     return result
 
 

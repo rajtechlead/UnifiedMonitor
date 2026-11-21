@@ -56,6 +56,13 @@ const statusColour: Record<string, string> = {
 const sourceFor = (platform?: string) =>
   ['microsoft', 'aws', 'gcp', 'google_workspace'].includes(platform ?? '') ? (platform as string) : 'microsoft'
 
+const stateBucket = (state: string | null) => {
+  if (state === 'implemented') return 'pass'
+  if (state === 'not_implemented') return 'fail'
+  if (state === 'partially_implemented') return 'warn'
+  return 'not_run'
+}
+
 export default function ZeroTrustPlatformPage() {
   const params = useParams()
   const source = sourceFor(params.platform)
@@ -192,9 +199,7 @@ export default function ZeroTrustPlatformPage() {
               <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-muted)', minWidth: 120 }}>{control.id}</span>
               <span style={{ flex: 1, fontSize: 12 }}>{control.title}</span>
               <span style={{ fontSize: 11, color: 'var(--color-text-muted)', minWidth: 190 }}>{control.collector}</span>
-              <span style={{ fontSize: 11, minWidth: 96, textAlign: 'right', color: statusColour[
-                control.state === 'implemented' ? 'pass' : control.state === 'not_implemented' ? 'fail' : control.state === 'partially_implemented' ? 'warn' : 'not_run'
-              ] }}>
+              <span style={{ fontSize: 11, minWidth: 96, textAlign: 'right', color: statusColour[stateBucket(control.state)] }}>
                 {control.has_evidence ? control.state ?? 'collected' : 'no evidence'}
               </span>
             </div>

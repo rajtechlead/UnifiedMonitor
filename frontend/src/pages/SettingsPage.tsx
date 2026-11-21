@@ -3,6 +3,8 @@ import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
 import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook } from 'lucide-react'
 import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
+import BrandingPanel from '../components/BrandingPanel'
+import DelegatedAccessPanel from '../components/DelegatedAccessPanel'
 
 const GOOGLE_SHARED = '__google_shared'
 
@@ -517,6 +519,10 @@ export default function SettingsPage() {
       <PostureSnapshotEditor />
 
       <IntegrationsPanel />
+
+      <BrandingPanel />
+
+      <DelegatedAccessPanel />
 
       {/* Tenant info */}
       {tenantData && (

@@ -1,3 +1,30 @@
+## 2026-11-21 — posture engines, control trends, scorecard, branding
+
+- ✅ Posture analysis is now a real package (`unimonitor/posture/`): CIS packs for
+  AWS/Azure/GCP/M365/Google Workspace, plus DSPM, CIEM, AI-SPM, Kubernetes and
+  identity attack-path engines over one normalised inventory. Every engine is a
+  pure function; a resource missing from the snapshot is `not_applicable`, never a
+  pass. `GET /api/v1/posture/analysis` reads `UNIMONITOR_POSTURE_SNAPSHOT`,
+  `POST /api/v1/posture/analyze` analyses a posted inventory (8 MiB cap, analyst
+  role), and `/posture` shows the results.
+- ✅ Control-level trends: every assessment run appends immutable
+  `control_snapshots` rows (migration 007); `GET /api/v1/grc/controls/trend` and
+  `/controls/{id}/trend` return the series, transitions and improvement flag.
+  One data point is reported as `insufficient_history`, never as a trend.
+- ✅ Scorecard export: `/api/v1/reports/scorecard?fmt=csv|xlsx|pdf` builds the file
+  synchronously from stored findings and framework coverage; the Reports page
+  exposes the three formats.
+- ✅ Per-tenant branding (portal name, accent colour, logo, support address in
+  `Tenant.settings_json`, validated to https/relative URLs) applied by the Layout,
+  and delegated tenant access (`tenant_access`, migration 008) with grant/revoke
+  endpoints and an admin panel. `GET /tenants/{id}/summary` is the guarded consumer.
+- ✅ Tests: posture engines, exporters, posture API, control trends and branding
+  (26 new tests).
+- Remaining Sonar items are the large mechanical refactors (`S8410` Annotated
+  dependency style, `S8415` `responses=` documentation on older endpoints, the
+  remaining `S3776` complexity functions, `S5778` exception-test shape and the
+  deprecated recharts `Cell`).
+
 ## 2026-11-21 — installer build + SonarQube cleanup
 
 - ✅ Installer build is now one command: `scripts/build-windows-installer.cmd`

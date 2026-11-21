@@ -7,7 +7,9 @@ import {
   Bell, KeyRound, RefreshCw, Search, ListChecks, Info, Users, GitBranch,
   Building2, FileSearch,
 } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
 import SearchPalette from './SearchPalette'
+import { api } from '../hooks/useApi'
 import { useAuthStore } from '../store/authStore'
 import { useThemeStore } from '../store/themeStore'
 
@@ -15,6 +17,7 @@ const NAV_ITEMS = [
   { to: '/executive', icon: LayoutDashboard, label: 'Executive' },
   { to: '/ciso', icon: ShieldAlert, label: 'CISO' },
   { to: '/clouds', icon: Cloud, label: 'Clouds' },
+  { to: '/posture', icon: ShieldAlert, label: 'Cloud Posture' },
   { to: '/zero-trust', icon: ShieldCheck, label: 'Zero Trust' },
   { to: '/zero-trust/assessment', icon: ListChecks, label: 'ZT Assessment' },
   { to: '/zero-trust/mapping', icon: GitBranch, label: 'ZT Mapping' },
@@ -41,6 +44,19 @@ export default function Layout() {
   const navigate = useNavigate()
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [searchOpen, setSearchOpen] = useState(false)
+
+  // White-label: the tenant's own name and accent colour, fetched once per session.
+  const { data: branding } = useQuery<{ portal_name: string; accent_colour: string }>({
+    queryKey: ['branding'],
+    queryFn: () => api.get('/settings/branding').then((response) => response.data),
+    staleTime: 5 * 60 * 1000,
+  })
+
+  useEffect(() => {
+    if (branding?.accent_colour) {
+      document.documentElement.style.setProperty('--color-brand', branding.accent_colour)
+    }
+  }, [branding?.accent_colour])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -89,7 +105,7 @@ export default function Layout() {
           </div>
           {sidebarOpen && (
             <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--color-brand)' }}>
-              UniMonitor
+              {branding?.portal_name || 'UniMonitor'}
             </span>
           )}
           <button

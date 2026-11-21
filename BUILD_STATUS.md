@@ -151,6 +151,7 @@ runtime install reports no known vulnerabilities (verified 2026-11-17).
 - [x] PyInstaller Build Passes (Linux 2026-11-13; packaged `--help` smoke test green on windows-latest)
 - [x] One-command installer build (`scripts/build-windows-installer.ps1`) covers venv, frontend, PyInstaller, NSSM, NSIS, smoke test and portable zip — exercised on Windows only through CI
 - [x] SonarQube cleanup pass (110+ issues: redundant `response_model`, duplicated literals, unhandled promises, nested ternaries, sort comparators, read-only props)
+- [x] Cloud posture engines (CIS, DSPM, CIEM, AI-SPM, Kubernetes, attack paths), control-level trend series, scorecard export, tenant branding and delegated access
 - [x] GitHub Actions Green (last confirmed `1de7bcd`)
 - [x] All 6 required dashboard views present
 - [ ] NSIS Build Passes (Windows environment required)

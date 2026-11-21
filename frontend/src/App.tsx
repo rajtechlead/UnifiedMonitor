@@ -28,6 +28,7 @@ import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
 import AboutPage from './pages/AboutPage'
 import MspPage from './pages/MspPage'
+import PosturePage from './pages/PosturePage'
 import AuditorPage from './pages/AuditorPage'
 import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
@@ -99,6 +100,7 @@ export default function App() {
             <Route path="zero-trust/mapping" element={<RouteErrorBoundary><ZeroTrustMappingPage /></RouteErrorBoundary>} />
             <Route path="zero-trust/platform/:platform" element={<RouteErrorBoundary><ZeroTrustPlatformPage /></RouteErrorBoundary>} />
             <Route path="clouds/:providerId" element={<RouteErrorBoundary><CloudProviderPage /></RouteErrorBoundary>} />
+            <Route path="posture" element={<RouteErrorBoundary><PosturePage /></RouteErrorBoundary>} />
             <Route path="security" element={<RouteErrorBoundary><SecurityDashboard /></RouteErrorBoundary>} />
             <Route path="compliance" element={<RouteErrorBoundary><ComplianceDashboard /></RouteErrorBoundary>} />
             <Route path="compliance/:frameworkId" element={<RouteErrorBoundary><FrameworkPage /></RouteErrorBoundary>} />

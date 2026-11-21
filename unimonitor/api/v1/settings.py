@@ -15,10 +15,13 @@ from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, ValidationError, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from unimonitor.auth.dependencies import require_role
+from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.config import get_settings
+from unimonitor.db.models.tenant import Tenant
+from unimonitor.db.session import get_db
 from unimonitor.graph.collectors.snapshot import load_snapshot
 
 logger = structlog.get_logger(__name__)
@@ -31,6 +34,94 @@ class PostureSnapshotResponse(BaseModel):
     configured: bool
     path: str
     snapshot: dict[str, Any]
+
+
+BRANDING_KEY = "branding"
+
+
+class Branding(BaseModel):
+    """Per-tenant white-label settings, stored in ``Tenant.settings_json``."""
+
+    portal_name: str = Field(default="UniMonitor", min_length=1, max_length=64)
+    accent_colour: str = Field(default="#2563EB", pattern=r"^#[0-9A-Fa-f]{6}$")
+    logo_url: str | None = Field(default=None, max_length=512)
+    support_email: str | None = Field(default=None, max_length=254)
+
+    @field_validator("logo_url")
+    @classmethod
+    def _safe_logo(cls, value: str | None) -> str | None:
+        """Only https or site-relative URLs — never a javascript:/data: URL."""
+        if value and not (value.startswith("https://") or value.startswith("/")):
+            raise ValueError("logo_url must be an https:// URL or a site-relative path")
+        return value
+
+    @field_validator("support_email")
+    @classmethod
+    def _email_shape(cls, value: str | None) -> str | None:
+        if value and ("@" not in value or any(char.isspace() for char in value)):
+            raise ValueError("support_email must be an email address")
+        return value
+
+
+def _tenant_settings(tenant: Tenant) -> dict[str, Any]:
+    try:
+        data = json.loads(tenant.settings_json or "{}")
+    except ValueError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _branding_from(tenant: Tenant | None) -> Branding:
+    if tenant is None:
+        return Branding()
+    raw = _tenant_settings(tenant).get(BRANDING_KEY)
+    if not isinstance(raw, dict):
+        return Branding()
+    try:
+        return Branding(**raw)
+    except ValidationError:
+        # A hand-edited settings blob must not break every page that renders the brand.
+        logger.warning("branding_invalid", tenant_id=tenant.id)
+        return Branding()
+
+
+@router.get("/branding", responses={401: {"description": "Not authenticated"}})
+async def get_branding(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Branding:
+    """The caller's tenant branding (defaults when nothing is configured)."""
+    tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
+    return _branding_from(tenant)
+
+
+@router.put(
+    "/branding",
+    responses={
+        400: {"description": "The user has no tenant to brand"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Tenant not found"},
+        422: {"description": "Invalid branding value"},
+    },
+)
+async def put_branding(
+    body: Branding,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> Branding:
+    """Update portal name, accent colour, logo and support address for the tenant."""
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=400, detail="This account is not attached to a tenant")
+    tenant = await db.get(Tenant, current_user.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    settings = _tenant_settings(tenant)
+    settings[BRANDING_KEY] = body.model_dump()
+    tenant.settings_json = json.dumps(settings, sort_keys=True)
+    await db.flush()
+    logger.info("branding_updated", tenant_id=tenant.id, by=current_user.id)
+    return body
 
 
 def _snapshot_path() -> Path | None:

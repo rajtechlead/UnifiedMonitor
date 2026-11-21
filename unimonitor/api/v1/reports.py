@@ -9,10 +9,12 @@ from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -90,6 +92,40 @@ async def _tenant_for_run(run_id: str) -> str | None:
     except Exception as exc:  # noqa: BLE001 - DB down means we cannot resolve the run
         logger.warning("report_run_lookup_failed", run_id=run_id, error=str(exc))
         return None
+
+
+ScorecardFormat = Literal["csv", "xlsx", "pdf"]
+
+
+@router.get(
+    "/scorecard",
+    responses={
+        400: {"description": "Unsupported scorecard format"},
+        401: {"description": "Not authenticated"},
+    },
+)
+async def download_scorecard(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    fmt: ScorecardFormat = Query(default="xlsx", description="csv, xlsx or pdf"),
+    tenant_id: str | None = Query(default=None),
+    run_id: str | None = Query(default=None),
+) -> Response:
+    """Download the control-level scorecard as a file.
+
+    Generated synchronously from stored findings and framework coverage; a run id
+    narrows the scorecard to one assessment, otherwise the current state is used.
+    """
+    from unimonitor.reporting.scorecard import export, gather
+
+    scorecard = await gather(db, tenant_id=tenant_id, run_id=run_id)
+    content, media_type, filename = export(scorecard, fmt)
+    logger.info("scorecard_exported", fmt=fmt, tenant_id=tenant_id, run_id=run_id, by=current_user.id)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.post("/generate", status_code=status.HTTP_202_ACCEPTED)

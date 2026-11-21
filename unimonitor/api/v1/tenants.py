@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -98,6 +98,33 @@ class TenantRollupRow(BaseModel):
     weakest_framework_id: str | None = None
     weakest_framework_name: str | None = None
     weakest_framework_pct: float | None = None
+
+
+class TenantAccessGrant(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=36)
+    role: Literal["viewer", "analyst", "auditor"] = "viewer"
+
+
+class TenantAccessRow(BaseModel):
+    user_id: str
+    email: str
+    full_name: str = ""
+    role: str
+    granted_by: str | None = None
+    created_at: datetime | None = None
+
+
+class TenantSummary(BaseModel):
+    tenant_id: str
+    name: str
+    display_name: str | None = None
+    is_active: bool
+    security_score: float | None = None
+    compliance_score: float | None = None
+    risk_score: float | None = None
+    open_findings: int = 0
+    by_severity: dict[str, int] = {}
+    last_collection_at: datetime | None = None
 
 
 class TenantRollupTotals(BaseModel):
@@ -286,6 +313,186 @@ async def tenant_rollup(
             collection_failures=sum(1 for row in rows if row.last_collection_status == "failed"),
         ),
         generated_at=datetime.now(UTC),
+    )
+
+
+async def _has_tenant_access(session: Any, user: Any, tenant_id: str) -> bool:
+    """A user reaches a tenant through their home tenant, a grant, or the admin role."""
+    from sqlalchemy import select
+
+    from unimonitor.db.models.tenant_access import TenantAccess
+
+    if getattr(user, "role", "") == "admin":
+        return True
+    if getattr(user, "tenant_id", None) == tenant_id:
+        return True
+    granted = await session.execute(select(TenantAccess.id).where(TenantAccess.user_id == user.id, TenantAccess.tenant_id == tenant_id))
+    return granted.scalar_one_or_none() is not None
+
+
+@router.get(
+    "/{tenant_id}/access",
+    responses={401: {"description": "Not authenticated"}, 403: {"description": "Administrator role required"}},
+)
+async def list_tenant_access(
+    tenant_id: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> list[TenantAccessRow]:
+    """Grants on one tenant (home-tenant membership is not repeated here)."""
+    from sqlalchemy import select
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.tenant_access import TenantAccess
+    from unimonitor.db.models.user import AppUser
+
+    async with async_session_factory() as session:
+        rows = (
+            await session.execute(
+                select(TenantAccess, AppUser).join(AppUser, AppUser.id == TenantAccess.user_id).where(TenantAccess.tenant_id == tenant_id)
+            )
+        ).all()
+    return [
+        TenantAccessRow(
+            user_id=access.user_id,
+            email=user.email,
+            full_name=user.full_name,
+            role=access.role,
+            granted_by=access.granted_by,
+            created_at=access.created_at,
+        )
+        for access, user in rows
+    ]
+
+
+@router.post(
+    "/{tenant_id}/access",
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"description": "The user already has this tenant as their home tenant"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Tenant or user not found"},
+        409: {"description": "The grant already exists"},
+    },
+)
+async def grant_tenant_access(
+    tenant_id: str,
+    body: TenantAccessGrant,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> TenantAccessRow:
+    """Grant one user a tenant-scoped role."""
+    from sqlalchemy import select
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.db.models.tenant_access import TenantAccess
+    from unimonitor.db.models.user import AppUser
+
+    async with async_session_factory() as session:
+        tenant = await session.get(Tenant, tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        user = await session.get(AppUser, body.user_id)
+        if user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        if user.tenant_id == tenant_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This user already belongs to the tenant")
+        existing = (
+            await session.execute(select(TenantAccess.id).where(TenantAccess.user_id == user.id, TenantAccess.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if existing:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The user already has access to this tenant")
+
+        access = TenantAccess(user_id=user.id, tenant_id=tenant_id, role=body.role, granted_by=current_user.id)
+        session.add(access)
+        await session.commit()
+        logger.info("tenant_access_granted", tenant_id=tenant_id, user_id=user.id, role=body.role, by=current_user.id)
+        return TenantAccessRow(
+            user_id=user.id,
+            email=user.email,
+            full_name=user.full_name,
+            role=access.role,
+            granted_by=access.granted_by,
+            created_at=access.created_at,
+        )
+
+
+@router.delete(
+    "/{tenant_id}/access/{user_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        401: {"description": "Not authenticated"},
+        404: {"description": "No such grant"},
+    },
+)
+async def revoke_tenant_access(
+    tenant_id: str,
+    user_id: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> None:
+    """Revoke a delegated grant; the user's home tenant is unaffected."""
+    from sqlalchemy import select
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.tenant_access import TenantAccess
+
+    async with async_session_factory() as session:
+        grant = (
+            await session.execute(select(TenantAccess).where(TenantAccess.user_id == user_id, TenantAccess.tenant_id == tenant_id))
+        ).scalar_one_or_none()
+        if grant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such grant")
+        await session.delete(grant)
+        await session.commit()
+    logger.info("tenant_access_revoked", tenant_id=tenant_id, user_id=user_id, by=current_user.id)
+
+
+@router.get(
+    "/{tenant_id}/summary",
+    responses={
+        401: {"description": "Not authenticated"},
+        403: {"description": "No access to this tenant"},
+        404: {"description": "Tenant not found"},
+    },
+)
+async def tenant_summary(
+    tenant_id: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+) -> TenantSummary:
+    """A compact, access-checked summary — the consumer of delegated access."""
+    from sqlalchemy import func, select
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.db.repositories.assessment_repo import AssessmentRepository
+
+    async with async_session_factory() as session:
+        if not await _has_tenant_access(session, current_user, tenant_id):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this tenant")
+        tenant = await session.get(Tenant, tenant_id)
+        if tenant is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+        severity_rows = (
+            await session.execute(
+                select(Finding.severity, func.count(Finding.id))
+                .where(Finding.tenant_id == tenant_id, Finding.is_suppressed.is_(False))
+                .group_by(Finding.severity)
+            )
+        ).all()
+        latest = await AssessmentRepository(session).get_latest_completed_run(tenant_id=tenant_id)
+
+    by_severity = {str(severity): int(count) for severity, count in severity_rows}
+    return TenantSummary(
+        tenant_id=tenant.id,
+        name=tenant.name,
+        display_name=tenant.display_name,
+        is_active=tenant.is_active,
+        security_score=latest.security_score if latest else None,
+        compliance_score=latest.compliance_score if latest else None,
+        risk_score=latest.risk_score if latest else None,
+        open_findings=sum(by_severity.values()),
+        by_severity=by_severity,
+        last_collection_at=tenant.last_collection_at,
     )
 
 

@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.core.logging import get_logger
 from unimonitor.db.models.assessment import AssessmentRun, AssessmentStatus
+from unimonitor.db.models.control_snapshot import ControlSnapshot
 from unimonitor.db.models.finding import Finding, FindingEvidence, FindingSeverity, FindingState
 from unimonitor.graph.collector_registry import CollectorRegistry
 from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
@@ -125,6 +126,21 @@ class AssessmentEngine:
             for finding in findings:
                 self.db.add(finding)
             await self.db.flush()
+
+            # 4b. Append the immutable per-control state used by the trend series.
+            # Findings are overwritten in place on later runs, so without this the
+            # history of a control cannot be reconstructed.
+            for finding in findings:
+                self.db.add(
+                    ControlSnapshot(
+                        tenant_id=self.tenant_id,
+                        assessment_run_id=run.id,
+                        control_id=finding.control_id or finding.external_control_id,
+                        external_control_id=finding.external_control_id,
+                        severity=finding.severity,
+                        state=finding.state,
+                    )
+                )
 
             # 5. Score the run
             scores = calculate_scores(findings)
