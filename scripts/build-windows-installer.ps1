@@ -110,7 +110,7 @@ try {
     Step "Installing Python dependencies"
     Invoke-Checked $VenvPython @("-m", "pip", "install", "--upgrade", "pip", "--quiet")
     Invoke-Checked $VenvPython @(
-        "install", "--quiet",
+        "-m", "pip", "install", "--quiet",
         "pyinstaller>=6.16.0,<7",
         "-e", ".[production]"
     )

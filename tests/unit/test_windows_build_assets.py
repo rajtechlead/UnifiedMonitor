@@ -157,6 +157,29 @@ def test_build_script_parses_on_windows_powershell_5_1():
     assert b"\r\n" not in body, "use LF; 5.1 handles both, but mixed endings hide parse errors"
 
 
+def test_every_python_step_runs_a_module():
+    """`python install ...` passes "install" to the interpreter, not to pip.
+
+    That is how the dependency step failed: the argument list lost its "-m pip",
+    so Python tried to open a file called `install` and exited with code 2.
+    """
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    invocations = script.split("Invoke-Checked $VenvPython @(")[1:]
+    assert invocations, "build script no longer runs Python steps"
+    for block in invocations:
+        first = block.split('"')
+        assert len(first) > 1, f"malformed Python invocation: {block[:60]!r}"
+        target = first[1]
+        # Either run a module (-m <name>) or a script file; never a bare verb.
+        assert target == "-m" or target.endswith(".py"), f"Python step must run a module or a script: {block[:60]!r}"
+
+
+def test_dependency_install_goes_through_pip():
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    assert '"-m", "pip", "install"' in script, "dependencies must be installed with python -m pip"
+    assert '".[production]"' in script, "the build venv needs the production extras"
+
+
 def test_install_guide_points_at_the_one_command_build():
     install = (ROOT / "INSTALL.md").read_text()
     assert "build-windows-installer.cmd" in install
