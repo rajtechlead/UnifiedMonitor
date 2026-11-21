@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 
 from unimonitor.core.logging import get_logger
 from unimonitor.secrets.provider import HealthStatus, ProviderType
@@ -60,7 +60,7 @@ async def check_all_providers(
 
     report = AggregatedHealthReport(
         statuses=list(statuses),
-        checked_at=datetime.utcnow(),
+        checked_at=datetime.now(UTC),
         all_healthy=all_healthy,
         primary_healthy=primary_healthy,
     )

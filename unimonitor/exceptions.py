@@ -114,7 +114,7 @@ class DatabaseError(UniMonitorError):
 
 
 async def unimonitor_exception_handler(
-    request: Request,
+    _request: Request,
     exc: UniMonitorError,
 ) -> JSONResponse:
     return JSONResponse(
@@ -124,7 +124,7 @@ async def unimonitor_exception_handler(
 
 
 async def generic_exception_handler(
-    request: Request,
+    _request: Request,
     exc: Exception,
 ) -> JSONResponse:
     return JSONResponse(

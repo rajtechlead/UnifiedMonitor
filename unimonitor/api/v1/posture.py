@@ -48,7 +48,12 @@ async def list_platforms(
 
 @router.get(
     "/analysis",
-    responses={401: {"description": "Not authenticated"}, 404: {"description": "No posture snapshot is configured or it cannot be read"}},
+    responses={
+        400: {"description": "Inventory could not be analysed"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "No posture snapshot is configured or it cannot be read"},
+        413: {"description": "Inventory is too large"},
+    },
 )
 async def get_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],

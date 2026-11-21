@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { UserPlus, UserX, Users } from 'lucide-react'
 import { usersApi } from '../hooks/useApi'
 import { useAuthStore } from '../store/authStore'
+import TableHead from '../components/TableHead'
 
 type ManagedUser = {
   id: string
@@ -180,16 +181,7 @@ export default function UsersPage() {
         )}
         {!isLoading && !isError && shown.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-                {['User', 'Email', 'Role', 'Status', 'Last sign-in', 'Actions'].map(header => (
-                  <th key={header} style={{
-                    textAlign: 'left', padding: '10px 14px', fontSize: 12, fontWeight: 600,
-                    color: 'var(--color-text-muted)',
-                  }}>{header}</th>
-                ))}
-              </tr>
-            </thead>
+            <TableHead headers={['User', 'Email', 'Role', 'Status', 'Last sign-in', 'Actions']} />
             <tbody>
               {shown.map(user => (
                 <tr key={user.id} style={{ borderBottom: '1px solid var(--color-border)' }}>

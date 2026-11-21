@@ -68,12 +68,19 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
 
 def _identity_findings(identity: dict[str, Any]) -> list[PostureFinding]:
     """Per-item checks, kept out of the loop so ``analyse`` stays flat."""
-    findings: list[PostureFinding] = []
     name = resource_name(identity)
     actions = actions_of(identity)
     privileged = is_privileged(identity)
     kind = str(field(identity, "kind", "principal_type", "type_name", default="identity")).lower()
 
+    findings = _grant_findings(name, actions, privileged)
+    findings.extend(_privilege_findings(identity, name, privileged, kind))
+    findings.extend(_credential_findings(identity, name, privileged))
+    return findings
+
+
+def _grant_findings(name: str, actions: list[str], privileged: bool) -> list[PostureFinding]:
+    findings: list[PostureFinding] = []
     if has_wildcard(actions):
         findings.append(
             PostureFinding(
@@ -87,6 +94,28 @@ def _identity_findings(identity: dict[str, Any]) -> list[PostureFinding]:
             )
         )
 
+    if _IAM_ROLE_FORWARDING_ACTION in actions and any(action in _ESCALATION_ACTIONS for action in actions):
+        findings.append(
+            PostureFinding(
+                "CIEM-ESCALATION",
+                "Identity can escalate its own privilege",
+                "critical",
+                CATEGORY,
+                name,
+                "iam:PassRole is combined with an action that can attach or create policy.",
+                "Remove the pair; use permission boundaries and an approval workflow for role changes.",
+            )
+        )
+    return findings
+
+
+def _privilege_findings(
+    identity: dict[str, Any],
+    name: str,
+    privileged: bool,
+    kind: str,
+) -> list[PostureFinding]:
+    findings: list[PostureFinding] = []
     if privileged and flag(identity, "service_account", "is_service_account", "workload_identity"):
         findings.append(
             PostureFinding(
@@ -113,19 +142,23 @@ def _identity_findings(identity: dict[str, Any]) -> list[PostureFinding]:
             )
         )
 
-    if _IAM_ROLE_FORWARDING_ACTION in actions and any(action in _ESCALATION_ACTIONS for action in actions):
+    if kind in {"ci", "cicd", "pipeline", "build"} and privileged:
         findings.append(
             PostureFinding(
-                "CIEM-ESCALATION",
-                "Identity can escalate its own privilege",
-                "critical",
+                "CIEM-CI-ADMIN",
+                "Build pipeline identity is over-privileged",
+                "high",
                 CATEGORY,
                 name,
-                "iam:PassRole is combined with an action that can attach or create policy.",
-                "Remove the pair; use permission boundaries and an approval workflow for role changes.",
+                "A CI/CD identity carries administrative or wildcard rights.",
+                "Scope the pipeline role to the artefacts it deploys; use separate roles per environment.",
             )
         )
+    return findings
 
+
+def _credential_findings(identity: dict[str, Any], name: str, privileged: bool) -> list[PostureFinding]:
+    findings: list[PostureFinding] = []
     age = number(identity, "key_age_days", "credential_age_days")
     if age is not None and age > 90:
         findings.append(
@@ -165,19 +198,6 @@ def _identity_findings(identity: dict[str, Any]) -> list[PostureFinding]:
                 name,
                 "The trust policy accepts any account or principal.",
                 "Restrict the trust policy to named accounts and require an external ID.",
-            )
-        )
-
-    if kind in {"ci", "cicd", "pipeline", "build"} and privileged:
-        findings.append(
-            PostureFinding(
-                "CIEM-CI-ADMIN",
-                "Build pipeline identity is over-privileged",
-                "high",
-                CATEGORY,
-                name,
-                "A CI/CD identity carries administrative or wildcard rights.",
-                "Scope the pipeline role to the artefacts it deploys; use separate roles per environment.",
             )
         )
     return findings

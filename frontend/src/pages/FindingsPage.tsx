@@ -101,6 +101,11 @@ export default function FindingsPage() {
   const [category, setCategory] = useState('')
   const [sortBy, setSortBy] = useState('last_seen_at')
   const [sortDesc, setSortDesc] = useState(true)
+
+  const sortArrow = (column: string) => {
+    if (sortBy !== column) return ''
+    return sortDesc ? ' ▼' : ' ▲'
+  }
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<string | null>(() => searchParams.get('finding'))
   const pageSize = 25
@@ -284,7 +289,7 @@ export default function FindingsPage() {
                     style={{ textAlign: 'left', padding: '10px 14px', cursor: 'pointer', userSelect: 'none',
                       fontWeight: 600, color: sortBy === sort ? 'var(--color-brand)' : 'var(--color-text-muted)', fontSize: 12 }}
                   >
-                    {label}{sortBy === sort ? (sortDesc ? ' ▼' : ' ▲') : ''}
+                    {label}{sortArrow(sort)}
                   </th>
                 ))}
               </tr>

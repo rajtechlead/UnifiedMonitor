@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, ShieldCheck } from 'lucide-react'
 import { grcApi } from '../hooks/useApi'
+import TableHead from '../components/TableHead'
 
 type Evidence = {
   type: string
@@ -163,16 +164,7 @@ export default function FrameworkPage() {
           borderRadius: 12, overflow: 'hidden',
         }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-                {['Control', 'Category', 'Severity', 'Result', 'Evidence', ''].map(header => (
-                  <th key={header} style={{
-                    textAlign: 'left', padding: '10px 14px', fontSize: 12, fontWeight: 600,
-                    color: 'var(--color-text-muted)',
-                  }}>{header}</th>
-                ))}
-              </tr>
-            </thead>
+            <TableHead headers={['Control', 'Category', 'Severity', 'Result', 'Evidence', '']} />
             <tbody>
               {rows.map(control => (
                 <tr key={control.external_id} style={{ borderBottom: '1px solid var(--color-border)', verticalAlign: 'top' }}>

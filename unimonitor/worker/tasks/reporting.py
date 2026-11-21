@@ -44,80 +44,99 @@ def generate_report_task(
         extra={"report_id": report_id, "run_id": run_id, "formats": formats},
     )
 
-    async def _run():
-        from sqlalchemy import select
-
-        from unimonitor.db.base import async_session_factory
-        from unimonitor.db.models.assessment import AssessmentRun
-        from unimonitor.db.models.finding import Finding
-        from unimonitor.db.models.report import Report, ReportStatus
-        from unimonitor.reporting.csv_generator import CsvReportGenerator
-        from unimonitor.reporting.docx_generator import DocxReportGenerator
-        from unimonitor.reporting.excel_generator import ExcelReportGenerator
-        from unimonitor.reporting.html_generator import HtmlReportGenerator
-        from unimonitor.reporting.json_generator import JsonReportGenerator
-        from unimonitor.reporting.pdf_generator import PdfReportGenerator
-
-        async with async_session_factory() as db:
-            # Load report record
-            result = await db.execute(select(Report).where(Report.id == report_id))
-            report = result.scalar_one_or_none()
-            if not report:
-                raise ValueError(f"Report {report_id} not found")
-
-            # Load run
-            result = await db.execute(select(AssessmentRun).where(AssessmentRun.id == run_id))
-            run = result.scalar_one_or_none()
-            if not run:
-                raise ValueError(f"AssessmentRun {run_id} not found")
-
-            # Load findings
-            result = await db.execute(select(Finding).where(Finding.assessment_run_id == run.id))
-            findings = result.scalars().all()
-
-            report.status = ReportStatus.GENERATING.value
-            report.task_id = self.request.id
-            await db.commit()
-
-            generated_files: dict[str, str] = {}
-            generators = {
-                "pdf": PdfReportGenerator,
-                "docx": DocxReportGenerator,
-                "excel": ExcelReportGenerator,
-                "csv": CsvReportGenerator,
-                "json": JsonReportGenerator,
-                "html": HtmlReportGenerator,
-            }
-
-            for fmt in formats:
-                gen_cls = generators.get(fmt)
-                if gen_cls is None:
-                    logger.warning("Unknown report format", extra={"fmt": fmt})
-                    continue
-                try:
-                    gen = gen_cls(tenant_id=tenant_id, run=run, findings=findings)
-                    # Generators are synchronous; awaiting their path string raised
-                    # TypeError and silently marked every report failed.
-                    file_path = gen.generate(report_type=report_type)
-                    generated_files[fmt] = file_path
-                except Exception as exc:
-                    logger.error("Report generation failed", extra={"fmt": fmt, "error": str(exc)})
-
-            report.status = ReportStatus.COMPLETED.value if generated_files else ReportStatus.FAILED.value
-            report.file_paths = generated_files
-            await db.commit()
-
-            return {
-                "report_id": report_id,
-                "status": report.status,
-                "files": generated_files,
-            }
-
     try:
-        return _run_async(_run())
+        return _run_async(
+            _generate_report(
+                report_id=report_id,
+                tenant_id=tenant_id,
+                run_id=run_id,
+                formats=formats,
+                report_type=report_type,
+                task_id=self.request.id,
+            )
+        )
     except Exception as exc:
         logger.error("Report task failed", extra={"report_id": report_id, "error": str(exc)})
         try:
             self.retry(exc=exc)
         except self.MaxRetriesExceededError:
             return {"report_id": report_id, "status": "failed", "error": str(exc)[:500]}
+
+
+async def _load_report_context(db, report_id: str, run_id: str):
+    """Load the report, its run and that run's findings, or explain what is missing."""
+    from sqlalchemy import select
+
+    from unimonitor.db.models.assessment import AssessmentRun
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.db.models.report import Report
+
+    report = (await db.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
+    if not report:
+        raise ValueError(f"Report {report_id} not found")
+
+    run = (await db.execute(select(AssessmentRun).where(AssessmentRun.id == run_id))).scalar_one_or_none()
+    if not run:
+        raise ValueError(f"AssessmentRun {run_id} not found")
+
+    findings = (await db.execute(select(Finding).where(Finding.assessment_run_id == run.id))).scalars().all()
+    return report, run, findings
+
+
+def _generate_files(tenant_id: str, run, findings, formats: list[ReportFormat], report_type: str) -> dict[str, str]:
+    """Render each requested format, skipping unknown ones and logging failures."""
+    from unimonitor.reporting.csv_generator import CsvReportGenerator
+    from unimonitor.reporting.docx_generator import DocxReportGenerator
+    from unimonitor.reporting.excel_generator import ExcelReportGenerator
+    from unimonitor.reporting.html_generator import HtmlReportGenerator
+    from unimonitor.reporting.json_generator import JsonReportGenerator
+    from unimonitor.reporting.pdf_generator import PdfReportGenerator
+
+    generators = {
+        "pdf": PdfReportGenerator,
+        "docx": DocxReportGenerator,
+        "excel": ExcelReportGenerator,
+        "csv": CsvReportGenerator,
+        "json": JsonReportGenerator,
+        "html": HtmlReportGenerator,
+    }
+
+    generated_files: dict[str, str] = {}
+    for fmt in formats:
+        gen_cls = generators.get(fmt)
+        if gen_cls is None:
+            logger.warning("Unknown report format", extra={"fmt": fmt})
+            continue
+        try:
+            generated_files[fmt] = gen_cls(tenant_id=tenant_id, run=run, findings=findings).generate(report_type=report_type)
+        except Exception as exc:
+            logger.error("Report generation failed", extra={"fmt": fmt, "error": str(exc)})
+    return generated_files
+
+
+async def _generate_report(
+    *,
+    report_id: str,
+    tenant_id: str,
+    run_id: str,
+    formats: list[ReportFormat],
+    report_type: str,
+    task_id: str,
+) -> dict:
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.report import ReportStatus
+
+    async with async_session_factory() as db:
+        report, run, findings = await _load_report_context(db, report_id, run_id)
+
+        report.status = ReportStatus.GENERATING.value
+        report.task_id = task_id
+        await db.commit()
+
+        generated_files = _generate_files(tenant_id, run, findings, formats, report_type)
+
+        report.status = ReportStatus.COMPLETED.value if generated_files else ReportStatus.FAILED.value
+        report.file_paths = generated_files
+        await db.commit()
+
+    return {"report_id": report_id, "status": report.status, "files": generated_files}

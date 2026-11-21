@@ -27,7 +27,7 @@ import json
 import os
 import stat
 import time
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from unimonitor.core.logging import get_logger
@@ -154,6 +154,8 @@ class LocalVaultProvider:
     # ------------------------------------------------------------------
 
     async def get_secret(self, name: str, version: str | None = None) -> str:
+        # Protocol argument: the local vault stores a single version per secret.
+        del version
         vault = self._read_vault()
         if name not in vault:
             raise KeyError(f"Secret '{name}' not found in local vault")
@@ -167,7 +169,7 @@ class LocalVaultProvider:
         # Update metadata
         meta = self._read_meta()
         meta[name] = {
-            "created_at": str(datetime.utcnow()),
+            "created_at": str(datetime.now(UTC)),
             "tags": tags or {},
         }
         self._write_meta(meta)
@@ -175,7 +177,7 @@ class LocalVaultProvider:
         return SecretMetadata(
             name=name,
             provider=self.provider_type,
-            created_at=datetime.utcnow(),
+            created_at=datetime.now(UTC),
             tags=tags or {},
         )
 

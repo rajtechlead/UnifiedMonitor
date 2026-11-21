@@ -406,8 +406,9 @@ class TestAssessmentEngineRun:
             patch("unimonitor.grc.engine.ControlLoader", return_value=loader),
             patch("unimonitor.grc.engine.CollectorRegistry", return_value=registry),
         ):
+            coroutine = engine.run(run, frameworks=[])
             with pytest.raises(RuntimeError, match="Graph API down"):
-                _run(engine.run(run, frameworks=[]))
+                _run(coroutine)
 
         assert run.status == "failed"
         assert "Graph API down" in run.error_message

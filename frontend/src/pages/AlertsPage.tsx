@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { alertsApi } from '../hooks/useApi'
+import TableHead from '../components/TableHead'
 
 type Alert = {
   id: string
@@ -224,14 +225,7 @@ export default function AlertsPage() {
           <div style={{ padding: 32, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>{listPlaceholder}</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-                {['Alert', 'Severity', 'Value', 'Triggered', 'Status', 'Actions'].map((h) => (
-                  <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: 12,
-                    color: 'var(--color-text-muted)', fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
+            <TableHead headers={['Alert', 'Severity', 'Value', 'Triggered', 'Status', 'Actions']} />
             <tbody>
               {alerts.map((alert) => (
                 <tr key={alert.id} style={{ borderBottom: '1px solid var(--color-border)' }}>

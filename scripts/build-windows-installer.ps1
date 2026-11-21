@@ -110,10 +110,19 @@ try {
     Step "Installing Python dependencies"
     Invoke-Checked $VenvPython @("-m", "pip", "install", "--upgrade", "pip", "--quiet")
     Invoke-Checked $VenvPython @(
-        "-m", "pip", "install", "--quiet",
+        "-m", "pip", "install", "--no-input", "--no-color",
         "pyinstaller>=6.16.0,<7",
         "-e", ".[production]"
     )
+    # pip can exit 0 without putting PyInstaller in this environment (a PIP_TARGET
+    # or PIP_PREFIX setting, a stray PYTHONPATH, an install that hit another
+    # interpreter). Trust the postcondition, not the exit code.
+    $pyinstallerVersion = & $VenvPython -c "import PyInstaller; print(PyInstaller.__version__)" 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $pyinstallerVersion) {
+        Fail ("PyInstaller is not importable from {0}. Run '{0} -m pip config list' and check for " +
+              "PIP_TARGET, PIP_PREFIX or PYTHONPATH, or delete .build-venv and re-run." -f $VenvPython)
+    }
+    Write-Host "  PyInstaller $pyinstallerVersion"
 
     # -- 3. Frontend -----------------------------------------------------------
     if ($SkipFrontend) {
@@ -146,7 +155,7 @@ try {
     # -- 5. Freeze the application ---------------------------------------------
     Step "Running PyInstaller"
     Invoke-Checked $VenvPython @(
-        "-m", "pyinstaller",
+        "-m", "PyInstaller",
         "deploy/windows/unimonitor.spec",
         "--clean", "--noconfirm"
     )

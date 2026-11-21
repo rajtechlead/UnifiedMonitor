@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import TableHead from '../components/TableHead'
 import { KeyRound } from 'lucide-react'
 import { monitoringApi } from '../hooks/useApi'
 
@@ -85,14 +86,7 @@ export default function LicensesPage() {
         borderRadius: 12, overflow: 'hidden',
       }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>
-              {['SKU', 'Status', 'Assigned', 'Purchased', 'Available', 'Utilisation'].map((h) => (
-                <th key={h} style={{ textAlign: 'left', padding: '10px 14px', fontSize: 12,
-                  color: 'var(--color-text-muted)', fontWeight: 600 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
+          <TableHead headers={['SKU', 'Status', 'Assigned', 'Purchased', 'Available', 'Utilisation']} />
           <tbody>
             {data.skus.map((sku) => (
               <tr key={sku.sku_id} style={{ borderBottom: '1px solid var(--color-border)' }}>

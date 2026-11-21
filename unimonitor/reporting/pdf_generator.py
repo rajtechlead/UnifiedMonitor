@@ -67,9 +67,13 @@ class PdfReportGenerator(BaseReportGenerator):
             textColor=colors.Color(*UNIMONITOR_BLUE),
             spaceAfter=6,
         )
-        story.append(Paragraph("UniMonitor Security Assessment Report", title_style))
-        story.append(HRFlowable(width="100%", thickness=2, color=colors.Color(*UNIMONITOR_BLUE)))
-        story.append(Spacer(1, 0.4 * cm))
+        story.extend(
+            [
+                Paragraph("UniMonitor Security Assessment Report", title_style),
+                HRFlowable(width="100%", thickness=2, color=colors.Color(*UNIMONITOR_BLUE)),
+                Spacer(1, 0.4 * cm),
+            ]
+        )
 
         sub_style = ParagraphStyle("Sub", parent=styles["Normal"], fontSize=10, textColor=colors.grey)
         now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
@@ -111,8 +115,7 @@ class PdfReportGenerator(BaseReportGenerator):
         story.append(Spacer(1, 0.6 * cm))
 
         # ── Severity breakdown ───────────────────────────────────────────────
-        story.append(Paragraph("Finding Severity Breakdown", h2))
-        story.append(Spacer(1, 0.3 * cm))
+        story.extend([Paragraph("Finding Severity Breakdown", h2), Spacer(1, 0.3 * cm)])
         sev_data = [["Severity", "Count"]] + [[sev, str(cnt)] for sev, cnt in stats["severity_counts"].items()]
         sev_table = Table(sev_data, colWidths=[8 * cm, 4 * cm])
         sev_style = [

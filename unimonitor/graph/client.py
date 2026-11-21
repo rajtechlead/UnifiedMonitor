@@ -28,6 +28,8 @@ from unimonitor.exceptions import (
 
 logger = get_logger(__name__)
 
+JSON_CONTENT_TYPE = "application/json"
+
 
 @dataclass
 class GraphResponse:
@@ -153,8 +155,8 @@ class GraphClient:
         url = f"{self.base_url}{endpoint}" if not endpoint.startswith("http") else endpoint
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Accept": "application/json",
+            "Content-Type": JSON_CONTENT_TYPE,
+            "Accept": JSON_CONTENT_TYPE,
         }
         try:
             resp = await self._http_client.get(url, headers=headers, params=params)
@@ -201,7 +203,6 @@ class GraphClient:
         *,
         params: dict | None = None,
         max_pages: int = 50,
-        use_cache: bool = True,
     ) -> list[dict]:
         """Retrieve all pages of a paginated Graph API response."""
         all_items: list[dict] = []
@@ -211,7 +212,7 @@ class GraphClient:
         token = await self._ensure_token()
         headers = {
             "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
+            "Content-Type": JSON_CONTENT_TYPE,
         }
 
         while url and page_count < max_pages:

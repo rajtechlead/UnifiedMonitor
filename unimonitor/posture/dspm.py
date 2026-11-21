@@ -63,12 +63,21 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
 
 def _store_findings(store: dict[str, Any]) -> list[PostureFinding]:
     """Per-item checks, kept out of the loop so ``analyse`` stays flat."""
-    findings: list[PostureFinding] = []
     name = resource_name(store)
     sensitive = is_sensitive(store)
-    public = _public(store)
-    encrypted = _encrypted(store)
+    findings = _exposure_findings(store, name, sensitive, _public(store), _encrypted(store))
+    findings.extend(_sensitive_findings(store, name, sensitive))
+    return findings
 
+
+def _exposure_findings(
+    store: dict[str, Any],
+    name: str,
+    sensitive: bool,
+    public: bool,
+    encrypted: bool | None,
+) -> list[PostureFinding]:
+    findings: list[PostureFinding] = []
     if public and sensitive:
         findings.append(
             PostureFinding(
@@ -95,12 +104,11 @@ def _store_findings(store: dict[str, Any]) -> list[PostureFinding]:
         )
 
     if encrypted is False:
-        severity = "critical" if sensitive else "high"
         findings.append(
             PostureFinding(
                 "DSPM-ENCRYPTION",
                 "Data store is not encrypted at rest",
-                severity,
+                "critical" if sensitive else "high",
                 CATEGORY,
                 name,
                 "The export reports encryption at rest as disabled.",
@@ -120,46 +128,52 @@ def _store_findings(store: dict[str, Any]) -> list[PostureFinding]:
                 "Remove external principals and require authenticated, audited access.",
             )
         )
+    return findings
 
-    if sensitive:
-        key_type = str(field(store, "encryption_key_type", "key_type", default="")).lower()
-        if key_type in {"provider", "provider_managed", "default", "service"}:
-            findings.append(
-                PostureFinding(
-                    "DSPM-CMK",
-                    "Sensitive data uses a provider-managed key",
-                    "medium",
-                    CATEGORY,
-                    name,
-                    f"Encryption key type is {key_type!r}.",
-                    "Use a customer-managed key so access can be revoked independently of the provider.",
-                )
+
+def _sensitive_findings(store: dict[str, Any], name: str, sensitive: bool) -> list[PostureFinding]:
+    findings: list[PostureFinding] = []
+    if not sensitive:
+        return findings
+
+    key_type = str(field(store, "encryption_key_type", "key_type", default="")).lower()
+    if key_type in {"provider", "provider_managed", "default", "service"}:
+        findings.append(
+            PostureFinding(
+                "DSPM-CMK",
+                "Sensitive data uses a provider-managed key",
+                "medium",
+                CATEGORY,
+                name,
+                f"Encryption key type is {key_type!r}.",
+                "Use a customer-managed key so access can be revoked independently of the provider.",
             )
-        retention = number(store, "retention_days", "object_lock_days")
-        if retention is not None and retention < 30:
-            findings.append(
-                PostureFinding(
-                    "DSPM-RETENTION",
-                    "Sensitive data retention is shorter than 30 days",
-                    "low",
-                    CATEGORY,
-                    name,
-                    f"Retention is {retention} days.",
-                    "Confirm the retention matches policy; short retention can destroy investigation evidence.",
-                )
+        )
+    retention = number(store, "retention_days", "object_lock_days")
+    if retention is not None and retention < 30:
+        findings.append(
+            PostureFinding(
+                "DSPM-RETENTION",
+                "Sensitive data retention is shorter than 30 days",
+                "low",
+                CATEGORY,
+                name,
+                f"Retention is {retention} days.",
+                "Confirm the retention matches policy; short retention can destroy investigation evidence.",
             )
-        if not any(key in store for key in ("classification", "data_classification", "data_types", "contains_pii", "tags", "labels")):
-            findings.append(
-                PostureFinding(
-                    "DSPM-UNCLASSIFIED",
-                    "Data store has no classification",
-                    "low",
-                    CATEGORY,
-                    name,
-                    "No classification field is present, so sensitive-data handling cannot be verified.",
-                    "Add a classification tag and include it in the inventory export.",
-                )
+        )
+    if not any(key in store for key in ("classification", "data_classification", "data_types", "contains_pii", "tags", "labels")):
+        findings.append(
+            PostureFinding(
+                "DSPM-UNCLASSIFIED",
+                "Data store has no classification",
+                "low",
+                CATEGORY,
+                name,
+                "No classification field is present, so sensitive-data handling cannot be verified.",
+                "Add a classification tag and include it in the inventory export.",
             )
+        )
     return findings
 
 

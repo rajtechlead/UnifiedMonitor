@@ -67,7 +67,6 @@ def calculate_scores(findings: list[Finding]) -> dict:
 
     total_weight = 0.0
     passed_weight = 0.0
-    compliance_applicable = 0
     compliance_credit = 0.0
     total_risk = 0.0
     max_risk = 0.0
@@ -92,7 +91,6 @@ def calculate_scores(findings: list[Finding]) -> dict:
         # Compliance score
         credit = STATE_COMPLIANCE_CREDIT.get(f.state)
         if credit is not None:  # skip NA
-            compliance_applicable += 1
             compliance_credit += credit * weight
 
         # Risk score

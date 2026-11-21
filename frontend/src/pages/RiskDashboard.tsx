@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import StatCards from '../components/StatCards'
 import { Link } from 'react-router-dom'
 import { dashboardApi } from '../hooks/useApi'
 
@@ -46,22 +47,14 @@ export default function RiskDashboard() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-        {[
+      <StatCards
+        cards={[
           { label: 'Overall Risk Score', value: Math.round(risk?.overall_risk_score ?? 0), color: '#F59E0B' },
           { label: 'Findings in Heatmap', value: totalRisks, color: 'var(--color-brand)' },
           { label: 'Open Risks', value: openRisks.length, color: '#F97316' },
           { label: 'Critical Risks', value: criticalCount, color: '#EF4444' },
-        ].map(card => (
-          <div key={card.label} style={{
-            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-            borderRadius: 12, padding: 20, textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: card.color }}>{card.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{card.label}</div>
-          </div>
-        ))}
-      </div>
+        ]}
+      />
 
       {/* Heatmap */}
       <div style={{

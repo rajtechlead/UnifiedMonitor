@@ -174,6 +174,20 @@ def test_every_python_step_runs_a_module():
         assert target == "-m" or target.endswith(".py"), f"Python step must run a module or a script: {block[:60]!r}"
 
 
+def test_pyinstaller_is_verified_and_run_as_a_module():
+    """pip can exit 0 without leaving PyInstaller importable, so the script checks.
+
+    The second build failed at "No module named pyinstaller" right after a
+    successful install step: the exit code alone was not evidence. The script now
+    imports PyInstaller from the build venv before freezing, and invokes it with
+    the module's documented casing.
+    """
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    assert '"import PyInstaller; print(PyInstaller.__version__)"' in script
+    assert '"-m", "PyInstaller"' in script, "PyInstaller must be run as the PyInstaller module"
+    assert '"-m", "pyinstaller"' not in script
+
+
 def test_dependency_install_goes_through_pip():
     script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
     assert '"-m", "pip", "install"' in script, "dependencies must be installed with python -m pip"

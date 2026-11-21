@@ -162,7 +162,13 @@ class ExcelReportGenerator(BaseReportGenerator):
         headers = ["Framework", "Total Controls", "Implemented", "Partial", "Not Implemented", "N/A", "Coverage %"]
         self._header_style(ws, 1, headers)
 
-        # Aggregate by framework_ids field
+        for row_idx, (fw, counts) in enumerate(sorted(self._framework_stats().items()), start=2):
+            self._write_framework_row(ws, row_idx, fw, counts)
+
+        self._auto_width(ws)
+
+    def _framework_stats(self) -> dict[str, dict[str, int]]:
+        """Aggregate each finding's framework ids into total/state counters."""
         framework_stats: dict[str, dict[str, int]] = {}
         for f in self.findings:
             fw_ids_raw = self._get_finding_attr(f, "framework_ids", "[]") or "[]"
@@ -172,23 +178,30 @@ class ExcelReportGenerator(BaseReportGenerator):
                 fw_ids = []
             state = getattr(f, "state", "not_implemented") or "not_implemented"
             for fw in fw_ids:
-                if fw not in framework_stats:
-                    framework_stats[fw] = {"total": 0, "implemented": 0, "partially_implemented": 0, "not_implemented": 0, "not_applicable": 0}
-                framework_stats[fw]["total"] += 1
-                framework_stats[fw][state] = framework_stats[fw].get(state, 0) + 1
+                counts = framework_stats.setdefault(
+                    fw,
+                    {
+                        "total": 0,
+                        "implemented": 0,
+                        "partially_implemented": 0,
+                        "not_implemented": 0,
+                        "not_applicable": 0,
+                    },
+                )
+                counts["total"] += 1
+                counts[state] = counts.get(state, 0) + 1
+        return framework_stats
 
-        for row_idx, (fw, counts) in enumerate(sorted(framework_stats.items()), start=2):
-            total = counts["total"]
-            impl = counts.get("implemented", 0)
-            partial = counts.get("partially_implemented", 0)
-            not_impl = counts.get("not_implemented", 0)
-            na = counts.get("not_applicable", 0)
-            coverage = round((impl + na) / total * 100, 1) if total else 0
-            row_vals = [fw.upper(), total, impl, partial, not_impl, na, f"{coverage}%"]
-            for col_idx, val in enumerate(row_vals, 1):
-                ws.cell(row=row_idx, column=col_idx, value=val)
-            if row_idx % 2 == 0:
-                for col in range(1, len(row_vals) + 1):
-                    ws.cell(row=row_idx, column=col).fill = PatternFill(fill_type="solid", fgColor="F0F4FF")
-
-        self._auto_width(ws)
+    def _write_framework_row(self, ws, row_idx: int, fw: str, counts: dict[str, int]) -> None:
+        total = counts["total"]
+        impl = counts.get("implemented", 0)
+        partial = counts.get("partially_implemented", 0)
+        not_impl = counts.get("not_implemented", 0)
+        na = counts.get("not_applicable", 0)
+        coverage = round((impl + na) / total * 100, 1) if total else 0
+        row_vals = [fw.upper(), total, impl, partial, not_impl, na, f"{coverage}%"]
+        for col_idx, val in enumerate(row_vals, 1):
+            ws.cell(row=row_idx, column=col_idx, value=val)
+        if row_idx % 2 == 0:
+            for col in range(1, len(row_vals) + 1):
+                ws.cell(row=row_idx, column=col).fill = PatternFill(fill_type="solid", fgColor="F0F4FF")

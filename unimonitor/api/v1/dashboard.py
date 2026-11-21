@@ -966,7 +966,12 @@ async def dashboard_zero_trust(
         applicable = b["implemented"] + b["partial"] + b["not_implemented"]
         total = applicable + b["not_applicable"]
         coverage = round((b["implemented"] + b["partial"] * 0.5) / applicable * 100, 2) if applicable else 0.0
-        status = "uncovered" if applicable == 0 else ("gap" if coverage < 60 else "covered")
+        if applicable == 0:
+            status = "uncovered"
+        elif coverage < 60:
+            status = "gap"
+        else:
+            status = "covered"
         pillars.append(
             PillarScore(
                 id=pillar.id,

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import StatCards from '../components/StatCards'
 import { Link } from 'react-router-dom'
 import { dashboardApi } from '../hooks/useApi'
 import { RadarChart, PolarGrid, PolarAngleAxis, Radar, ResponsiveContainer, Tooltip } from 'recharts'
@@ -77,22 +78,14 @@ export default function ComplianceDashboard() {
       </div>
 
       {/* Summary row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-        {[
+      <StatCards
+        cards={[
           { label: 'Overall Compliance Score', value: `${Math.round(overall)}%`, color: scoreColor(overall) },
           { label: 'Avg Framework Coverage', value: `${avgScore}%`, color: scoreColor(avgScore) },
           { label: 'Active Frameworks', value: frameworks.length, color: 'var(--color-brand)' },
           { label: 'At Risk (<50%)', value: frameworks.filter(f => f.coverage_pct < 50).length, color: '#EF4444' },
-        ].map(card => (
-          <div key={card.label} style={{
-            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-            borderRadius: 12, padding: 20, textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: card.color }}>{card.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{card.label}</div>
-          </div>
-        ))}
-      </div>
+        ]}
+      />
 
       {/* Radar chart */}
       <div style={{

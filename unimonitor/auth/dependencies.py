@@ -36,7 +36,7 @@ async def get_current_user(
     return user
 
 
-async def get_current_active_user(
+def get_current_active_user(
     current_user: AppUser = Depends(get_current_user),
 ) -> AppUser:
     return current_user
@@ -49,7 +49,7 @@ def require_role(*roles: str):
     always passes, which is handled by ``AppUser.has_role``.
     """
 
-    async def _check(current_user: AppUser = Depends(get_current_user)) -> AppUser:
+    def _check(current_user: AppUser = Depends(get_current_user)) -> AppUser:
         if not current_user.has_role(*roles):
             raise AuthorisationError(f"Role '{current_user.role}' is not authorised for this action.")
         return current_user

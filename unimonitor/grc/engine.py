@@ -193,7 +193,7 @@ class AssessmentEngine:
         # so evaluate functions can access any key they need)
         eval_data = dict(collected_data)
 
-        state = FindingState.NOT_IMPLEMENTED.value
+        state: str
         evidence_text: str | None = None
 
         # What the collector supplied for this control. A control whose entire

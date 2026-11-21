@@ -158,7 +158,6 @@ COLLECTOR_DEFINITIONS = [
 
 @router.get(
     "/health",
-    response_model=PlatformHealthResponse,
     summary="Platform health check",
 )
 async def get_platform_health(
@@ -313,7 +312,6 @@ async def get_collectors(
 
 @router.post(
     "/collectors/{collector_name}/run",
-    response_model=CollectorRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger a specific collector",
     responses={400: {"description": "Bad request"}, 500: {"description": "Internal error"}},
@@ -364,7 +362,6 @@ async def run_collector(
 
 @router.get(
     "/collection-history",
-    response_model=list[CollectionHistoryEntry],
     summary="Recent collection run history",
 )
 async def get_collection_history(
@@ -606,7 +603,7 @@ async def collect_now(
     )
 
 
-@router.get("/licensing")
+@router.get("/licensing", responses={502: {"description": "Graph request failed"}})
 async def get_licensing(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
@@ -660,7 +657,7 @@ async def get_licensing(
     )
 
 
-@router.get("/service-health")
+@router.get("/service-health", responses={502: {"description": "Graph request failed"}})
 async def get_service_health(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],

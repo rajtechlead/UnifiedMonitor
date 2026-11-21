@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import StatCards from '../components/StatCards'
 import { ShieldAlert, ShieldCheck } from 'lucide-react'
 import { dashboardApi } from '../hooks/useApi'
+import TableHead from '../components/TableHead'
 
 type AuditEntry = {
   id: string
@@ -80,8 +82,8 @@ export default function AuditPage() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
-        {[
+      <StatCards
+        cards={[
           { label: 'UniMonitor Audit Events', value: audit?.total ?? 0, color: 'var(--color-brand)' },
           { label: 'Events (24h)', value: audit?.actions_24h ?? 0, color: '#10B981' },
           { label: 'Cloud Audit Events', value: cloudEvents.length, color: '#8B5CF6' },
@@ -90,16 +92,8 @@ export default function AuditPage() {
             value: chain ? `${chain.checked}` : '…',
             color: chain && !chain.valid ? '#EF4444' : '#8B5CF6',
           },
-        ].map(card => (
-          <div key={card.label} style={{
-            background: 'var(--color-surface)', border: '1px solid var(--color-border)',
-            borderRadius: 12, padding: 20, textAlign: 'center',
-          }}>
-            <div style={{ fontSize: 28, fontWeight: 700, color: card.color }}>{card.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{card.label}</div>
-          </div>
-        ))}
-      </div>
+        ]}
+      />
 
       {chain && (
         <div style={{
@@ -141,16 +135,7 @@ export default function AuditPage() {
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Timestamp', 'Platform', 'Action', 'Actor', 'Target'].map(header => (
-                  <th key={header} style={{
-                    textAlign: 'left', padding: '8px 12px', fontWeight: 600,
-                    color: 'var(--color-text-muted)', fontSize: 12,
-                  }}>{header}</th>
-                ))}
-              </tr>
-            </thead>
+                          <TableHead headers={['Timestamp', 'Platform', 'Action', 'Actor', 'Target']} cellPadding="8px 12px" background="transparent" />
             <tbody>
               {shownEvents.map(event => (
                 <tr key={`${event.id}-${event.created_at}`} style={{ borderBottom: '1px solid var(--color-border)' }}>
@@ -180,16 +165,7 @@ export default function AuditPage() {
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                {['Timestamp', 'Action', 'Resource', 'Actor', 'Hash'].map(header => (
-                  <th key={header} style={{
-                    textAlign: 'left', padding: '8px 12px', fontWeight: 600,
-                    color: 'var(--color-text-muted)', fontSize: 12,
-                  }}>{header}</th>
-                ))}
-              </tr>
-            </thead>
+                          <TableHead headers={['Timestamp', 'Action', 'Resource', 'Actor', 'Hash']} cellPadding="8px 12px" background="transparent" />
             <tbody>
               {entries.map(entry => (
                 <tr key={entry.id} style={{ borderBottom: '1px solid var(--color-border)' }}>

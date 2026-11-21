@@ -124,21 +124,25 @@ class ControlLoader:
             data = _load_yaml_file(yaml_file)
             if not data:
                 continue
-
-            if isinstance(data, dict) and "controls" in data:
-                # New list format
-                for ctrl in data["controls"]:
-                    defn = _parse_list_format(ctrl)
-                    if defn:
-                        definitions.append(defn)
-            elif isinstance(data, dict) and "control_id" in data:
-                # Legacy flat-dict format
-                defn = _parse_legacy_format(data, yaml_file)
-                if defn:
-                    definitions.append(defn)
+            definitions.extend(_definitions_from_file(data, yaml_file))
 
         logger.info("controls_loaded", count=len(definitions), path=str(self.controls_dir))
         return definitions
+
+
+def _definitions_from_file(data: dict, yaml_file: Path) -> list[ControlDefinition]:
+    """Parse one YAML document in either the list or the legacy flat format."""
+    if "controls" in data:
+        definitions: list[ControlDefinition] = []
+        for ctrl in data["controls"]:
+            defn = _parse_list_format(ctrl)
+            if defn:
+                definitions.append(defn)
+        return definitions
+    if "control_id" in data:
+        legacy = _parse_legacy_format(data, yaml_file)
+        return [legacy] if legacy else []
+    return []
 
 
 # ── Parsing helpers ───────────────────────────────────────────

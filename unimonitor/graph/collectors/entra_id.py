@@ -7,6 +7,10 @@ from dataclasses import dataclass, field
 from unimonitor.core.logging import get_logger
 from unimonitor.graph.client import GraphClient
 
+_FILTER = "$filter"
+_EXPAND = "$expand"
+_SELECT = "$select"
+
 logger = get_logger(__name__)
 
 
@@ -97,7 +101,7 @@ class EntraIdCollector:
         try:
             resp = await self.client.get(
                 "/identityProtection/riskyUsers",
-                params={"$filter": "riskLevel ne 'none'", "$top": "250"},
+                params={_FILTER: "riskLevel ne 'none'", "$top": "250"},
             )
             if resp.success:
                 data.risky_users = resp.data if isinstance(resp.data, list) else []
@@ -107,7 +111,7 @@ class EntraIdCollector:
         try:
             resp = await self.client.get(
                 "/identityProtection/riskDetections",
-                params={"$filter": "riskState eq 'atRisk'", "$top": "100"},
+                params={_FILTER: "riskState eq 'atRisk'", "$top": "100"},
             )
             if resp.success:
                 data.risky_sign_ins = resp.data if isinstance(resp.data, list) else []
@@ -126,7 +130,7 @@ class EntraIdCollector:
             # Active role assignments via privileged access
             resp = await self.client.get(
                 "/roleManagement/directory/roleAssignments",
-                params={"$expand": "principal,roleDefinition", "$top": "500"},
+                params={_EXPAND: "principal,roleDefinition", "$top": "500"},
             )
             if resp.success:
                 data.pim_role_assignments = resp.data if isinstance(resp.data, list) else []
@@ -136,7 +140,7 @@ class EntraIdCollector:
         try:
             resp = await self.client.get(
                 "/roleManagement/directory/roleEligibilitySchedules",
-                params={"$expand": "principal,roleDefinition", "$top": "500"},
+                params={_EXPAND: "principal,roleDefinition", "$top": "500"},
             )
             if resp.success:
                 data.pim_eligible_assignments = resp.data if isinstance(resp.data, list) else []
@@ -148,7 +152,7 @@ class EntraIdCollector:
             users = await self.client.get_all_pages(
                 "/users",
                 params={
-                    "$select": "id,displayName,userPrincipalName,accountEnabled,assignedLicenses,"
+                    _SELECT: "id,displayName,userPrincipalName,accountEnabled,assignedLicenses,"
                     "signInSessionsValidFromDateTime,lastPasswordChangeDateTime",
                     "$top": "999",
                 },
@@ -166,8 +170,8 @@ class EntraIdCollector:
             resp = await self.client.get(
                 "/users",
                 params={
-                    "$filter": "assignedPlans/any(a:a/servicePlanId eq '41781fb2-bc02-4b7c-bd55-b576a9eb15de')",
-                    "$select": "id,displayName,userPrincipalName",
+                    _FILTER: "assignedPlans/any(a:a/servicePlanId eq '41781fb2-bc02-4b7c-bd55-b576a9eb15de')",
+                    _SELECT: "id,displayName,userPrincipalName",
                     "$top": "500",
                 },
             )
@@ -180,7 +184,7 @@ class EntraIdCollector:
         try:
             apps = await self.client.get_all_pages(
                 "/applications",
-                params={"$select": "id,displayName,appId,createdDateTime,passwordCredentials,keyCredentials", "$top": "500"},
+                params={_SELECT: "id,displayName,appId,createdDateTime,passwordCredentials,keyCredentials", "$top": "500"},
                 max_pages=5,
             )
             data.app_registrations = apps
@@ -190,7 +194,7 @@ class EntraIdCollector:
         try:
             sps = await self.client.get_all_pages(
                 "/servicePrincipals",
-                params={"$select": "id,displayName,appId,appRoles,oauth2PermissionScopes", "$top": "500"},
+                params={_SELECT: "id,displayName,appId,appRoles,oauth2PermissionScopes", "$top": "500"},
                 max_pages=10,
             )
             data.service_principals = sps
@@ -206,7 +210,7 @@ class EntraIdCollector:
             data.errors["authorization_policy"] = str(e)
 
         try:
-            resp = await self.client.get("/directoryRoles", params={"$expand": "members($select=id,displayName,userPrincipalName)"})
+            resp = await self.client.get("/directoryRoles", params={_EXPAND: "members($select=id,displayName,userPrincipalName)"})
             if resp.success:
                 data.directory_roles = resp.data if isinstance(resp.data, list) else []
         except Exception as e:

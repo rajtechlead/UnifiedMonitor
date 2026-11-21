@@ -71,33 +71,43 @@ class NotificationDispatcher:
     # ── Channel dispatch ─────────────────────────────────────────────────────
 
     async def _send_to_channels(self, subject: str, body: str, settings_obj: Any) -> None:
+        await self._send_email_channel(subject, body, settings_obj)
+        await self._send_teams_channel(subject, body, settings_obj)
+        await self._send_slack_channel(subject, body, settings_obj)
 
-        if getattr(settings_obj, "smtp_enabled", False):
-            emails = getattr(settings_obj, "smtp_to_emails", None) or []
-            if isinstance(emails, str):
-                try:
-                    emails = json.loads(emails)
-                except Exception:
-                    emails = [emails]
-            if emails:
-                try:
-                    await self._send_smtp(emails, subject, body)
-                except Exception as exc:
-                    logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
+    async def _send_email_channel(self, subject: str, body: str, settings_obj: Any) -> None:
+        if not getattr(settings_obj, "smtp_enabled", False):
+            return
+        emails = getattr(settings_obj, "smtp_to_emails", None) or []
+        if isinstance(emails, str):
+            try:
+                emails = json.loads(emails)
+            except Exception:
+                emails = [emails]
+        if not emails:
+            return
+        try:
+            await self._send_smtp(emails, subject, body)
+        except Exception as exc:
+            logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
+    async def _send_teams_channel(self, subject: str, body: str, settings_obj: Any) -> None:
         teams_url = getattr(settings_obj, "teams_webhook_url", None)
-        if teams_url:
-            try:
-                await self._send_teams_webhook(teams_url, subject, body)
-            except Exception as exc:
-                logger.error("Teams webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
+        if not teams_url:
+            return
+        try:
+            await self._send_teams_webhook(teams_url, subject, body)
+        except Exception as exc:
+            logger.error("Teams webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
+    async def _send_slack_channel(self, subject: str, body: str, settings_obj: Any) -> None:
         slack_url = getattr(settings_obj, "slack_webhook_url", None)
-        if slack_url:
-            try:
-                await self._send_slack_webhook(slack_url, subject, body)
-            except Exception as exc:
-                logger.error("Slack webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
+        if not slack_url:
+            return
+        try:
+            await self._send_slack_webhook(slack_url, subject, body)
+        except Exception as exc:
+            logger.error("Slack webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
     async def _send_smtp(self, to_emails: list[str], subject: str, body: str) -> None:
         """Send via SMTP using smtplib (sync fallback)."""
