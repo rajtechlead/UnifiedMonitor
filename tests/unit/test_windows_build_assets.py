@@ -143,6 +143,20 @@ def test_one_command_build_script_covers_the_pipeline():
     assert "Set-StrictMode" in script
 
 
+def test_build_script_parses_on_windows_powershell_5_1():
+    """PowerShell 5.1 decodes a BOM-less script as Windows-1252.
+
+    A UTF-8 box-drawing character then turns into ``â”€``, and the ``”`` is a smart
+    quote that ends a string early, so the parser reports a missing brace far from
+    the real line. Keep the script ASCII and BOM-prefixed so 5.1 and 7 agree.
+    """
+    raw = BUILD_SCRIPT.read_bytes()
+    assert raw.startswith(b"\xef\xbb\xbf"), "script needs a UTF-8 BOM for Windows PowerShell 5.1"
+    body = raw[3:]
+    assert body.isascii(), f"non-ASCII bytes break Windows PowerShell 5.1: {[b for b in body if b > 127][:5]}"
+    assert b"\r\n" not in body, "use LF; 5.1 handles both, but mixed endings hide parse errors"
+
+
 def test_install_guide_points_at_the_one_command_build():
     install = (ROOT / "INSTALL.md").read_text()
     assert "build-windows-installer.cmd" in install

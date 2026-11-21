@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Builds UniMonitor-Setup-<version>-x64.exe with a single command.
 
@@ -75,7 +75,7 @@ function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
 
 Push-Location $Root
 try {
-    # ── 0. Version ────────────────────────────────────────────────────────────
+    # -- 0. Version ------------------------------------------------------------
     if (-not $Version) {
         $project = Get-Content (Join-Path $Root "pyproject.toml") -Raw
         if ($project -match '(?m)^version\s*=\s*"([^"]+)"') {
@@ -87,7 +87,7 @@ try {
     $Version = $Version.TrimStart('v')
     Write-Host "UniMonitor installer build $Version" -ForegroundColor Green
 
-    # ── 1. Prerequisites ──────────────────────────────────────────────────────
+    # -- 1. Prerequisites ------------------------------------------------------
     Step "Checking build tools"
     $pythonCmd = Get-Command $Python -ErrorAction SilentlyContinue
     if (-not $pythonCmd) { Fail "Python not found. Install Python 3.12+ from https://python.org/downloads and re-run." }
@@ -102,7 +102,7 @@ try {
         }
     }
 
-    # ── 2. Build virtual environment ──────────────────────────────────────────
+    # -- 2. Build virtual environment ------------------------------------------
     if (-not (Test-Path $VenvPython)) {
         Step "Creating .build-venv"
         Invoke-Checked $Python @("-m", "venv", (Join-Path $Root ".build-venv"))
@@ -115,7 +115,7 @@ try {
         "-e", ".[production]"
     )
 
-    # ── 3. Frontend ───────────────────────────────────────────────────────────
+    # -- 3. Frontend -----------------------------------------------------------
     if ($SkipFrontend) {
         if (-not (Test-Path (Join-Path $Root "unimonitor/static"))) {
             Fail "-SkipFrontend was given but unimonitor/static does not exist"
@@ -135,15 +135,15 @@ try {
         Copy-Item -Path (Join-Path $Root "frontend/dist/*") -Destination $static -Recurse -Force
     }
 
-    # ── 4. Branding ───────────────────────────────────────────────────────────
+    # -- 4. Branding -----------------------------------------------------------
     $icon = Join-Path $Root "branding/icon.ico"
     if (-not (Test-Path $icon)) {
-        Step "branding/icon.ico is missing — regenerating it"
+        Step "branding/icon.ico is missing -- regenerating it"
         Invoke-Checked $VenvPython @("scripts/make_icon.py")
         if (-not (Test-Path $icon)) { Fail "scripts/make_icon.py did not create branding/icon.ico" }
     }
 
-    # ── 5. Freeze the application ─────────────────────────────────────────────
+    # -- 5. Freeze the application ---------------------------------------------
     Step "Running PyInstaller"
     Invoke-Checked $VenvPython @(
         "-m", "pyinstaller",
@@ -153,7 +153,7 @@ try {
     $exe = Join-Path $Root "dist/UniMonitor/UniMonitor.exe"
     if (-not (Test-Path $exe)) { Fail "PyInstaller finished but dist/UniMonitor/UniMonitor.exe is missing" }
 
-    # ── 6. NSSM (Windows service helper) ──────────────────────────────────────
+    # -- 6. NSSM (Windows service helper) --------------------------------------
     Step "Fetching NSSM"
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
     $zip = Join-Path $BuildDir "nssm.zip"
@@ -179,7 +179,7 @@ try {
         Copy-Item -Path (Join-Path $Root "INSTALL.md") -Destination (Join-Path $Root "dist/UniMonitor/INSTALL.md") -Force
     }
 
-    # ── 7. NSIS ───────────────────────────────────────────────────────────────
+    # -- 7. NSIS ---------------------------------------------------------------
     Step "Locating NSIS (makensis)"
     $makensisCandidates = @(
         "C:\Program Files (x86)\NSIS\makensis.exe",
@@ -191,7 +191,7 @@ try {
     }
 
     if (-not $makensis) {
-        Write-Host "NSIS not installed — installing it for you"
+        Write-Host "NSIS not installed -- installing it for you"
         if (Get-Command winget -ErrorAction SilentlyContinue) {
             & winget install --id NSIS.NSIS --silent --accept-package-agreements --accept-source-agreements
         } elseif (Get-Command choco -ErrorAction SilentlyContinue) {
@@ -205,7 +205,7 @@ try {
     Write-Host "Using $makensis"
     Invoke-Checked $makensis @("/VERSION")
 
-    # ── 8. NSIS installer ─────────────────────────────────────────────────────
+    # -- 8. NSIS installer -----------------------------------------------------
     Step "Building the installer"
     Invoke-Checked $makensis @(
         "/V4",
@@ -215,7 +215,7 @@ try {
     $installer = Join-Path $Root "dist/UniMonitor-Setup-$Version-x64.exe"
     if (-not (Test-Path $installer)) { Fail "makensis reported success but $installer is missing" }
 
-    # ── 9. Smoke test + portable zip ──────────────────────────────────────────
+    # -- 9. Smoke test + portable zip ------------------------------------------
     if (-not $SkipSmokeTest) {
         Step "Smoke-testing the packaged executable"
         $stdout = Join-Path $BuildDir "exe-stdout.txt"
