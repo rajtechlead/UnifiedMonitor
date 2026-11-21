@@ -53,8 +53,8 @@ class UserProfile(BaseModel):
 
 @router.post("/login")
 async def login_local(
-    form_data: OAuth2PasswordRequestForm = Depends(),
-    db: AsyncSession = Depends(get_db),
+    form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Local username/password login (OAuth2 password flow).
 
@@ -106,7 +106,7 @@ async def login_local(
 
 
 @router.get("/sso")
-async def sso_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
+async def sso_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, bool]:
     """Whether "Sign in with Microsoft" can work on this install.
 
     The setup wizard stores the Entra app in the database, not in .env, so a
@@ -140,7 +140,7 @@ async def sso_status(db: AsyncSession = Depends(get_db)) -> dict[str, bool]:
 @router.get("/login")
 async def login(
     request: Request,
-    redirect_after: str = Query(default="/", alias="redirect"),
+    redirect_after: Annotated[str, Query(alias="redirect")] = "/",
 ) -> RedirectResponse:
     """Redirect to Entra ID OAuth2 authorization endpoint."""
     state = secrets.token_urlsafe(32)
@@ -161,10 +161,10 @@ async def login(
 @router.get("/callback")
 async def oauth_callback(
     request: Request,
-    code: str = Query(...),
-    state: str = Query(...),
-    error: str | None = Query(default=None),
-    error_description: str | None = Query(default=None),
+    code: Annotated[str, Query(...)],
+    state: Annotated[str, Query(...)],
+    error: Annotated[str | None, Query()] = None,
+    error_description: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Handle Entra ID OAuth callback, issue JWT tokens."""
     if error:
@@ -240,7 +240,7 @@ async def oauth_callback(
 @router.post("/refresh")
 async def refresh_token(
     body: RefreshRequest,
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TokenResponse:
     """Exchange a refresh token for a new access token."""
     settings = get_settings()

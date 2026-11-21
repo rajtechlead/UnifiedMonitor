@@ -47,11 +47,11 @@ def _control_state(finding: Any) -> str:
     return finding.state
 
 
-@router.get("/frameworks/{framework_id}/requirements")
+@router.get("/frameworks/{framework_id}/requirements", responses={404: {"description": "Not found"}})
 async def framework_requirements(
     framework_id: str,
     current_user: Annotated[Any, Depends(require_compliance())],
-    tenant_id: str | None = Query(default=None),
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> RequirementCatalogue:
     """Per-requirement status for a framework with a requirement catalogue.
 
@@ -138,12 +138,12 @@ async def framework_requirements(
     )
 
 
-@router.get("/frameworks/{framework_id}/evidence-package")
+@router.get("/frameworks/{framework_id}/evidence-package", responses={404: {"description": "Not found"}})
 async def evidence_package(
     framework_id: str,
     current_user: Annotated[Any, Depends(require_compliance())],
-    tenant_id: str | None = Query(default=None),
-    include_evidence: bool = Query(default=True, description="Include captured evidence content"),
+    tenant_id: Annotated[str | None, Query()] = None,
+    include_evidence: Annotated[bool, Query(description="Include captured evidence content")] = True,
 ) -> dict[str, Any]:
     """A self-contained, hashed evidence package for an auditor.
 

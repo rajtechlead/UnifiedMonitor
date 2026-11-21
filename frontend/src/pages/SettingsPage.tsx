@@ -112,11 +112,14 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
   const [error, setError] = useState('')
   if (connection.config.auth_method !== 'certificate') return null
 
-  const thumbprint = String(connection.config.certificate_thumbprint || '')
-  const expires = String(connection.config.certificate_expires_at || '')
+  const rawThumbprint = connection.config.certificate_thumbprint
+  const rawExpires = connection.config.certificate_expires_at
+  const thumbprint = typeof rawThumbprint === 'string' ? rawThumbprint : ''
+  const expires = typeof rawExpires === 'string' ? rawExpires : ''
   const daysLeft = expires ? Math.ceil((new Date(expires).getTime() - Date.now()) / 86_400_000) : null
   const expired = daysLeft !== null && daysLeft <= 0
   const soon = daysLeft !== null && daysLeft <= 30
+  const dayWord = daysLeft === 1 ? 'day' : 'days'
 
   const rotate = async () => {
     setError('')
@@ -152,7 +155,7 @@ function CertificateStatus({ connection, onRotated }: Readonly<{
           <AlertTriangle size={12} />
           {expired
             ? 'This certificate has expired — collection has stopped. Rotate it now.'
-            : `Expires in ${daysLeft} day${daysLeft === 1 ? '' : 's'} — rotate it before it lapses.`}
+            : `Expires in ${daysLeft} ${dayWord} — rotate it before it lapses.`}
         </div>
       )}
       <button

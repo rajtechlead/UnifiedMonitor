@@ -29,6 +29,8 @@ CONTROL_COLUMNS = (
 
 TABLE_STYLE = [("GRID", (0, 0), (-1, -1), 0.25, "grey"), ("BACKGROUND", (0, 0), (-1, 0), "whitesmoke")]
 
+SCORECARD_TITLE = "UniMonitor scorecard"
+
 MEDIA_TYPES = {
     "csv": "text/csv",
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -108,7 +110,7 @@ def to_xlsx(scorecard: dict[str, Any]) -> bytes:
     workbook = Workbook()
     summary = workbook.active
     summary.title = "Summary"
-    summary.append(["UniMonitor scorecard"])
+    summary.append([SCORECARD_TITLE])
     summary["A1"].font = Font(bold=True, size=14)
     summary.append(["Generated", scorecard["generated_at"]])
     summary.append(["Tenant", scorecard["tenant_id"] or "all"])
@@ -157,10 +159,10 @@ def to_pdf(scorecard: dict[str, Any]) -> bytes:
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     buffer = io.BytesIO()
-    document = SimpleDocTemplate(buffer, pagesize=landscape(A4), title="UniMonitor scorecard")
+    document = SimpleDocTemplate(buffer, pagesize=landscape(A4), title=SCORECARD_TITLE)
     styles = getSampleStyleSheet()
     story: list[Any] = [
-        Paragraph("UniMonitor scorecard", styles["Title"]),
+        Paragraph(SCORECARD_TITLE, styles["Title"]),
         Paragraph(f"Generated {scorecard['generated_at']}", styles["Normal"]),
         Spacer(1, 12),
     ]

@@ -51,7 +51,7 @@ class Branding(BaseModel):
     @classmethod
     def _safe_logo(cls, value: str | None) -> str | None:
         """Only https or site-relative URLs — never a javascript:/data: URL."""
-        if value and not (value.startswith("https://") or value.startswith("/")):
+        if value and not value.startswith(("https://", "/")):
             raise ValueError("logo_url must be an https:// URL or a site-relative path")
         return value
 
@@ -142,7 +142,10 @@ async def get_posture_snapshot(
     )
 
 
-@router.put("/posture-snapshot")
+@router.put(
+    "/posture-snapshot",
+    responses={409: {"description": "Conflict"}, 413: {"description": "Payload too large"}, 500: {"description": "Internal error"}},
+)
 async def put_posture_snapshot(
     body: dict[str, Any],
     current_user: Annotated[Any, Depends(require_role("admin"))],

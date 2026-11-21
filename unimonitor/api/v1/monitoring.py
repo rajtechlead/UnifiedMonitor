@@ -163,7 +163,7 @@ COLLECTOR_DEFINITIONS = [
 )
 async def get_platform_health(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
+    db: Annotated[AsyncSession, Depends(get_session)],
 ) -> PlatformHealthResponse:
     """Return health status of all platform components."""
     import time
@@ -254,8 +254,8 @@ async def get_platform_health(
 )
 async def get_collectors(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
 ) -> list[CollectorStatus]:
     """Return the status of all data collectors for a given tenant.
 
@@ -316,12 +316,13 @@ async def get_collectors(
     response_model=CollectorRunResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Trigger a specific collector",
+    responses={400: {"description": "Bad request"}, 500: {"description": "Internal error"}},
 )
 async def run_collector(
     collector_name: str,
     current_user: Annotated[User, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
 ) -> CollectorRunResponse:
     """Trigger a named collector to run immediately for a tenant."""
     valid_names = {d["name"] for d in COLLECTOR_DEFINITIONS}
@@ -367,10 +368,10 @@ async def run_collector(
     summary="Recent collection run history",
 )
 async def get_collection_history(
-    limit: int = Query(default=20, ge=1, le=100),
-    db: AsyncSession = Depends(get_session),
-    current_user: User = Depends(get_current_user),
-    tenant_id: str | None = Query(default=None, description=TENANT_QUERY_DESCRIPTION),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    current_user: Annotated[User, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
 ) -> list[CollectionHistoryEntry]:
     """Return the last N assessment runs for a tenant."""
     from unimonitor.db.models.assessment import Assessment
@@ -500,8 +501,8 @@ async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
 @router.get("/schedule")
 async def get_collection_schedule(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> CollectionScheduleResponse:
     """Automatic collection interval and the next expected run."""
     from unimonitor.config import get_settings
@@ -526,11 +527,11 @@ async def get_collection_schedule(
     )
 
 
-@router.post("/collect", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/collect", status_code=status.HTTP_202_ACCEPTED, responses={503: {"description": "Service unavailable"}})
 async def collect_now(
     current_user: Annotated[User, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> CollectNowResponse:
     """Run a full collection immediately, creating a default assessment if needed."""
     import uuid
@@ -608,8 +609,8 @@ async def collect_now(
 @router.get("/licensing")
 async def get_licensing(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> LicensingResponse:
     """Licence posture: seats bought, assigned, idle and suspended per SKU."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -662,8 +663,8 @@ async def get_licensing(
 @router.get("/service-health")
 async def get_service_health(
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_session)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> ServiceHealthResponse:
     """Microsoft 365 service health and unresolved advisories."""
     tenant = await _resolve_tenant(db, tenant_id)

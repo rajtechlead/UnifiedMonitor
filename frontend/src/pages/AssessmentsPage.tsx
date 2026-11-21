@@ -68,11 +68,15 @@ function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
       background: 'var(--color-surface)', border: '1px solid var(--color-border)',
       borderRadius: 12, overflow: 'hidden',
     }}>
-      <div
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
         style={{
           padding: 20, display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer',
+          width: '100%', textAlign: 'left', border: 'none', background: 'transparent',
+          color: 'inherit', font: 'inherit',
         }}
-        onClick={() => setExpanded(!expanded)}
       >
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
@@ -121,7 +125,7 @@ function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
           </button>
           {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
-      </div>
+      </button>
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', padding: '16px 20px' }}>
@@ -231,8 +235,11 @@ export default function AssessmentsPage() {
         }}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Create New Assessment</div>
           <div style={{ marginBottom: 14 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>Name</label>
+            <label htmlFor="assessment-name" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+              Name
+            </label>
             <input
+              id="assessment-name"
               value={newName}
               onChange={e => setNewName(e.target.value)}
               placeholder="e.g. Quarterly M365 Assessment"
@@ -244,7 +251,7 @@ export default function AssessmentsPage() {
             />
           </div>
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Frameworks</label>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Frameworks</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
               {FRAMEWORK_OPTIONS.map(fw => (
                 <label key={fw} style={{

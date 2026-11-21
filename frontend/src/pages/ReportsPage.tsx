@@ -155,10 +155,11 @@ export default function ReportsPage() {
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Generate New Report</div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
+            <label htmlFor="report-run" style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 6 }}>
               Assessment Run
             </label>
             <select
+              id="report-run"
               value={selectedRunId}
               onChange={e => setSelectedRunId(e.target.value)}
               style={{
@@ -184,9 +185,7 @@ export default function ReportsPage() {
           </div>
 
           <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 8 }}>
-              Output Formats
-            </label>
+            <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Output Formats</div>
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
               {FORMAT_OPTIONS.map(fmt => (
                 <label key={fmt} style={{

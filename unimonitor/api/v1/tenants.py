@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field, SecretStr
 from unimonitor.auth.dependencies import get_current_user, require_role
 
 logger = structlog.get_logger(__name__)
+TENANT_NOT_FOUND = "Tenant not found"
+
 router = APIRouter()
 
 
@@ -150,10 +152,10 @@ class TenantRollupResponse(BaseModel):
 @router.get("")
 async def list_tenants(
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=100),
-    search: str | None = Query(default=None),
-    is_active: bool | None = Query(default=None),
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
+    search: Annotated[str | None, Query()] = None,
+    is_active: Annotated[bool | None, Query()] = None,
 ) -> PaginatedTenants:
     """List all tenants (admin only)."""
     from unimonitor.db.base import async_session_factory
@@ -212,7 +214,7 @@ async def create_tenant(
 @router.get("/rollup")
 async def tenant_rollup(
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    include_coverage: bool = Query(default=True, description="Compute framework coverage per tenant"),
+    include_coverage: Annotated[bool, Query(description="Compute framework coverage per tenant")] = True,
 ) -> TenantRollupResponse:
     """MSP rollup: one comparable row per tenant, plus managed totals.
 
@@ -390,7 +392,7 @@ async def grant_tenant_access(
     async with async_session_factory() as session:
         tenant = await session.get(Tenant, tenant_id)
         if tenant is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
         user = await session.get(AppUser, body.user_id)
         if user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -451,7 +453,7 @@ async def revoke_tenant_access(
     responses={
         401: {"description": "Not authenticated"},
         403: {"description": "No access to this tenant"},
-        404: {"description": "Tenant not found"},
+        404: {"description": TENANT_NOT_FOUND},
     },
 )
 async def tenant_summary(
@@ -471,7 +473,7 @@ async def tenant_summary(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You do not have access to this tenant")
         tenant = await session.get(Tenant, tenant_id)
         if tenant is None:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
         severity_rows = (
             await session.execute(
                 select(Finding.severity, func.count(Finding.id))
@@ -509,7 +511,7 @@ async def get_tenant(
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
 
     return TenantResponse.model_validate(tenant)
 
@@ -528,7 +530,7 @@ async def update_tenant(
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
 
         updates = body.model_dump(exclude_none=True)
         if "client_secret" in updates:
@@ -553,7 +555,7 @@ async def delete_tenant(
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
         await repo.soft_delete(tenant_id)
 
     logger.info("tenant_deleted", tenant_id=tenant_id, by=current_user.id)
@@ -573,7 +575,7 @@ async def test_connection(
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
 
     # Required Graph API permissions for UniMonitor
 
@@ -650,7 +652,7 @@ async def tenant_health(
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
         stats = await repo.get_collection_stats(tenant_id, hours=24)
 
     return TenantHealthResponse(

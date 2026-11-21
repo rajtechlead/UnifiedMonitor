@@ -69,18 +69,18 @@ async def _active_admins(db: AsyncSession) -> int:
 @router.get("")
 async def list_users(
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[UserResponse]:
     """Every user of this install, oldest first."""
     users = (await db.execute(select(AppUser).order_by(AppUser.created_at))).scalars().all()
     return [_response(user) for user in users]
 
 
-@router.post("", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED, responses={400: {"description": "Bad request"}, 409: {"description": "Conflict"}})
 async def create_user(
     body: UserCreate,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Add a user. Without a password they sign in with Microsoft."""
     email = body.email.strip().lower()
@@ -122,12 +122,12 @@ async def create_user(
     return _response(user)
 
 
-@router.put("/{user_id}/role")
+@router.put("/{user_id}/role", responses={404: {"description": "Not found"}, 409: {"description": "Conflict"}})
 async def update_role(
     user_id: str,
     body: RoleUpdate,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Change a user's role, refusing to remove the last active administrator."""
     user = await db.get(AppUser, user_id)
@@ -151,12 +151,12 @@ async def update_role(
     return _response(user)
 
 
-@router.put("/{user_id}")
+@router.put("/{user_id}", responses={404: {"description": "Not found"}, 409: {"description": "Conflict"}})
 async def update_user(
     user_id: str,
     body: ActiveUpdate,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> UserResponse:
     """Enable or disable sign-in for a user."""
     user = await db.get(AppUser, user_id)
@@ -182,11 +182,11 @@ async def update_user(
     return _response(user)
 
 
-@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": "Not found"}, 409: {"description": "Conflict"}})
 async def delete_user(
     user_id: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Remove access. The person's Microsoft 365 account is untouched."""
     user = await db.get(AppUser, user_id)

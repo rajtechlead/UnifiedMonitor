@@ -132,7 +132,7 @@ def _mask(value: str) -> str:
 async def get_notification_settings(
     tenant_id: str,
     current_user: Annotated[User, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_session),
+    db: Annotated[AsyncSession, Depends(get_session)],
 ) -> NotificationSettings:
     """Return notification settings for a tenant (secrets masked)."""
     tenant = await _get_tenant(tenant_id, db)
@@ -204,7 +204,7 @@ async def update_notification_settings(
     tenant_id: str,
     update: NotificationSettingsUpdate,
     current_user: Annotated[User, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_session),
+    db: Annotated[AsyncSession, Depends(get_session)],
 ) -> NotificationSettings:
     """Persist notification settings for a tenant."""
     import json
@@ -271,16 +271,12 @@ async def update_notification_settings(
     return await get_notification_settings(tenant_id=tenant_id, current_user=current_user, db=db)
 
 
-@router.post(
-    "/test",
-    response_model=TestNotificationResponse,
-    summary="Send a test notification",
-)
+@router.post("/test", response_model=TestNotificationResponse, summary="Send a test notification", responses={400: {"description": "Bad request"}})
 async def test_notification(
     tenant_id: str,
     request: TestNotificationRequest,
     current_user: Annotated[User, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_session),
+    db: Annotated[AsyncSession, Depends(get_session)],
 ) -> TestNotificationResponse:
     """Send a test notification via the specified channel."""
     import json

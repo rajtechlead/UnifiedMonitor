@@ -90,7 +90,7 @@ async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
             row = {
                 "displayName": intent.get("displayName", ""),
                 "isAssigned": bool(assignments),
-                "assignmentTarget": "allDevices" if assigned_all else ("group" if assignments else ""),
+                "assignmentTarget": _assignment_target(assigned_all, bool(assignments)),
             }
             # Only claim version currency when Graph actually reports both versions.
             if "version" in intent and "templateReference" in intent:
@@ -374,3 +374,10 @@ def collect_copilot_studio() -> dict[str, Any]:
     are supplied through the posture snapshot (UNIMONITOR_POSTURE_SNAPSHOT).
     """
     return {}
+
+
+def _assignment_target(assigned_all: bool, has_assignments: bool) -> str:
+    """Name the widest assignment target instead of nesting conditionals."""
+    if assigned_all:
+        return "allDevices"
+    return "group" if has_assignments else ""

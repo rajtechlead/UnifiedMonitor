@@ -107,9 +107,9 @@ ScorecardFormat = Literal["csv", "xlsx", "pdf"]
 async def download_scorecard(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    fmt: ScorecardFormat = Query(default="xlsx", description="csv, xlsx or pdf"),
-    tenant_id: str | None = Query(default=None),
-    run_id: str | None = Query(default=None),
+    fmt: Annotated[ScorecardFormat, Query(description="csv, xlsx or pdf")] = "xlsx",
+    tenant_id: Annotated[str | None, Query()] = None,
+    run_id: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Download the control-level scorecard as a file.
 
@@ -128,7 +128,7 @@ async def download_scorecard(
     )
 
 
-@router.post("/generate", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/generate", status_code=status.HTTP_202_ACCEPTED, responses={400: {"description": "Bad request"}, 404: {"description": "Not found"}})
 async def generate_report(
     body: ReportGenerateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -199,10 +199,10 @@ async def generate_report(
 @router.get("")
 async def list_reports(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
-    report_type: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    tenant_id: Annotated[str | None, Query()] = None,
+    report_type: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> ReportListResponse:
     """List generated reports."""
     # Try DB first, fall back to in-memory
@@ -275,9 +275,9 @@ class PaginatedRunReports(BaseModel):
 @router.get("/runs")
 async def list_report_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    tenant_id: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedRunReports:
     """List assessment runs for the Reports page run picker.
 
@@ -360,7 +360,7 @@ async def list_report_runs(
         return PaginatedRunReports(items=[], total=0, page=page, page_size=page_size)
 
 
-@router.get("/{report_id}")
+@router.get("/{report_id}", responses={404: {"description": "Not found"}})
 async def get_report_status(
     report_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -413,7 +413,8 @@ async def _report_files(report_id: str) -> dict[str, str]:
             if not report or not report.file_paths:
                 return {}
             stored = json.loads(report.file_paths)
-    except Exception as exc:  # noqa: BLE001 - a missing DB must return 404, not 500
+    # A missing database must yield an empty answer, not a 500.
+    except Exception as exc:  # noqa: BLE001
         logger.warning("report_lookup_failed", report_id=report_id, error=str(exc))
         return {}
     return {str(fmt): str(path) for fmt, path in stored.items() if Path(str(path)).exists()}
@@ -423,7 +424,7 @@ def _file_response(fmt: str, path: str) -> FileResponse:
     return FileResponse(path=path, media_type=_MEDIA_TYPES[fmt], filename=Path(path).name)
 
 
-@router.get("/{report_id}/download/{fmt}")
+@router.get("/{report_id}/download/{fmt}", responses={404: {"description": "Not found"}})
 async def download_report_format(
     report_id: str,
     fmt: str,
@@ -440,7 +441,7 @@ async def download_report_format(
     return _file_response(fmt, path)
 
 
-@router.get("/{report_id}/download")
+@router.get("/{report_id}/download", responses={404: {"description": "Not found"}})
 async def download_report(
     report_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

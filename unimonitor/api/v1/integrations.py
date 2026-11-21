@@ -119,7 +119,7 @@ async def _open_findings(db: Any, tenant_id: str | None, severity: str | None, l
     return list((await db.execute(stmt)).scalars().all())
 
 
-@router.post("/siem/{provider}/test")
+@router.post("/siem/{provider}/test", responses={400: {"description": "Bad request"}})
 async def test_siem_connector(
     provider: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -134,12 +134,12 @@ async def test_siem_connector(
     return SendResponse(**receipt)
 
 
-@router.post("/siem/{provider}/send")
+@router.post("/siem/{provider}/send", responses={502: {"description": "Upstream failure"}})
 async def push_to_siem(
     provider: str,
     body: SendRequest,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: Any = Depends(get_db),
+    db: Annotated[Any, Depends(get_db)],
 ) -> SendResponse:
     """Push the current open findings to one SIEM connector."""
     from unimonitor.integrations.events import finding_event
@@ -154,11 +154,11 @@ async def push_to_siem(
     return SendResponse(**receipt)
 
 
-@router.post("/ticketing/sync")
+@router.post("/ticketing/sync", responses={400: {"description": "Bad request"}})
 async def sync_tickets(
     body: TicketSyncRequest,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: Any = Depends(get_db),
+    db: Annotated[Any, Depends(get_db)],
 ) -> TicketSyncResponse:
     """Open a ticket for every open finding that does not have one yet.
 

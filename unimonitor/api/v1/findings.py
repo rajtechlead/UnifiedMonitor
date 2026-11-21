@@ -194,8 +194,8 @@ async def _release_expired_suppressions(db: AsyncSession) -> int:
 @router.get("/summary")
 async def findings_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> FindingSummaryResponse:
     """Return aggregated finding counts by severity, state, and category."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -214,14 +214,14 @@ async def findings_summary(
     )
 
 
-@router.get("/export/siem")
+@router.get("/export/siem", responses={400: {"description": "Bad request"}})
 async def export_siem(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    fmt: Literal["cef", "json"] = Query(default="cef", alias="format"),
-    limit: int = Query(default=1000, ge=1, le=5000),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
+    fmt: Annotated[Literal["cef", "json"], Query(alias="format")] = "cef",
+    limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
 ) -> Response:
     """Export open findings for a SIEM (CEF or JSON lines).
 
@@ -258,22 +258,22 @@ async def export_siem(
     return Response(content="\n".join(finding_cef(row) for row in rows), media_type="text/plain")
 
 
-@router.get("")
+@router.get("", responses={422: {"description": "Unprocessable entity"}})
 async def list_findings(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    state: str | None = Query(default=None),
-    triage_status: str | None = Query(default=None),
-    category: str | None = Query(default=None),
-    service: str | None = Query(default=None),
-    is_suppressed: bool | None = Query(default=None),
-    search: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=100),
-    sort_by: str = Query(default="last_seen_at"),
-    sort_desc: bool = Query(default=True),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
+    state: Annotated[str | None, Query()] = None,
+    triage_status: Annotated[str | None, Query()] = None,
+    category: Annotated[str | None, Query()] = None,
+    service: Annotated[str | None, Query()] = None,
+    is_suppressed: Annotated[bool | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
+    sort_by: Annotated[str, Query()] = "last_seen_at",
+    sort_desc: Annotated[bool, Query()] = True,
 ) -> PaginatedFindings:
     """List findings with filtering and pagination."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -314,9 +314,9 @@ async def list_findings(
 @router.get("/priority")
 async def priority_queue(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    limit: int = Query(default=20, ge=1, le=100),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PriorityQueueResponse:
     """Open findings ranked by return on remediation effort (ROI).
 
@@ -368,11 +368,11 @@ async def priority_queue(
     return PriorityQueueResponse(items=items[:limit], total=total, tenant_id=tenant_id)
 
 
-@router.get("/{finding_id}")
+@router.get("/{finding_id}", responses={404: {"description": "Not found"}})
 async def get_finding(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FindingResponse:
     """Get a specific finding by ID."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -385,12 +385,12 @@ async def get_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.patch("/{finding_id}/state")
+@router.patch("/{finding_id}/state", responses={404: {"description": "Not found"}, 422: {"description": "Unprocessable entity"}})
 async def update_finding_state(
     finding_id: str,
     body: StateUpdateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FindingResponse:
     """Update the implementation state of a finding."""
     if body.state not in VALID_STATES:
@@ -427,12 +427,12 @@ async def update_finding_state(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/{finding_id}/triage")
+@router.post("/{finding_id}/triage", responses={404: {"description": "Not found"}})
 async def triage_finding(
     finding_id: str,
     body: TriageRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FindingResponse:
     """Acknowledge, snooze, assign or resolve a finding.
 
@@ -480,11 +480,11 @@ async def triage_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.get("/{finding_id}/timeline")
+@router.get("/{finding_id}/timeline", responses={404: {"description": "Not found"}})
 async def finding_timeline(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[TimelineItem]:
     """Merged investigation timeline: state changes and collected evidence."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -513,12 +513,12 @@ async def finding_timeline(
     return timeline
 
 
-@router.post("/{finding_id}/suppress")
+@router.post("/{finding_id}/suppress", responses={404: {"description": "Not found"}})
 async def suppress_finding(
     finding_id: str,
     body: SuppressRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FindingResponse:
     """Suppress a finding with a justification reason."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -547,11 +547,11 @@ async def suppress_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/{finding_id}/unsuppress")
+@router.post("/{finding_id}/unsuppress", responses={404: {"description": "Not found"}})
 async def unsuppress_finding(
     finding_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> FindingResponse:
     """Remove suppression from a finding."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -579,12 +579,16 @@ async def unsuppress_finding(
     return FindingResponse.model_validate(finding)
 
 
-@router.post("/{finding_id}/remediate", status_code=status.HTTP_202_ACCEPTED)
+@router.post(
+    "/{finding_id}/remediate",
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={404: {"description": "Not found"}, 503: {"description": "Service unavailable"}},
+)
 async def trigger_ai_remediation(
     finding_id: str,
     body: AiRemediationRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Trigger AI-powered remediation generation for a finding."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -617,11 +621,11 @@ async def trigger_ai_remediation(
         raise HTTPException(status_code=503, detail="Failed to dispatch AI remediation task") from exc
 
 
-@router.get("/{finding_id}/history")
+@router.get("/{finding_id}/history", responses={404: {"description": "Not found"}})
 async def get_finding_history(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[FindingHistoryItem]:
     """Return state change history for a finding."""
     from unimonitor.db.repositories.finding_repo import FindingRepository

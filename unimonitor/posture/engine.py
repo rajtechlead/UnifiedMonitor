@@ -11,6 +11,9 @@ from typing import Any
 CheckResult = tuple[bool | None, str]
 Check = Callable[[dict[str, list[dict[str, Any]]]], CheckResult]
 
+# A rule whose resources were absent is "not_applicable", never a pass.
+_RULE_STATE = {True: "pass", False: "fail", None: "not_applicable"}
+
 
 @dataclass(frozen=True)
 class Rule:
@@ -40,7 +43,7 @@ def evaluate_rules(rules: list[Rule], resources: dict[str, list[dict[str, Any]]]
                 "id": rule.id,
                 "title": rule.title,
                 "severity": rule.severity,
-                "state": "pass" if state is True else "fail" if state is False else "not_applicable",
+                "state": _RULE_STATE[state],
                 "detail": detail,
                 "remediation": rule.remediation,
                 "tags": list(rule.tags),

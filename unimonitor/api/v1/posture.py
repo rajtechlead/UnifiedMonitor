@@ -48,14 +48,11 @@ async def list_platforms(
 
 @router.get(
     "/analysis",
-    responses={
-        401: {"description": "Not authenticated"},
-        404: {"description": "No posture snapshot is configured or it cannot be read"},
-    },
+    responses={401: {"description": "Not authenticated"}, 404: {"description": "No posture snapshot is configured or it cannot be read"}},
 )
 async def get_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
-    platform: str | None = Query(default=None, description="CIS pack to evaluate, e.g. aws"),
+    platform: Annotated[str | None, Query(description="CIS pack to evaluate, e.g. aws")] = None,
 ) -> dict[str, Any]:
     """Analyse the snapshot configured in ``UNIMONITOR_POSTURE_SNAPSHOT``."""
     snapshot = load_snapshot()

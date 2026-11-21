@@ -61,20 +61,23 @@ export default function SearchPalette({ open, onClose }: { readonly open: boolea
 
   return (
     <div
-      role="presentation"
-      onClick={onClose}
-      onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.45)',
+      style={{ position: 'fixed', inset: 0,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: '12vh', zIndex: 100 }}
     >
-      <div
-        role="dialog"
-        aria-modal="true"
+      <button
+        type="button"
+        aria-label="Close search"
+        onClick={onClose}
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%',
+          background: 'rgba(15,23,42,0.45)', border: 'none', padding: 0, cursor: 'default' }}
+      />
+      <dialog
+        open
         aria-label="Search"
-        onClick={(event) => event.stopPropagation()}
-        style={{ width: '100%', maxWidth: 560, background: 'var(--color-surface)',
-          border: '1px solid var(--color-border)', borderRadius: 12, overflow: 'hidden',
-          boxShadow: 'var(--shadow-md)' }}
+        onKeyDown={(event) => { if (event.key === 'Escape') onClose() }}
+        style={{ position: 'relative', margin: 0, padding: 0, width: '100%', maxWidth: 560,
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 12, overflow: 'hidden', boxShadow: 'var(--shadow-md)', color: 'inherit' }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
           borderBottom: '1px solid var(--color-border)' }}>
@@ -113,7 +116,7 @@ export default function SearchPalette({ open, onClose }: { readonly open: boolea
             <div style={{ padding: 16, fontSize: 12, color: 'var(--color-text-muted)' }}>No matches.</div>
           )}
         </div>
-      </div>
+      </dialog>
     </div>
   )
 }

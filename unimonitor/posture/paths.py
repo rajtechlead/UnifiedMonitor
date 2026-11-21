@@ -153,8 +153,7 @@ def analyse(resources: list[dict[str, Any]], edges: list[dict[str, Any]] | None 
 
     # Directly reported paths from an export (e.g. a graph product) are kept so
     # the page shows the same chains the operator already trusts.
-    for path in _reported_paths(resources):
-        findings.append(path)
+    findings.extend(_reported_paths(resources))
 
     return result(
         CATEGORY,

@@ -98,7 +98,10 @@ class PaginatedRuns(BaseModel):
 # ── Helpers ──────────────────────────────────────────────────
 
 
-def _assessment_to_response(assessment, latest_run=None) -> AssessmentResponse:
+def _assessment_to_response(
+    assessment,
+    latest_run=None,
+) -> AssessmentResponse:
     return AssessmentResponse(
         id=assessment.id,
         tenant_id=assessment.tenant_id,
@@ -118,9 +121,9 @@ def _assessment_to_response(assessment, latest_run=None) -> AssessmentResponse:
 @router.get("")
 async def list_assessments(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    is_active: bool | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    is_active: Annotated[bool | None, Query()] = None,
 ) -> PaginatedAssessments:
     """List assessments, optionally filtered by tenant."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -139,7 +142,7 @@ async def list_assessments(
 async def create_assessment(
     body: AssessmentCreate,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssessmentResponse:
     """Create a new assessment configuration."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -158,11 +161,11 @@ async def create_assessment(
     return _assessment_to_response(assessment)
 
 
-@router.get("/{assessment_id}")
+@router.get("/{assessment_id}", responses={404: {"description": "Not found"}})
 async def get_assessment(
     assessment_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssessmentResponse:
     """Get assessment by ID with latest run summary."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -176,12 +179,12 @@ async def get_assessment(
     return _assessment_to_response(assessment, latest)
 
 
-@router.put("/{assessment_id}")
+@router.put("/{assessment_id}", responses={404: {"description": "Not found"}})
 async def update_assessment(
     assessment_id: str,
     body: AssessmentUpdate,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AssessmentResponse:
     """Update assessment configuration."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -210,11 +213,11 @@ async def update_assessment(
     return _assessment_to_response(assessment, latest)
 
 
-@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{assessment_id}", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": "Not found"}})
 async def delete_assessment(
     assessment_id: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     """Delete an assessment and all its runs."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -228,11 +231,11 @@ async def delete_assessment(
     logger.info("assessment_deleted", assessment_id=assessment_id, by=current_user.id)
 
 
-@router.post("/{assessment_id}/run", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/{assessment_id}/run", status_code=status.HTTP_202_ACCEPTED, responses={404: {"description": "Not found"}})
 async def trigger_run(
     assessment_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> TriggerRunResponse:
     """Trigger an assessment run as a Celery background task."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -288,9 +291,9 @@ async def trigger_run(
 async def list_runs(
     assessment_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=20, ge=1, le=100),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedRuns:
     """List all runs for an assessment."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -306,12 +309,12 @@ async def list_runs(
     )
 
 
-@router.get("/{assessment_id}/runs/{run_id}")
+@router.get("/{assessment_id}/runs/{run_id}", responses={404: {"description": "Not found"}})
 async def get_run(
     assessment_id: str,
     run_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> RunSummary:
     """Get a specific assessment run."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -324,12 +327,16 @@ async def get_run(
     return RunSummary.model_validate(run)
 
 
-@router.post("/{assessment_id}/runs/{run_id}/cancel", status_code=status.HTTP_200_OK)
+@router.post(
+    "/{assessment_id}/runs/{run_id}/cancel",
+    status_code=status.HTTP_200_OK,
+    responses={404: {"description": "Not found"}, 409: {"description": "Conflict"}},
+)
 async def cancel_run(
     assessment_id: str,
     run_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict:
     """Cancel a pending or running assessment run."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository

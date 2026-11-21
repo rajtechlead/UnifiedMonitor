@@ -270,7 +270,11 @@ async def _get_finding_counts(db: AsyncSession, tenant_id: str | None) -> Findin
     )
 
 
-async def _get_top_findings_list(db: AsyncSession, tenant_id: str | None, limit: int = 10) -> list[TopFinding]:
+async def _get_top_findings_list(
+    db: AsyncSession,
+    tenant_id: str | None,
+    limit: int = 10,
+) -> list[TopFinding]:
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
     repo = FindingRepository(db)
@@ -352,8 +356,8 @@ async def _build_framework_coverage(db: AsyncSession, tenant_id: str | None) -> 
 @router.get("/overview")
 async def dashboard_overview(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> OverviewResponse:
     """Overview dashboard: scores, finding counts, monitoring health."""
     sec, comp, risk = await _get_scores_for_tenant(db, tenant_id)
@@ -424,8 +428,8 @@ async def dashboard_overview(
 @router.get("/executive")
 async def dashboard_executive(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> ExecutiveSummaryResponse:
     """Executive dashboard view."""
     sec, comp, risk = await _get_scores_for_tenant(db, tenant_id)
@@ -466,8 +470,8 @@ async def dashboard_executive(
 @router.get("/security")
 async def dashboard_security(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> SecurityViewResponse:
     """Security operations dashboard view."""
     finding_counts = await _get_finding_counts(db, tenant_id)
@@ -509,8 +513,8 @@ async def dashboard_security(
 @router.get("/compliance")
 async def dashboard_compliance(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> ComplianceViewResponse:
     """Compliance dashboard view — framework coverage percentages."""
     _, comp, _ = await _get_scores_for_tenant(db, tenant_id)
@@ -527,8 +531,8 @@ async def dashboard_compliance(
 @router.get("/risk")
 async def dashboard_risk(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> RiskViewResponse:
     """Risk dashboard — heatmap and every open risk, so nothing is hidden behind "critical"."""
     from sqlalchemy import select
@@ -580,8 +584,8 @@ async def dashboard_risk(
 @router.get("/soc")
 async def dashboard_soc(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> SocViewResponse:
     """SOC operations dashboard view."""
     finding_counts = await _get_finding_counts(db, tenant_id)
@@ -601,8 +605,8 @@ async def dashboard_soc(
 @router.get("/audit")
 async def dashboard_audit(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=100, ge=1, le=500),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> AuditViewResponse:
     """Audit view — recent audit trail entries and 24h activity."""
     from sqlalchemy import func, select
@@ -656,8 +660,8 @@ async def dashboard_audit(
 @router.get("/audit/verify")
 async def verify_audit_chain(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    limit: int = Query(default=5000, ge=1, le=50000),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    limit: Annotated[int, Query(ge=1, le=50000)] = 5000,
 ) -> AuditChainResponse:
     """Recompute the audit hash chain and report the first break."""
     from unimonitor.core.audit import verify_chain
@@ -669,9 +673,9 @@ async def verify_audit_chain(
 @router.get("/trends")
 async def dashboard_trends(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    window_days: int = Query(default=30, ge=7, le=365),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    window_days: Annotated[int, Query(ge=7, le=365)] = 30,
 ) -> TrendsResponse:
     """Historical score and finding trends, plus remediation SLA performance."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
@@ -813,7 +817,12 @@ def _count_states(findings: list) -> tuple[FindingCounts, StateCounts, float, fl
     )
 
 
-def _summarise_provider(provider, findings: list, controls: list, connected: bool | None = None) -> CloudProviderSummary:
+def _summarise_provider(
+    provider,
+    findings: list,
+    controls: list,
+    connected: bool | None = None,
+) -> CloudProviderSummary:
     """One provider row. An unconnected cloud reports no data, not false findings."""
     is_connected = bool(findings) if connected is None else connected
     if not is_connected:
@@ -936,8 +945,8 @@ def _pillar_buckets(states: dict[str, str]) -> dict[str, dict[str, int]]:
 @router.get("/zero-trust")
 async def dashboard_zero_trust(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> ZeroTrustResponse:
     """Coverage per Zero Trust pillar, grouped from each control's ``zero_trust`` mapping."""
     from sqlalchemy import select
@@ -981,8 +990,8 @@ async def dashboard_zero_trust(
 @router.get("/clouds")
 async def dashboard_clouds(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> CloudAggregateResponse:
     """Aggregate multi-cloud dashboard: one row per provider plus totals."""
     from unimonitor.grc.providers import PROVIDERS
@@ -1021,12 +1030,12 @@ async def dashboard_clouds(
     )
 
 
-@router.get("/clouds/{provider_id}")
+@router.get("/clouds/{provider_id}", responses={404: {"description": "Not found"}})
 async def dashboard_cloud_provider(
     provider_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> CloudProviderDetailResponse:
     """Single-cloud dashboard: scores, control coverage and findings for one provider."""
     from fastapi import HTTPException
@@ -1151,9 +1160,9 @@ class CisoDashboardResponse(BaseModel):
 @router.get("/ciso")
 async def dashboard_ciso(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    risk_limit: int = Query(default=10, ge=1, le=50),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    risk_limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> CisoDashboardResponse:
     """CISO view: residual risk across every monitored cloud."""
     from unimonitor.grc.providers import PROVIDERS, provider_for_service

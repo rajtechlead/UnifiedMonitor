@@ -7,7 +7,7 @@ admin token can connect, change or remove a platform.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -30,8 +30,8 @@ http_bearer = HTTPBearer(auto_error=False)
 
 
 async def require_setup_admin(
-    db: AsyncSession = Depends(get_db),
-    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(http_bearer)],
 ) -> None:
     """Allow the request while no administrator exists; require an admin token after."""
     if not await service.has_admin(db):
@@ -88,13 +88,13 @@ def _certificate_payload(certificate: ClientCertificate | None) -> dict[str, Any
 
 
 @router.get("/status")
-async def setup_status(db: AsyncSession = Depends(get_db)) -> dict:
+async def setup_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
     """Setup progress: drives the first-run redirect and the connection list."""
     return await service.get_status(db)
 
 
 @router.post("/admin")
-async def create_admin(body: FirstAdmin, db: AsyncSession = Depends(get_db)) -> dict:
+async def create_admin(body: FirstAdmin, db: Annotated[AsyncSession, Depends(get_db)]) -> dict:
     """Create the first local administrator and return a session token."""
     if await service.has_admin(db):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An administrator already exists.")
@@ -113,7 +113,7 @@ async def create_admin(body: FirstAdmin, db: AsyncSession = Depends(get_db)) -> 
 
 
 @router.post("/microsoft/device-code")
-async def microsoft_device_code(_: None = Depends(require_setup_admin)) -> dict:
+async def microsoft_device_code(_: Annotated[None, Depends(require_setup_admin)]) -> dict:
     """Start the one-click Microsoft 365 connection."""
     try:
         code = await m365.start_device_flow()
@@ -132,8 +132,8 @@ async def microsoft_device_code(_: None = Depends(require_setup_admin)) -> dict:
 @router.post("/microsoft/complete")
 async def microsoft_complete(
     body: CompleteRequest,
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
     """Poll the device-code sign-in once; on success create the app and store it."""
     try:
@@ -197,8 +197,8 @@ async def microsoft_complete(
 
 @router.post("/microsoft/verify")
 async def microsoft_verify(
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
     """Re-check the stored Microsoft connection, e.g. after a manual certificate upload."""
     try:
@@ -210,9 +210,9 @@ async def microsoft_verify(
 
 @router.post("/microsoft/certificate/rotate")
 async def microsoft_rotate_certificate(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
     body: RotateCertificateRequest | None = None,
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
 ) -> dict:
     """Replace the stored certificate with a freshly generated one."""
     try:
@@ -226,8 +226,8 @@ async def microsoft_rotate_certificate(
 @router.post("/connections/google-service-account")
 async def connect_google_service_account(
     body: GoogleServiceAccountRequest,
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
     """Connect Google Cloud and Workspace with one shared service account."""
     try:
@@ -249,8 +249,8 @@ async def connect_google_service_account(
 async def connect(
     provider: str,
     payload: dict[str, Any],
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
     """Validate and store one platform's credentials."""
     try:
@@ -263,8 +263,8 @@ async def connect(
 @router.delete("/connections/{provider}")
 async def remove_connection(
     provider: str,
-    db: AsyncSession = Depends(get_db),
-    _: None = Depends(require_setup_admin),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
     if not await service.delete_connection(db, provider):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No {provider} connection.")

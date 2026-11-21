@@ -102,7 +102,7 @@ class EvidenceUploadResponse(BaseModel):
 @router.get("/frameworks")
 async def list_frameworks_with_coverage(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> list[FrameworkCoverage]:
     """List all supported frameworks with current compliance coverage."""
     from unimonitor.db.base import async_session_factory
@@ -129,11 +129,11 @@ async def list_frameworks_with_coverage(
     return result
 
 
-@router.get("/frameworks/{framework_id}/coverage")
+@router.get("/frameworks/{framework_id}/coverage", responses={404: {"description": "Not found"}})
 async def framework_coverage(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> FrameworkCoverage:
     """Get detailed compliance coverage for a specific framework."""
     fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
@@ -159,11 +159,11 @@ async def framework_coverage(
     )
 
 
-@router.get("/frameworks/{framework_id}/controls")
+@router.get("/frameworks/{framework_id}/controls", responses={404: {"description": "Not found"}})
 async def framework_controls(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> list[dict]:
     """Get all controls for a framework with current finding state."""
     fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
@@ -235,10 +235,10 @@ async def framework_controls(
 async def controls_trend(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: str | None = Query(default=None),
-    days: int = Query(default=30, ge=1, le=365, description="Window in days"),
-    limit: int = Query(default=100, ge=1, le=500),
-    only_changed: bool = Query(default=False, description="Only controls whose state changed"),
+    tenant_id: Annotated[str | None, Query()] = None,
+    days: Annotated[int, Query(ge=1, le=365, description="Window in days")] = 30,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    only_changed: Annotated[bool, Query(description="Only controls whose state changed")] = False,
 ) -> dict[str, Any]:
     """Control-level state series from the snapshots written by each run."""
     from unimonitor.grc.control_trends import control_trends
@@ -248,17 +248,14 @@ async def controls_trend(
 
 @router.get(
     "/controls/{control_id}/trend",
-    responses={
-        401: {"description": "Not authenticated"},
-        404: {"description": "No snapshots exist for this control in the window"},
-    },
+    responses={401: {"description": "Not authenticated"}, 404: {"description": "No snapshots exist for this control in the window"}},
 )
 async def single_control_trend(
     control_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: str | None = Query(default=None),
-    days: int = Query(default=90, ge=1, le=365),
+    tenant_id: Annotated[str | None, Query()] = None,
+    days: Annotated[int, Query(ge=1, le=365)] = 90,
 ) -> dict[str, Any]:
     """State series for one control."""
     from unimonitor.grc.control_trends import control_trend
@@ -269,10 +266,10 @@ async def single_control_trend(
     return result
 
 
-@router.get("/crosswalk")
+@router.get("/crosswalk", responses={404: {"description": "Not found"}})
 async def control_crosswalk(
     current_user: Annotated[Any, Depends(get_current_user)],
-    control_id: str = Query(..., description="External control ID to crosswalk"),
+    control_id: Annotated[str, Query(..., description="External control ID to crosswalk")],
 ) -> list[CrosswalkEntry]:
     """Show how a control maps across all supported frameworks."""
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
@@ -307,9 +304,9 @@ async def control_crosswalk(
 @router.get("/gap-analysis")
 async def gap_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
-    framework_id: str | None = Query(default=None),
-    min_severity: str = Query(default="medium"),
+    tenant_id: Annotated[str | None, Query()] = None,
+    framework_id: Annotated[str | None, Query()] = None,
+    min_severity: Annotated[str, Query()] = "medium",
 ) -> GapAnalysisResponse:
     """Gap analysis: controls not yet implemented, grouped by category."""
     from unimonitor.db.base import async_session_factory
@@ -371,7 +368,7 @@ async def gap_analysis(
 @router.get("/risk-scoring")
 async def risk_scoring(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: str | None = Query(default=None),
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> RiskScoringResponse:
     """Overall risk scoring with breakdown by category."""
     from unimonitor.db.base import async_session_factory
@@ -398,10 +395,10 @@ async def risk_scoring(
     )
 
 
-@router.post("/evidence/{finding_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/evidence/{finding_id}", status_code=status.HTTP_201_CREATED, responses={404: {"description": "Not found"}})
 async def upload_evidence(
     finding_id: str,
-    file: UploadFile = File(...),
+    file: Annotated[UploadFile, File(...)],
     current_user: Annotated[Any, Depends(require_role("analyst"))] = None,
 ) -> EvidenceUploadResponse:
     """Upload evidence file for a finding."""
@@ -451,7 +448,7 @@ async def upload_evidence(
     )
 
 
-@router.get("/evidence/{finding_id}")
+@router.get("/evidence/{finding_id}", responses={404: {"description": "Not found"}})
 async def list_evidence(
     finding_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],

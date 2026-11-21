@@ -234,8 +234,8 @@ def _check_response(check: Any) -> CheckResponse:
 @router.get("/summary")
 async def zerotrust_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> SummaryResponse:
     """Latest score for every platform, so the page can compare them side by side."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -290,13 +290,13 @@ async def zerotrust_summary(
 @router.get("/checks")
 async def zerotrust_checks(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    source: SourceLiteral = Query(default="microsoft"),
-    pillar: str | None = Query(default=None),
-    status: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    q: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    source: Annotated[SourceLiteral, Query()] = "microsoft",
+    pillar: Annotated[str | None, Query()] = None,
+    status: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
+    q: Annotated[str | None, Query()] = None,
 ) -> list[CheckResponse]:
     """Checks from the latest run of a platform, filtered for the page's table."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -322,7 +322,7 @@ async def zerotrust_checks(
 @router.get("/mapping")
 async def zerotrust_mapping(
     current_user: Annotated[Any, Depends(get_current_user)],
-    source: SourceLiteral = Query(default="microsoft"),
+    source: Annotated[SourceLiteral, Query()] = "microsoft",
 ) -> MappingResponse:
     """The platform's test catalogue with the controls that supply its evidence.
 
@@ -379,12 +379,12 @@ async def zerotrust_mapping(
     )
 
 
-@router.get("/evidence-gaps")
+@router.get("/evidence-gaps", responses={400: {"description": "Bad request"}})
 async def zerotrust_evidence_gaps(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    source: str = Query(default="all"),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    source: Annotated[str, Query()] = "all",
 ) -> GapsResponse:
     """Which tests and controls lack collected evidence, and what to collect."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -425,18 +425,18 @@ async def zerotrust_evidence_gaps(
 @router.get("/runs")
 async def zerotrust_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> list[RunResponse]:
     tenant = await _resolve_tenant(db, tenant_id)
     return [_run_response(run) for run in await service.list_runs(db, tenant)]
 
 
-@router.post("/import")
+@router.post("/import", responses={400: {"description": "Bad request"}, 422: {"description": "Unprocessable entity"}})
 async def zerotrust_import(
     body: ImportRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ImportResponse:
     """Import the JSON a Zero Trust Assessment run produced.
 
@@ -477,11 +477,11 @@ async def zerotrust_import(
     return response
 
 
-@router.post("/run")
+@router.post("/run", responses={404: {"description": "Not found"}})
 async def zerotrust_run_platform(
     body: RunRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ImportResponse:
     """Evaluate a platform's checks from the latest collected evidence."""
     tenant = await _resolve_tenant(db, body.tenant_id)
@@ -517,8 +517,8 @@ async def zerotrust_run_platform(
 @router.post("/run-all")
 async def zerotrust_run_all(
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> RunAllResponse:
     """Evaluate every platform with the Python engine in one pass.
 
@@ -554,7 +554,7 @@ async def zerotrust_run_all(
     return RunAllResponse(runs=runs, skipped=skipped)
 
 
-@router.get("/script", response_class=PlainTextResponse)
+@router.get("/script", response_class=PlainTextResponse, responses={404: {"description": "Not found"}})
 async def zerotrust_script(current_user: Annotated[Any, Depends(get_current_user)]) -> PlainTextResponse:
     """The PowerShell runner, so the page can offer it for download."""
     if not SCRIPT_PATH.exists():

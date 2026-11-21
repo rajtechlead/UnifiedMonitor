@@ -114,8 +114,8 @@ async def list_templates(current_user: Annotated[Any, Depends(get_current_user)]
 @router.get("/summary")
 async def alert_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> AlertSummary:
     from unimonitor.db.models.alert import Alert
 
@@ -138,8 +138,8 @@ async def alert_summary(
 @router.get("/policies")
 async def list_policies(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> list[PolicyResponse]:
     from unimonitor.db.models.alert import AlertPolicy
 
@@ -161,12 +161,12 @@ async def _tenant_for(db: AsyncSession, tenant_id: str | None) -> str:
     return first
 
 
-@router.post("/policies", status_code=status.HTTP_201_CREATED)
+@router.post("/policies", status_code=status.HTTP_201_CREATED, responses={422: {"description": "Unprocessable entity"}})
 async def create_policy(
     body: PolicyRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> PolicyResponse:
     from unimonitor.db.models.alert import METRICS, AlertPolicy
 
@@ -200,11 +200,11 @@ async def create_policy(
     return PolicyResponse.model_validate(policy)
 
 
-@router.post("/policies/from-template", status_code=status.HTTP_201_CREATED)
+@router.post("/policies/from-template", status_code=status.HTTP_201_CREATED, responses={404: {"description": "Not found"}})
 async def create_policy_from_template(
     body: TemplateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PolicyResponse:
     from unimonitor.db.models.alert import ALERT_TEMPLATES, AlertPolicy
 
@@ -239,12 +239,12 @@ async def create_policy_from_template(
     return PolicyResponse.model_validate(policy)
 
 
-@router.put("/policies/{policy_id}")
+@router.put("/policies/{policy_id}", responses={404: {"description": "Not found"}})
 async def update_policy(
     policy_id: str,
     body: PolicyRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PolicyResponse:
     from unimonitor.db.models.alert import AlertPolicy
 
@@ -270,7 +270,7 @@ async def update_policy(
 async def delete_policy(
     policy_id: str,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     from sqlalchemy import delete
 
@@ -283,8 +283,8 @@ async def delete_policy(
 @router.post("/evaluate")
 async def evaluate_now(
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
 ) -> dict:
     """Evaluate policies immediately instead of waiting for the schedule."""
     from unimonitor.alerts.engine import evaluate_tenant
@@ -297,12 +297,12 @@ async def evaluate_now(
 @router.get("")
 async def list_alerts(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    tenant_id: str | None = Query(default=None),
-    status_filter: str | None = Query(default=None, alias="status"),
-    severity: str | None = Query(default=None),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=25, ge=1, le=100),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    tenant_id: Annotated[str | None, Query()] = None,
+    status_filter: Annotated[str | None, Query(alias="status")] = None,
+    severity: Annotated[str | None, Query()] = None,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
 ) -> AlertPage:
     from unimonitor.db.models.alert import Alert
 
@@ -329,12 +329,12 @@ async def list_alerts(
     )
 
 
-@router.post("/{alert_id}/status")
+@router.post("/{alert_id}/status", responses={404: {"description": "Not found"}})
 async def update_alert(
     alert_id: str,
     body: AlertUpdateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
-    db: AsyncSession = Depends(get_db),
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AlertResponse:
     from unimonitor.db.models.alert import Alert
 

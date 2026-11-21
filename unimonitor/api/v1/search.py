@@ -34,9 +34,9 @@ class SearchResponse(BaseModel):
 @router.get("")
 async def global_search(
     current_user: Annotated[Any, Depends(get_current_user)],
-    db: AsyncSession = Depends(get_db),
-    q: str = Query(min_length=2, max_length=120),
-    limit: int = Query(default=5, ge=1, le=20),
+    db: Annotated[AsyncSession, Depends(get_db)],
+    q: Annotated[str, Query(min_length=2, max_length=120)],
+    limit: Annotated[int, Query(ge=1, le=20)] = 5,
 ) -> SearchResponse:
     """Search findings, alerts and controls by text; the UI adds static pages."""
     from unimonitor.db.models.alert import Alert

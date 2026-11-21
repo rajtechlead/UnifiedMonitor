@@ -107,14 +107,14 @@ def _control_response(control: Any) -> ControlResponse:
 @router.get("")
 async def list_controls(
     current_user: Annotated[Any, Depends(get_current_user)],
-    category: str | None = Query(default=None),
-    service: str | None = Query(default=None),
-    severity: str | None = Query(default=None),
-    framework: str | None = Query(default=None),
-    search: str | None = Query(default=None),
-    is_active: bool | None = Query(default=True),
-    page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=50, ge=1, le=200),
+    category: Annotated[str | None, Query()] = None,
+    service: Annotated[str | None, Query()] = None,
+    severity: Annotated[str | None, Query()] = None,
+    framework: Annotated[str | None, Query()] = None,
+    search: Annotated[str | None, Query()] = None,
+    is_active: Annotated[bool | None, Query()] = True,
+    page: Annotated[int, Query(ge=1)] = 1,
+    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
 ) -> PaginatedControls:
     """List all controls with filtering and pagination."""
     from unimonitor.grc.control_loader import ControlLoader, controls_for_framework
@@ -153,7 +153,7 @@ async def list_frameworks(
     return SUPPORTED_FRAMEWORKS
 
 
-@router.get("/frameworks/{framework_id}")
+@router.get("/frameworks/{framework_id}", responses={404: {"description": "Not found"}})
 async def get_framework(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
@@ -186,7 +186,7 @@ async def get_framework(
     )
 
 
-@router.get("/{control_id}")
+@router.get("/{control_id}", responses={404: {"description": "Not found"}})
 async def get_control(
     control_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
