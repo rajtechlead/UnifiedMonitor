@@ -203,10 +203,34 @@ class AuditViewResponse(BaseModel):
     generated_at: datetime
 
 
+class MttrRow(BaseModel):
+    severity: str
+    resolved: int
+    mean_hours: float | None
+    median_hours: float | None
+    p90_hours: float | None
+    sla_hours: int | None
+
+
+class SlaRow(BaseModel):
+    severity: str
+    open: int
+    breached: int
+    sla_hours: int | None
+    oldest_hours: float | None
+
+
+class RemediationSummary(BaseModel):
+    window_days: int
+    mttr: list[MttrRow]
+    open_sla: list[SlaRow]
+
+
 class TrendsResponse(BaseModel):
     window_days: int
     score_trends: list[TrendPoint]
     finding_trend: list[dict]
+    remediation: RemediationSummary
     generated_at: datetime
 
 
@@ -649,12 +673,14 @@ async def dashboard_trends(
     tenant_id: str | None = Query(default=None),
     window_days: int = Query(default=30, ge=7, le=365),
 ) -> TrendsResponse:
-    """Historical score and finding trends."""
+    """Historical score and finding trends, plus remediation SLA performance."""
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
+    from unimonitor.grc.trends import remediation_metrics
 
     repo = AssessmentRepository(db)
     trend_points = await repo.get_score_trends(tenant_id=tenant_id, days=window_days)
     finding_trend = await repo.get_finding_trends(tenant_id=tenant_id, days=window_days)
+    remediation = await remediation_metrics(db, tenant_id=tenant_id, window_days=window_days)
 
     return TrendsResponse(
         window_days=window_days,
@@ -668,6 +694,11 @@ async def dashboard_trends(
             for p in trend_points
         ],
         finding_trend=finding_trend,
+        remediation=RemediationSummary(
+            window_days=remediation["window_days"],
+            mttr=[MttrRow(**row) for row in remediation["mttr"]],
+            open_sla=[SlaRow(**row) for row in remediation["open_sla"]],
+        ),
         generated_at=datetime.now(UTC),
     )
 

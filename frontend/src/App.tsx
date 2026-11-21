@@ -27,6 +27,8 @@ import AssessmentsPage from './pages/AssessmentsPage'
 import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
 import AboutPage from './pages/AboutPage'
+import MspPage from './pages/MspPage'
+import AuditorPage from './pages/AuditorPage'
 import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthStore } from './store/authStore'
@@ -112,6 +114,8 @@ export default function App() {
             <Route path="assessments" element={<RouteErrorBoundary><AssessmentsPage /></RouteErrorBoundary>} />
             <Route path="reports" element={<RouteErrorBoundary><ReportsPage /></RouteErrorBoundary>} />
             <Route path="settings" element={<RouteErrorBoundary><SettingsPage /></RouteErrorBoundary>} />
+            <Route path="msp" element={<RouteErrorBoundary><MspPage /></RouteErrorBoundary>} />
+            <Route path="auditor" element={<RouteErrorBoundary><AuditorPage /></RouteErrorBoundary>} />
             <Route path="about" element={<RouteErrorBoundary><AboutPage /></RouteErrorBoundary>} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />

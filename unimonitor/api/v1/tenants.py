@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any
 
 import structlog
@@ -79,6 +79,44 @@ class PaginatedTenants(BaseModel):
     pages: int
 
 
+class TenantRollupRow(BaseModel):
+    tenant_id: str
+    name: str
+    display_name: str | None = None
+    is_active: bool
+    last_collection_at: datetime | None = None
+    last_collection_status: str | None = None
+    security_score: float
+    compliance_score: float
+    risk_score: float
+    open_findings: int
+    critical: int
+    high: int
+    medium: int
+    suppressed: int
+    coverage_pct: float
+    weakest_framework_id: str | None = None
+    weakest_framework_name: str | None = None
+    weakest_framework_pct: float | None = None
+
+
+class TenantRollupTotals(BaseModel):
+    tenants: int
+    mean_security_score: float
+    mean_compliance_score: float
+    open_findings: int
+    critical: int
+    high: int
+    coverage_pct: float
+    collection_failures: int
+
+
+class TenantRollupResponse(BaseModel):
+    tenants: list[TenantRollupRow]
+    totals: TenantRollupTotals
+    generated_at: datetime
+
+
 # ── Endpoints ────────────────────────────────────────────────
 
 
@@ -142,6 +180,113 @@ async def create_tenant(
 
     logger.info("tenant_created", tenant_id=tenant.id, name=tenant.name, by=current_user.id)
     return TenantResponse.model_validate(tenant)
+
+
+@router.get("/rollup", response_model=TenantRollupResponse)
+async def tenant_rollup(
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+    include_coverage: bool = Query(default=True, description="Compute framework coverage per tenant"),
+) -> TenantRollupResponse:
+    """MSP rollup: one comparable row per tenant, plus managed totals.
+
+    Every tenant gets its latest completed score, open exposure by severity and —
+    when *include_coverage* is set — the framework drifting furthest from target.
+    This is the cross-tenant view an MSP needs; the rest of the product is
+    deliberately single-tenant.
+    """
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.grc.scoring import compute_framework_coverage
+
+    async with async_session_factory() as session:
+        from sqlalchemy import func, select
+
+        from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+        from unimonitor.db.models.finding import Finding
+        from unimonitor.db.repositories.assessment_repo import AssessmentRepository
+        from unimonitor.db.repositories.tenant_repo import TenantRepository
+
+        tenants, _ = await TenantRepository(session).list_paginated(page=1, page_size=200, is_active=True)
+
+        open_rows = (
+            await session.execute(
+                select(Finding.tenant_id, Finding.severity, func.count(Finding.id))
+                .where(
+                    Finding.is_suppressed.is_(False),
+                    Finding.state.in_(["not_implemented", "partially_implemented"]),
+                )
+                .group_by(Finding.tenant_id, Finding.severity)
+            )
+        ).all()
+        open_by_tenant: dict[str, dict[str, int]] = {}
+        for tenant_id, severity, count in open_rows:
+            open_by_tenant.setdefault(tenant_id, {})[severity] = count
+
+        suppressed_rows = (
+            await session.execute(
+                select(Finding.tenant_id, func.count(Finding.id)).where(Finding.is_suppressed.is_(True)).group_by(Finding.tenant_id)
+            )
+        ).all()
+        suppressed_by_tenant = dict(suppressed_rows)
+
+        framework_names = {fw["id"]: fw["name"] for fw in SUPPORTED_FRAMEWORKS}
+        assessment_repo = AssessmentRepository(session)
+        rows: list[TenantRollupRow] = []
+        for tenant in tenants:
+            latest = await assessment_repo.get_latest_completed_run(tenant_id=tenant.id)
+            severities = open_by_tenant.get(tenant.id, {})
+            security_score = (latest.security_score or 0.0) if latest else 0.0
+            compliance_score = (latest.compliance_score or 0.0) if latest else 0.0
+            risk_score = (latest.risk_score or 0.0) if latest else 0.0
+
+            coverage_pct = 0.0
+            weakest_id: str | None = None
+            weakest_pct: float | None = None
+            if include_coverage:
+                coverages = await compute_framework_coverage(session, tenant_id=tenant.id)
+                scored = [(fw_id, cov) for fw_id, cov in coverages.items() if cov.get("controls_total")]
+                if scored:
+                    coverage_pct = round(sum(cov["coverage_pct"] for _, cov in scored) / len(scored), 2)
+                    weakest_id, weakest = min(scored, key=lambda item: item[1]["coverage_pct"])
+                    weakest_pct = weakest["coverage_pct"]
+
+            rows.append(
+                TenantRollupRow(
+                    tenant_id=tenant.id,
+                    name=tenant.name,
+                    display_name=tenant.display_name,
+                    is_active=tenant.is_active,
+                    last_collection_at=getattr(tenant, "last_collection_at", None),
+                    last_collection_status=getattr(tenant, "last_collection_status", None),
+                    security_score=security_score,
+                    compliance_score=compliance_score,
+                    risk_score=risk_score,
+                    open_findings=sum(severities.values()),
+                    critical=severities.get("critical", 0),
+                    high=severities.get("high", 0),
+                    medium=severities.get("medium", 0),
+                    suppressed=suppressed_by_tenant.get(tenant.id, 0),
+                    coverage_pct=coverage_pct,
+                    weakest_framework_id=weakest_id,
+                    weakest_framework_name=framework_names.get(weakest_id, weakest_id) if weakest_id else None,
+                    weakest_framework_pct=weakest_pct,
+                )
+            )
+
+    reported = [row for row in rows if row.security_score > 0 or row.open_findings]
+    return TenantRollupResponse(
+        tenants=sorted(rows, key=lambda row: (row.critical, row.high, row.open_findings), reverse=True),
+        totals=TenantRollupTotals(
+            tenants=len(rows),
+            mean_security_score=round(sum(row.security_score for row in rows) / len(rows), 2) if rows else 0.0,
+            mean_compliance_score=round(sum(row.compliance_score for row in rows) / len(rows), 2) if rows else 0.0,
+            open_findings=sum(row.open_findings for row in rows),
+            critical=sum(row.critical for row in rows),
+            high=sum(row.high for row in rows),
+            coverage_pct=round(sum(row.coverage_pct for row in reported) / len(reported), 2) if reported else 0.0,
+            collection_failures=sum(1 for row in rows if row.last_collection_status == "failed"),
+        ),
+        generated_at=datetime.now(UTC),
+    )
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)

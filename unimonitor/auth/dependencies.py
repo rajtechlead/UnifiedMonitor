@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.jwt import validate_access_token
 from unimonitor.db import get_async_session
-from unimonitor.db.models.user import AppUser, UserRole
+from unimonitor.db.models.user import AppUser
 from unimonitor.exceptions import AuthenticationError, AuthorisationError
 
 http_bearer = HTTPBearer(auto_error=False)
@@ -42,8 +42,12 @@ async def get_current_active_user(
     return current_user
 
 
-def require_role(*roles: UserRole):
-    """Dependency factory: require the user to have one of the given roles."""
+def require_role(*roles: str):
+    """Dependency factory: require the user to have one of the given roles.
+
+    Roles are plain strings (see ``UserRole`` in the user model); the admin role
+    always passes, which is handled by ``AppUser.has_role``.
+    """
 
     async def _check(current_user: AppUser = Depends(get_current_user)) -> AppUser:
         if not current_user.has_role(*roles):
@@ -54,12 +58,13 @@ def require_role(*roles: UserRole):
 
 
 def require_admin():
-    return require_role(UserRole.ADMIN)
+    return require_role("admin")
 
 
 def require_analyst():
-    return require_role(UserRole.ADMIN, UserRole.SECURITY_ANALYST, UserRole.SOC_ANALYST)
+    return require_role("analyst")
 
 
 def require_compliance():
-    return require_role(UserRole.ADMIN, UserRole.COMPLIANCE_OFFICER, UserRole.AUDITOR)
+    """Evidence and requirement reporting: auditors and compliance staff, plus admin."""
+    return require_role("compliance_officer", "auditor")

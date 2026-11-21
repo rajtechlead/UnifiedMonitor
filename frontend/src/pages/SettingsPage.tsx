@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
-import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound } from 'lucide-react'
+import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook } from 'lucide-react'
 import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
 
 const GOOGLE_SHARED = '__google_shared'
@@ -273,6 +273,192 @@ function PlatformConnections() {
   )
 }
 
+/**
+ * The posture snapshot is a JSON document merged into collected data for posture
+ * keys Graph cannot expose. Editing it from here removes the need for shell
+ * access; the server refuses to create a path that was never configured.
+ */
+function PostureSnapshotEditor() {
+  const { data, refetch } = useQuery({
+    queryKey: ['settings', 'posture-snapshot'],
+    queryFn: () => api.get('/settings/posture-snapshot').then((r) => r.data),
+  })
+  const [text, setText] = useState('')
+  const [error, setError] = useState('')
+  const [saved, setSaved] = useState(false)
+
+  useEffect(() => {
+    if (data) setText(JSON.stringify(data.snapshot ?? {}, null, 2))
+  }, [data])
+
+  const save = async () => {
+    setError('')
+    setSaved(false)
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(text || '{}')
+    } catch {
+      setError('That is not valid JSON. Fix the syntax and save again.')
+      return
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+      setError('The snapshot must be a JSON object.')
+      return
+    }
+    try {
+      await api.put('/settings/posture-snapshot', parsed)
+      setSaved(true)
+      refetch()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Could not save the posture snapshot.')
+    }
+  }
+
+  return (
+    <Section icon={FileJson} title="Posture snapshot">
+      <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        JSON values merged into collected data for posture facts no Graph endpoint exposes.
+        {data?.configured
+          ? ` Stored at ${data.path}.`
+          : ' UNIMONITOR_POSTURE_SNAPSHOT is not configured, so this editor is read-only.'}
+      </p>
+      <textarea
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        rows={10}
+        spellCheck={false}
+        style={{
+          width: '100%', padding: 12, fontSize: 12, fontFamily: 'monospace',
+          border: '1px solid var(--color-border)', borderRadius: 7,
+          background: 'var(--color-surface-2)', color: 'var(--color-text)', outline: 'none',
+          resize: 'vertical',
+        }}
+      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 10 }}>
+        <button
+          onClick={save}
+          disabled={!data?.configured}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', fontSize: 12,
+            background: 'var(--color-brand)', color: 'white', border: 'none', borderRadius: 7,
+            cursor: data?.configured ? 'pointer' : 'not-allowed', opacity: data?.configured ? 1 : 0.5,
+          }}
+        >
+          <Save size={13} /> Save snapshot
+        </button>
+        {saved && <span style={{ fontSize: 12, color: '#10B981' }}>Snapshot saved</span>}
+        {error && <span style={{ fontSize: 12, color: 'var(--color-high)' }}>{error}</span>}
+      </div>
+    </Section>
+  )
+}
+
+/**
+ * SIEM and ticketing connectors are configured with deployment secrets; this
+ * panel shows which ones are ready, lets an admin test the wiring and push the
+ * current open findings without leaving the product.
+ */
+function IntegrationsPanel() {
+  const { data, refetch } = useQuery({
+    queryKey: ['integrations'],
+    queryFn: () => api.get('/integrations').then((r) => r.data),
+  })
+  const [busy, setBusy] = useState('')
+  const [result, setResult] = useState('')
+  const [severity, setSeverity] = useState('high')
+
+  const act = async (label: string, path: string, body?: unknown) => {
+    setBusy(label)
+    setResult('')
+    try {
+      const response = await api.post(path, body)
+      const sent = response.data.sent ?? response.data.created
+      setResult(`${label}: ${sent ?? 0} sent${response.data.errors ? `, ${response.data.errors} errors` : ''}`)
+      refetch()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setResult(`${label}: ${detail || 'failed'}`)
+    } finally {
+      setBusy('')
+    }
+  }
+
+  const siem = data?.siem ?? []
+  const ticketing = data?.ticketing ?? []
+
+  return (
+    <Section icon={Webhook} title="SIEM and ticketing connectors">
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        Connectors are enabled by their deployment secrets. Nothing is sent automatically.
+      </div>
+      {siem.map((connector: {
+        slug: string; name: string; description: string; configured: boolean; missing_settings: string[]
+      }) => (
+        <div key={connector.slug} style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+          padding: '10px 0', borderBottom: '1px solid var(--color-border)',
+        }}>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 500 }}>{connector.name}</div>
+            <div style={{ fontSize: 11, color: connector.configured ? '#10B981' : 'var(--color-text-muted)' }}>
+              {connector.configured
+                ? 'Ready'
+                : `Needs ${connector.missing_settings.join(', ')}`}
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button
+              onClick={() => act(`${connector.name} test`, `/integrations/siem/${connector.slug}/test`)}
+              disabled={!connector.configured || busy !== ''}
+              style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)', cursor: connector.configured ? 'pointer' : 'not-allowed' }}
+            >
+              Test
+            </button>
+            <button
+              onClick={() => act(connector.name, `/integrations/siem/${connector.slug}/send`, {})}
+              disabled={!connector.configured || busy !== ''}
+              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: 'var(--color-brand)', color: 'white', cursor: connector.configured ? 'pointer' : 'not-allowed', opacity: connector.configured ? 1 : 0.5 }}
+            >
+              <Send size={11} /> Send
+            </button>
+          </div>
+        </div>
+      ))}
+
+      <div style={{ marginTop: 16 }}>
+        <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Ticketing sync</div>
+        {ticketing.map((provider: { slug: string; name: string; configured: boolean; missing_settings: string[] }) => (
+          <div key={provider.slug} style={{ fontSize: 11, color: provider.configured ? '#10B981' : 'var(--color-text-muted)' }}>
+            {provider.name}: {provider.configured ? 'ready' : `needs ${provider.missing_settings.join(', ')}`}
+          </div>
+        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+          <label htmlFor="ticket-severity" style={{ fontSize: 12 }}>Minimum severity</label>
+          <select
+            id="ticket-severity"
+            value={severity}
+            onChange={(e) => setSeverity(e.target.value)}
+            style={{ padding: '6px 9px', fontSize: 12, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)' }}
+          >
+            {['critical', 'high', 'medium', 'low'].map((option) => (
+              <option key={option} value={option}>{option}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => act('Ticket sync', '/integrations/ticketing/sync', { min_severity: severity })}
+            disabled={busy !== '' || !data?.default_ticketing_provider}
+            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, padding: '6px 10px', borderRadius: 6, border: 'none', background: 'var(--color-brand)', color: 'white', cursor: data?.default_ticketing_provider ? 'pointer' : 'not-allowed', opacity: data?.default_ticketing_provider ? 1 : 0.5 }}
+          >
+            <Send size={11} /> Sync now
+          </button>
+        </div>
+      </div>
+      {result && <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 10 }}>{result}</p>}
+    </Section>
+  )
+}
+
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
 
@@ -326,6 +512,10 @@ export default function SettingsPage() {
       </div>
 
       <PlatformConnections />
+
+      <PostureSnapshotEditor />
+
+      <IntegrationsPanel />
 
       {/* Tenant info */}
       {tenantData && (

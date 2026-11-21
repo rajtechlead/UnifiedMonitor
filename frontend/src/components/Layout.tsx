@@ -5,6 +5,7 @@ import {
   ClipboardList, FileText, Settings, LogOut, Moon, Sun, Menu, X,
   BarChart3, Activity, ScrollText, Cloud, ShieldAlert, ShieldCheck,
   Bell, KeyRound, RefreshCw, Search, ListChecks, Info, Users, GitBranch,
+  Building2, FileSearch,
 } from 'lucide-react'
 import SearchPalette from './SearchPalette'
 import { useAuthStore } from '../store/authStore'
@@ -26,6 +27,8 @@ const NAV_ITEMS = [
   { to: '/alerts', icon: Bell, label: 'Alerts' },
   { to: '/assessments', icon: ClipboardList, label: 'Assessments' },
   { to: '/reports', icon: FileText, label: 'Reports' },
+  { to: '/auditor', icon: FileSearch, label: 'Auditor Portal' },
+  { to: '/msp', icon: Building2, label: 'Managed Tenants' },
   { to: '/licenses', icon: KeyRound, label: 'Licences' },
   { to: '/service-health', icon: Activity, label: 'Service Health' },
   { to: '/collection', icon: RefreshCw, label: 'Data Collection' },

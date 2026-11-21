@@ -167,14 +167,6 @@ def _with_remediation(finding, guidance: dict[str, str]) -> FindingResponse:
 VALID_SEVERITIES = {"informational", "low", "medium", "high", "critical"}
 
 
-def _cef_severity(severity: str) -> int:
-    return {"informational": 2, "low": 4, "medium": 6, "high": 8, "critical": 10}.get(severity.lower(), 5)
-
-
-def _cef_escape(value: str) -> str:
-    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ").replace("\r", " ")
-
-
 async def _release_expired_suppressions(db: AsyncSession) -> int:
     """Clear time-boxed exceptions whose end date has passed."""
     from sqlalchemy import update
@@ -257,40 +249,13 @@ async def export_siem(
     stmt = stmt.order_by(Finding.risk_score.desc(), Finding.last_seen_at.desc()).limit(limit)
     rows = (await db.execute(stmt)).scalars().all()
 
+    from unimonitor.integrations.events import finding_cef, finding_event
+
     if fmt == "json":
-        payload = [
-            {
-                "id": row.id,
-                "tenant_id": row.tenant_id,
-                "control": row.external_control_id,
-                "title": row.title,
-                "severity": row.severity,
-                "state": row.state,
-                "category": row.category,
-                "service": row.service,
-                "risk_score": row.risk_score,
-                "first_detected_at": row.first_detected_at.isoformat() if row.first_detected_at else None,
-                "last_seen_at": row.last_seen_at.isoformat() if row.last_seen_at else None,
-            }
-            for row in rows
-        ]
-        body = "\n".join(_json.dumps(item, separators=(",", ":")) for item in payload)
+        body = "\n".join(_json.dumps(finding_event(row), separators=(",", ":")) for row in rows)
         return Response(content=body, media_type="application/x-ndjson")
 
-    lines = []
-    for row in rows:
-        lines.append(
-            "CEF:0|UniMonitor|UniMonitor|1.0|"
-            f"{_cef_escape(row.external_control_id)}|{_cef_escape(row.title)}|"
-            f"{_cef_severity(row.severity)}|"
-            f"src=unimonitor cs1Label=TenantId cs1={_cef_escape(row.tenant_id)} "
-            f"cs2Label=Category cs2={_cef_escape(row.category)} "
-            f"cs3Label=Service cs3={_cef_escape(row.service)} "
-            f"cs4Label=State cs4={_cef_escape(row.state)} "
-            f"cn1Label=RiskScore cn1={row.risk_score} "
-            f"end={int(row.last_seen_at.timestamp() * 1000) if row.last_seen_at else 0}"
-        )
-    return Response(content="\n".join(lines), media_type="text/plain")
+    return Response(content="\n".join(finding_cef(row) for row in rows), media_type="text/plain")
 
 
 @router.get("", response_model=PaginatedFindings)

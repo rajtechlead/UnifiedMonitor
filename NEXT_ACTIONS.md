@@ -37,6 +37,12 @@ The framework registry is now the single source of truth (`SUPPORTED_FRAMEWORKS`
 is generated from `FRAMEWORKS`), and a regression test asserts every framework
 resolves to at least one control.
 
+CPCSC is now mapped at **requirement level**: all 98 ITSP.10.171 identifiers and
+titles live in `grc/framework_mappings.py` (`CPCSC_REQUIREMENTS`, 13 marked
+Level 1), each exposing the evidence controls of its family through
+`GET /grc/frameworks/cpcsc/requirements`. Official requirement text is not
+redistributed, so controls are selected at family level.
+
 Still pending for a later round: CIS Foundations benchmark *rule packs* (the
 framework exists; the per-rule evaluators do not).
 
@@ -68,16 +74,23 @@ Still to build:
    image signing/attestation — the catalogues already flag Binary Authorization as a gap.
 6. **Identity risk and attack paths**: join findings into graph paths (public SG → instance role →
    sensitive bucket) instead of flat per-control lists.
-7. **Continuous evidence and auditor portal**: immutable evidence snapshots with retention,
-   control-to-evidence packages per framework, and read-only auditor accounts.
+7. ~~Continuous evidence and auditor portal~~ — done: `GET /grc/frameworks/{id}/evidence-package`
+   returns a hashed, self-contained package (control state, findings, evidence) and the
+   Auditor Portal page renders CPCSC requirement status for auditor/compliance roles.
 8. ~~Exception workflow~~ — done (expiry + auto-release). Owner/justification fields exist
    as reason; a dedicated owner field is still a nice-to-have.
-9. ~~Posture snapshot editor~~ — API done; wire the Settings-page editor.
-10. **Ticketing and SIEM integrations**: Jira/ServiceNow issue sync; the CEF/JSON export is done.
-11. **CIS/benchmark trend and SLA reporting**: control-level trends, mean time to remediate by
-    severity, and scorecard export for executives (currently trend is score-only).
-12. **MSP multi-tenant rollup**: cross-tenant comparison, per-tenant branding and delegated
-    access; the data model is multi-tenant but the UI is single-tenant.
+9. ~~Posture snapshot editor~~ — done: the Settings page edits the snapshot with JSON
+   validation and only offers saving when a path is configured.
+10. ~~Ticketing and SIEM integrations~~ — done: idempotent Jira/ServiceNow/generic-webhook
+    ticket sync (migration `006`) and push connectors for Datadog, Splunk HEC, Elastic,
+    Microsoft Sentinel, Sumo Logic, Chronicle, Wazuh, a generic webhook and CEF syslog,
+    each testable and triggerable from the Settings page.
+11. ~~CIS/benchmark trend and SLA reporting~~ — remediation half done: `/dashboard/trends`
+    returns mean/median/p90 time to remediate per severity and open SLA breaches, shown on
+    the CISO board. Control-level trend series and a scorecard export file remain open.
+12. ~~MSP multi-tenant rollup~~ — done: `/tenants/rollup` returns one comparable row per
+    active tenant (latest scores, open exposure, weakest framework) plus managed totals, and
+    the Managed Tenants page renders it. Per-tenant branding and delegated access remain open.
 
 ## Phase 10 — Repository merge (2026-11-18)
 

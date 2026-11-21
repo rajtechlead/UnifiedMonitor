@@ -25,12 +25,17 @@ Status: 🟢 Green locally — Release Candidate blocked on Windows validation +
 | Check | Status | Notes |
 |---|---|---|
 | Dependency installation | ✅ | `pip install -e ".[dev,production]"` clean |
-| Test suite | ✅ 666/666 | 93s after caching the control library (was 329s); 8 warnings (AsyncMock coroutine never awaited inside mocks) |
+| Test suite | ✅ 673/673 | 95s after caching the control library (was 329s); 8 warnings (AsyncMock coroutine never awaited inside mocks) |
 | Control library | ✅ 190 controls | 23 YAML files; unique ids, valid severities; **33 frameworks** (CPCSC, 800-171, FedRAMP, NIS2, DORA, CCM, SCuBA, ISO extensions, AI frameworks, regional sets) all resolve to controls |
-| Framework mappings | ✅ | `grc/framework_mappings.py` holds explicit CPCSC/NIS2/DORA maps and derived crosswalks; `SUPPORTED_FRAMEWORKS` is generated from the registry so it cannot drift |
+| Framework mappings | ✅ | `grc/framework_mappings.py` holds explicit CPCSC/NIS2/DORA maps and derived crosswalks; `SUPPORTED_FRAMEWORKS` and `FRAMEWORK_KEYS` are generated from the registry so they cannot drift (regression test asserts no orphan rule exists) |
+| CPCSC requirement level | ✅ | all 98 ITSP.10.171 identifiers with titles and the 13 Level 1 flags; `/grc/frameworks/cpcsc/requirements` reports per-requirement status |
 | Exception lifecycle | ✅ | time-boxed suppression (`expires_in_days`), auto-release on read, migration `005` |
 | SIEM export | ✅ | `GET /findings/export/siem` (CEF / NDJSON), open findings only |
-| Posture snapshot API | ✅ | admin `GET/PUT /settings/posture-snapshot`; Settings-page editor still pending |
+| Posture snapshot | ✅ | admin `GET/PUT /settings/posture-snapshot`, edited from the Settings page with JSON validation |
+| Integrations | ✅ | SIEM push connectors (Datadog, Splunk HEC, Elastic, Sentinel, Sumo, Chronicle, Wazuh, webhook, CEF syslog) and idempotent Jira/ServiceNow/webhook ticket sync; env-configured, tested with fakes only |
+| MTTR / SLA | ✅ | `/dashboard/trends` adds mean/median/p90 remediation hours per severity and open SLA breaches |
+| MSP rollup | ✅ | `/tenants/rollup` plus the Managed Tenants page |
+| Auditor portal | ✅ | hashed evidence package per framework and CPCSC requirement status page for auditor/compliance roles |
 | Zero Trust catalogues | ✅ | Microsoft 364 upstream tests + native Python catalogues: AWS 19, GCP 15, Workspace 14; mapping and evidence-gap endpoints covered |
 | Multi-cloud collectors | ✅ unit-tested | AWS (boto3), GCP + Workspace (REST); no live accounts exercised |
 | First-run onboarding | ✅ 45 tests | setup window closes after the first admin; connect/list/delete; certificate default + manual-upload fallback; AWS role; one Google service account; sign-in client override; certificate expiry + rotation |

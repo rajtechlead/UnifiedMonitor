@@ -164,6 +164,41 @@ class Settings(BaseSettings):
     TEAMS_WEBHOOK_URL: str = ""
     SLACK_WEBHOOK_URL: str = ""
 
+    # ── SIEM connectors ──────────────────────────────────────
+    # A connector is enabled by the presence of its credentials. Nothing is sent
+    # until an administrator pushes to it (see unimonitor/integrations/siem.py).
+    DATADOG_API_KEY: str = ""
+    DATADOG_SITE: str = "datadoghq.com"
+    SPLUNK_HEC_URL: str = ""
+    SPLUNK_HEC_TOKEN: str = ""
+    SPLUNK_INDEX: str = "unimonitor"
+    ELASTIC_URL: str = ""
+    ELASTIC_API_KEY: str = ""
+    ELASTIC_INDEX: str = "unimonitor-findings"
+    AZURE_SENTINEL_DCR_ENDPOINT: str = ""
+    AZURE_SENTINEL_DCR_RULE_ID: str = ""
+    AZURE_SENTINEL_STREAM: str = ""
+    AZURE_SENTINEL_ACCESS_TOKEN: str = ""
+    SUMOLOGIC_HTTP_URL: str = ""
+    CHRONICLE_INGEST_URL: str = ""
+    CHRONICLE_AUTH_TOKEN: str = ""
+    WAZUH_INGEST_URL: str = ""
+    SIEM_WEBHOOK_URL: str = ""
+    SIEM_WEBHOOK_TOKEN: str = ""
+    SIEM_SYSLOG_HOST: str = ""
+    SIEM_SYSLOG_PORT: int = 514
+
+    # ── Ticketing sync ───────────────────────────────────────
+    JIRA_URL: str = ""
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_PROJECT_KEY: str = ""
+    SERVICENOW_URL: str = ""
+    SERVICENOW_USERNAME: str = ""
+    SERVICENOW_PASSWORD: str = ""
+    SERVICENOW_TABLE: str = "incident"
+    TICKET_WEBHOOK_URL: str = ""
+
     @field_validator("UNIMONITOR_CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors(cls, v: str | list[str]) -> list[str]:

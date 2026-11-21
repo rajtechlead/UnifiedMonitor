@@ -6,11 +6,13 @@ from fastapi import APIRouter
 
 from unimonitor.api.v1.alerts import router as alerts_router
 from unimonitor.api.v1.assessments import router as assessments_router
+from unimonitor.api.v1.audit_portal import router as audit_portal_router
 from unimonitor.api.v1.auth import router as auth_router
 from unimonitor.api.v1.controls import router as controls_router
 from unimonitor.api.v1.dashboard import router as dashboard_router
 from unimonitor.api.v1.findings import router as findings_router
 from unimonitor.api.v1.grc import router as grc_router
+from unimonitor.api.v1.integrations import router as integrations_router
 from unimonitor.api.v1.monitoring import router as monitoring_router
 from unimonitor.api.v1.notifications import router as notifications_router
 from unimonitor.api.v1.onboarding import router as onboarding_router
@@ -33,6 +35,8 @@ api_v1_router.include_router(controls_router, prefix="/controls", tags=["Control
 api_v1_router.include_router(dashboard_router, prefix="/dashboard", tags=["Dashboard"])
 api_v1_router.include_router(reports_router, prefix="/reports", tags=["Reports"])
 api_v1_router.include_router(grc_router, prefix="/grc", tags=["GRC"])
+api_v1_router.include_router(audit_portal_router, prefix="/grc", tags=["Auditor Portal"])
+api_v1_router.include_router(integrations_router, prefix="/integrations", tags=["Integrations"])
 api_v1_router.include_router(monitoring_router, prefix="/monitoring", tags=["Monitoring"])
 api_v1_router.include_router(notifications_router, prefix="/notifications", tags=["Notifications"])
 api_v1_router.include_router(onboarding_router, prefix="/onboarding", tags=["Setup"])

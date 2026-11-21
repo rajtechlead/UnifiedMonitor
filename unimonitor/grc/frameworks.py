@@ -182,7 +182,7 @@ FRAMEWORKS: dict[str, FrameworkMeta] = {
         total_controls=98,
         tags=["canada", "defense", "certification"],
         slug="cpcsc",
-        mapping_note="Family-level mapping of the 98 ITSP.10.171 requirements; the 13 Level 1 requirements fall inside these families.",
+        mapping_note="Requirement-level catalogue of all 98 ITSP.10.171 requirements; each resolves to its family's evidence controls.",
     ),
     "cmmc_2": FrameworkMeta(
         id="cmmc_2",
@@ -450,44 +450,32 @@ for _key, _meta in FRAMEWORKS.items():
         _meta.mapping_note = DERIVED[_meta.slug]["note"]
 
 
-# The API and UI use hyphenated ids; control YAML uses underscored compliance keys,
-# and some frameworks have legacy aliases. Every framework lookup goes through this
-# map, so a framework can never silently list only a subset of its controls.
-FRAMEWORK_KEYS: dict[str, tuple[str, ...]] = {
-    "iso27001-2022": ("iso27001_2022", "iso_27001_2022"),
-    "iso42001": ("iso42001",),
-    "nist-csf-2": ("nist_csf_2", "nist_csf"),
-    "nist-800-53-r5": ("nist_800_53_r5", "nist_800_53"),
-    "cis-controls-v8": ("cis_controls_v8", "cis"),
+# ``compliance_mapping`` keys and older API ids that must keep resolving to the
+# canonical slug, beyond the framework's own underscored id (which is generated).
+_LEGACY_ALIASES: dict[str, tuple[str, ...]] = {
+    "iso27001-2022": ("iso_27001_2022",),
+    "nist-csf-2": ("nist_csf",),
+    "nist-800-53-r5": ("nist_800_53",),
+    "cis-controls-v8": ("cis",),
     "microsoft-zero-trust": ("zero_trust", "microsoft_zero_trust"),
-    "cis-m365": ("cis_m365_benchmark", "cis_m365"),
-    "soc2": ("soc2",),
-    "pci-dss-4": ("pci_dss_v4", "pci_dss_4", "pci_dss"),
-    "hipaa": ("hipaa",),
-    "gdpr": ("gdpr",),
-    "cpcsc": ("cpcsc", "cpcsc_2024"),
-    "cmmc-2": ("cmmc_2", "cmmc_2_0"),
-    "nist-800-171-r3": ("nist_800_171_r3",),
-    "fedramp-low": ("fedramp_low",),
-    "fedramp-moderate": ("fedramp_moderate",),
-    "fedramp-high": ("fedramp_high",),
-    "nis2": ("nis2",),
-    "dora": ("dora",),
-    "csa-ccm-v4": ("csa_ccm_v4",),
-    "cisa-scuba-m365": ("cisa_scuba_m365",),
-    "cisa-scuba-workspace": ("cisa_scuba_workspace",),
-    "iso27017": ("iso27017",),
-    "iso27018": ("iso27018",),
-    "iso27701": ("iso27701",),
-    "nist-ai-rmf": ("nist_ai_rmf",),
-    "eu-ai-act": ("eu_ai_act",),
-    "essential-eight": ("essential_eight",),
-    "cyber-essentials": ("cyber_essentials",),
-    "ccpa-cpra": ("ccpa_cpra",),
-    "cjis": ("cjis",),
-    "swift-csp": ("swift_csp",),
-    "tisax": ("tisax",),
+    "cis-m365": ("cis_m365",),
+    "pci-dss-4": ("pci_dss_4", "pci_dss"),
+    "cpcsc": ("cpcsc_2024",),
+    "cmmc-2": ("cmmc_2_0",),
 }
+
+# The API and UI use hyphenated ids; control YAML uses underscored compliance keys,
+# and some frameworks have legacy aliases. The map is generated from FRAMEWORKS so
+# registering a framework can never leave its lookup silently missing; every
+# alias path is flattened once into ``_FRAMEWORK_BY_ALIAS``.
+FRAMEWORK_KEYS: dict[str, tuple[str, ...]] = {
+    meta.slug: tuple(dict.fromkeys((meta.id, *_LEGACY_ALIASES.get(meta.slug, ())))) for meta in FRAMEWORKS.values()
+}
+
+_FRAMEWORK_BY_ALIAS: dict[str, str] = {}
+for _slug, _aliases in FRAMEWORK_KEYS.items():
+    for _alias in (_slug, *_aliases):
+        _FRAMEWORK_BY_ALIAS.setdefault(_alias.replace("-", "_").lower(), _slug)
 
 
 def framework_keys(framework_id: str) -> set[str]:
@@ -495,18 +483,16 @@ def framework_keys(framework_id: str) -> set[str]:
     lowered = framework_id.strip().lower()
     normalised = lowered.replace("-", "_")
     keys = {lowered, normalised}
-    # Aliases are registered under the hyphenated id.
-    keys.update(FRAMEWORK_KEYS.get(lowered, ()) or FRAMEWORK_KEYS.get(normalised, ()))
+    slug = _FRAMEWORK_BY_ALIAS.get(normalised)
+    if slug:
+        keys.add(slug)
+        keys.update(FRAMEWORK_KEYS[slug])
     return keys
 
 
 def framework_id_for_key(key: str) -> str | None:
     """The canonical framework id for a ``compliance_mapping`` key."""
-    normalised = key.strip().lower().replace("-", "_")
-    for framework_id, aliases in FRAMEWORK_KEYS.items():
-        if normalised == framework_id.replace("-", "_") or normalised in aliases:
-            return framework_id
-    return None
+    return _FRAMEWORK_BY_ALIAS.get(key.strip().lower().replace("-", "_"))
 
 
 def get_framework(framework_id: str) -> FrameworkMeta | None:

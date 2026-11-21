@@ -95,14 +95,39 @@ async def test_every_supported_framework_has_controls(client: AsyncClient, auth_
         assert controls, f"{framework['id']} has no mapped controls"
         assert framework["mapping_note"] or controls, framework["id"]
 
-    # CPCSC is a family-level mapping of the 98 ITSP.10.171 requirements; its
-    # Level 1 criteria sit in the access-control, auth, media, physical,
-    # communications and integrity families.
+    # CPCSC resolves all 98 ITSP.10.171 requirements; its Level 1 criteria sit in
+    # the access-control, auth, media, physical, communications and integrity families.
     cpcsc = controls_for_framework("cpcsc")
     ids = {control.id for control in cpcsc}
     assert {"CTRL-ENT-001", "CTRL-AWS-001", "CTRL-INT-001", "CTRL-DEF-001"} <= ids
     # FedRAMP baselines derive from the NIST 800-53 mapping.
     assert len(controls_for_framework("fedramp-moderate")) == len(controls_for_framework("nist-800-53-r5"))
+
+
+def test_framework_key_map_is_generated_and_complete() -> None:
+    """Every registry entry resolves through every id form, and no rule is orphaned."""
+    from unimonitor.grc.framework_mappings import DERIVED, EXPLICIT
+    from unimonitor.grc.frameworks import FRAMEWORK_KEYS, FRAMEWORKS, framework_id_for_key, framework_keys
+
+    slugs = {meta.slug for meta in FRAMEWORKS.values()}
+    assert set(FRAMEWORK_KEYS) == slugs, "the key map must be generated from the registry"
+
+    for meta in FRAMEWORKS.values():
+        keys = framework_keys(meta.id)
+        assert meta.slug in keys, meta.slug
+        assert framework_id_for_key(meta.id) == meta.slug, meta.slug
+        assert framework_id_for_key(meta.slug) == meta.slug, meta.slug
+        assert framework_keys(meta.slug) == keys, meta.slug
+
+    # A mapping rule for a framework nobody registered would never be reached.
+    assert set(EXPLICIT) | set(DERIVED) <= slugs
+    for slug, rule in DERIVED.items():
+        if "source" in rule:
+            assert rule["source"] in slugs, f"{slug} derives from unknown source {rule['source']}"
+
+    # Legacy YAML keys resolve even when passed in their underscored form.
+    assert framework_id_for_key("zero_trust") == "microsoft-zero-trust"
+    assert "zero_trust" in framework_keys("microsoft_zero_trust")
 
 
 @pytest.mark.asyncio

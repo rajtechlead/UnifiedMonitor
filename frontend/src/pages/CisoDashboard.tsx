@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { dashboardApi } from '../hooks/useApi'
+import { api, dashboardApi } from '../hooks/useApi'
 
 type CloudRiskRow = {
   provider_id: string
@@ -41,6 +41,19 @@ type FrameworkRow = {
 
 type TrendPoint = { date: string; security_score: number; compliance_score: number; risk_score: number }
 
+type MttrRow = {
+  severity: string
+  resolved: number
+  mean_hours: number | null
+  median_hours: number | null
+  p90_hours: number | null
+  sla_hours: number | null
+}
+
+type SlaRow = { severity: string; open: number; breached: number; sla_hours: number | null; oldest_hours: number | null }
+
+type TrendsResponse = { remediation: { window_days: number; mttr: MttrRow[]; open_sla: SlaRow[] } }
+
 type CisoResponse = {
   scores: { security_score: number; compliance_score: number; risk_score: number }
   severity_totals: { critical: number; high: number; medium: number; low: number; informational: number; total: number }
@@ -66,6 +79,11 @@ export default function CisoDashboard() {
   const { data, isLoading, isError } = useQuery<CisoResponse>({
     queryKey: ['dashboard', 'ciso'],
     queryFn: dashboardApi.getCiso,
+  })
+
+  const { data: trends } = useQuery<TrendsResponse>({
+    queryKey: ['dashboard', 'trends', 90],
+    queryFn: () => api.get('/dashboard/trends', { params: { window_days: 90 } }).then((r) => r.data),
   })
 
   if (isLoading) {
@@ -116,6 +134,45 @@ export default function CisoDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Remediation SLA: how long fixes actually take, and what is overdue */}
+      {trends?.remediation && (
+        <div style={cardStyle}>
+          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 12 }}>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>Remediation SLA</span>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              last {trends.remediation.window_days} days
+            </span>
+          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: 'var(--color-text-muted)', fontSize: 10, textTransform: 'uppercase' }}>
+                {['Severity', 'Resolved', 'Mean', 'Median', 'P90', 'Open past SLA'].map((heading) => (
+                  <th key={heading} style={{ padding: '6px 8px', borderBottom: '1px solid var(--color-border)' }}>{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {trends.remediation.mttr.map((row) => {
+                const sla = trends.remediation.open_sla.find((item) => item.severity === row.severity)
+                const hours = (value: number | null) => (value === null ? '—' : `${Math.round(value)}h`)
+                return (
+                  <tr key={row.severity} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                    <td style={{ padding: '6px 8px', textTransform: 'capitalize' }}>{row.severity}</td>
+                    <td style={{ padding: '6px 8px' }}>{row.resolved}</td>
+                    <td style={{ padding: '6px 8px' }}>{hours(row.mean_hours)}</td>
+                    <td style={{ padding: '6px 8px' }}>{hours(row.median_hours)}</td>
+                    <td style={{ padding: '6px 8px' }}>{hours(row.p90_hours)}</td>
+                    <td style={{ padding: '6px 8px', color: sla?.breached ? '#EF4444' : 'var(--color-text-muted)' }}>
+                      {sla ? `${sla.breached} of ${sla.open}` : '—'}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Cloud exposure */}
       <div style={cardStyle}>
