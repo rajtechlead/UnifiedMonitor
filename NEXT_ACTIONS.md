@@ -30,10 +30,11 @@
   are flat conditional blocks; and the `S3776` complexity findings are refactored
   for the posture analysers, GRC engine and trends, auditor portal, control
   loader, tenant rollup, zero-trust coverage, ticketing and the SPA middleware.
-- Remaining Sonar items: the complexity of the cloud-provider collectors
-  (`graph/collectors/cloud_providers.py`, `extended.py`), the PDF and DOCX
-  generators, `onboarding/service.py`, the two largest page components
-  (`AuditPage`, `SetupPage`), and the deprecated recharts `Cell`.
+- Remaining Sonar items: the complexity of `graph/collectors/cloud_providers.py`
+  (AWS and GCP snapshots), the PDF and DOCX generators, `onboarding/service.py`,
+  the two largest page components (`AuditPage`, `SetupPage`), and the deprecated
+  recharts `Cell`. `extended.py` is refactored (Intune baselines, detected apps and
+  the Secure Score sections each have their own helper).
 
 ## 2026-11-21 — installer build + SonarQube cleanup
 

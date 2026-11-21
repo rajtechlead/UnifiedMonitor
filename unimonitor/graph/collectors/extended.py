@@ -82,23 +82,7 @@ async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
         {"$expand": "assignments", "$filter": "isTemplate eq false", "$top": "100"},
     )
     if intents:
-        baselines = []
-        for intent in intents:
-            assignments = intent.get("assignments") or []
-            targets = {str(a.get("target", {}).get("@odata.type", "")).lower() for a in assignments if isinstance(a, dict)}
-            assigned_all = any("alldevices" in t or "alllicensedusers" in t for t in targets)
-            row = {
-                "displayName": intent.get("displayName", ""),
-                "isAssigned": bool(assignments),
-                "assignmentTarget": _assignment_target(assigned_all, bool(assignments)),
-            }
-            # Only claim version currency when Graph actually reports both versions.
-            if "version" in intent and "templateReference" in intent:
-                template_version = str(intent.get("templateReference", {}).get("templateDisplayVersion", ""))
-                if template_version:
-                    row["isLatestVersion"] = str(intent.get("version", "")) == template_version
-            baselines.append(row)
-        data["intune_security_baselines"] = baselines
+        data["intune_security_baselines"] = [_baseline_row(intent) for intent in intents]
 
     overview = await _get_obj(gc, "/deviceManagement/managedDeviceOverview")
     if overview:
@@ -111,25 +95,13 @@ async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
         if laps:
             data["intune_windows_laps_policies"] = laps
 
-    app_control = [
-        c
-        for c in await _get_list(gc, "/deviceManagement/configurationPolicies", {"$top": "100"})
-        if any(n in str(c.get("name", "")).lower() for n in ("app control", "wdac", "applocker"))
-    ]
+    app_control = _app_control_policies(await _get_list(gc, "/deviceManagement/configurationPolicies", {"$top": "100"}))
     if app_control:
         data["intune_app_control_policies"] = app_control
 
     apps = await _get_list(gc, "/deviceManagement/detectedApps", {"$top": "200"})
     if apps:
-        data["intune_detected_apps"] = [
-            {
-                "displayName": a.get("displayName", ""),
-                "version": a.get("version", ""),
-                "deviceName": a.get("deviceName", ""),
-                "platform": a.get("platform", ""),
-            }
-            for a in apps
-        ]
+        data["intune_detected_apps"] = _detected_apps(apps)
         managed = data.get("intune_managed_device_count") or 0
         reporting = {a.get("deviceName") for a in apps if a.get("deviceName")}
         if managed and reporting:
@@ -250,44 +222,11 @@ async def collect_cloud_apps(gc: GraphClient) -> dict[str, Any]:
 
     grants = await _get_list(gc, "/oauth2PermissionGrants", {"$top": "300"})
     if grants:
-        apps = []
-        for grant in grants:
-            scopes = str(grant.get("scope", ""))
-            privileged = _high_privilege(scopes)
-            apps.append(
-                {
-                    "id": grant.get("id", ""),
-                    "displayName": grant.get("clientId", ""),
-                    "scopes": scopes,
-                    "hasHighPrivilegePermissions": privileged,
-                    "riskLevel": "high" if privileged else "low",
-                }
-            )
-        data["oauth_apps"] = apps
+        data["oauth_apps"] = [_oauth_app(grant) for grant in grants]
 
     rows = await _score_rows(gc)
-    if not rows:
-        return data
-
-    found, ratio = _score_ratio(rows, "cloud apps", "mcas", "defender for cloud apps")
-    if found:
-        data["cloud_app_connectors"] = [
-            {
-                "displayName": "Secure Score: Defender for Cloud Apps connector",
-                "status": "connected" if ratio >= 1.0 else "partial",
-            }
-        ]
-
-    found, ratio = _score_ratio(rows, "cloud discovery")
-    if found:
-        data["cloud_discovery_settings"] = {
-            "isEnabled": ratio >= 1.0,
-            "dataSources": ["secureScore"] if ratio > 0 else [],
-        }
-
-    found, ratio = _score_ratio(rows, "anomaly")
-    if found:
-        data["mcas_anomaly_policies"] = [{"displayName": "Secure Score: anomaly detection", "state": "enabled" if ratio >= 1.0 else "off"}]
+    if rows:
+        data.update(_cloud_app_score_sections(rows))
 
     found, ratio = _score_ratio(rows, "session control", "conditional access app control")
     if found:
@@ -381,3 +320,71 @@ def _assignment_target(assigned_all: bool, has_assignments: bool) -> str:
     if assigned_all:
         return "allDevices"
     return "group" if has_assignments else ""
+
+
+def _baseline_row(intent: dict[str, Any]) -> dict[str, Any]:
+    """One Intune security baseline, with its assignment target."""
+    assignments = intent.get("assignments") or []
+    targets = {str(a.get("target", {}).get("@odata.type", "")).lower() for a in assignments if isinstance(a, dict)}
+    assigned_all = any("alldevices" in t or "alllicensedusers" in t for t in targets)
+    row = {
+        "displayName": intent.get("displayName", ""),
+        "isAssigned": bool(assignments),
+        "assignmentTarget": _assignment_target(assigned_all, bool(assignments)),
+    }
+    # Only claim version currency when Graph actually reports both versions.
+    template_version = str(intent.get("templateReference", {}).get("templateDisplayVersion", "")) if "templateReference" in intent else ""
+    if "version" in intent and template_version:
+        row["isLatestVersion"] = str(intent.get("version", "")) == template_version
+    return row
+
+
+def _app_control_policies(policies: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Configuration policies that actually enforce app control."""
+    needles = ("app control", "wdac", "applocker")
+    return [policy for policy in policies if any(needle in str(policy.get("name", "")).lower() for needle in needles)]
+
+
+def _detected_apps(apps: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            "displayName": app.get("displayName", ""),
+            "version": app.get("version", ""),
+            "deviceName": app.get("deviceName", ""),
+            "platform": app.get("platform", ""),
+        }
+        for app in apps
+    ]
+
+
+def _oauth_app(grant: dict[str, Any]) -> dict[str, Any]:
+    """One OAuth consent grant, flagged when its scopes are broad."""
+    scopes = str(grant.get("scope", ""))
+    privileged = _high_privilege(scopes)
+    return {
+        "id": grant.get("id", ""),
+        "displayName": grant.get("clientId", ""),
+        "scopes": scopes,
+        "hasHighPrivilegePermissions": privileged,
+        "riskLevel": "high" if privileged else "low",
+    }
+
+
+def _cloud_app_score_sections(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Defender for Cloud Apps posture as reported by Secure Score."""
+    data: dict[str, Any] = {}
+    found, ratio = _score_ratio(rows, "cloud apps", "mcas", "defender for cloud apps")
+    if found:
+        data["cloud_app_connectors"] = [
+            {
+                "displayName": "Secure Score: Defender for Cloud Apps connector",
+                "status": "connected" if ratio >= 1.0 else "partial",
+            }
+        ]
+    found, ratio = _score_ratio(rows, "cloud discovery")
+    if found:
+        data["cloud_discovery_settings"] = {"isEnabled": ratio >= 1.0, "dataSources": ["secureScore"] if ratio > 0 else []}
+    found, ratio = _score_ratio(rows, "anomaly")
+    if found:
+        data["mcas_anomaly_policies"] = [{"displayName": "Secure Score: anomaly detection", "state": "enabled" if ratio >= 1.0 else "off"}]
+    return data
