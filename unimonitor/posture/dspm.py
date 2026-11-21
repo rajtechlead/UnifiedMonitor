@@ -51,102 +51,7 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
     findings: list[PostureFinding] = []
 
     for store in stores:
-        name = resource_name(store)
-        sensitive = is_sensitive(store)
-        public = _public(store)
-        encrypted = _encrypted(store)
-
-        if public and sensitive:
-            findings.append(
-                PostureFinding(
-                    "DSPM-PUBLIC-SENSITIVE",
-                    "Sensitive data store is publicly accessible",
-                    "critical",
-                    CATEGORY,
-                    name,
-                    "The store is marked public and holds data classified as sensitive.",
-                    "Remove public access, then review access logs for the exposure window.",
-                )
-            )
-        elif public:
-            findings.append(
-                PostureFinding(
-                    "DSPM-PUBLIC-STORE",
-                    "Data store is publicly accessible",
-                    "high",
-                    CATEGORY,
-                    name,
-                    "The store allows public access, whether or not it holds sensitive data.",
-                    "Block public access unless it is a deliberate static-hosting origin.",
-                )
-            )
-
-        if encrypted is False:
-            severity = "critical" if sensitive else "high"
-            findings.append(
-                PostureFinding(
-                    "DSPM-ENCRYPTION",
-                    "Data store is not encrypted at rest",
-                    severity,
-                    CATEGORY,
-                    name,
-                    "The export reports encryption at rest as disabled.",
-                    "Enable provider-managed encryption at minimum, then move sensitive data to a customer-managed key.",
-                )
-            )
-
-        if _external_sharing(store):
-            findings.append(
-                PostureFinding(
-                    "DSPM-EXTERNAL-SHARING",
-                    "Data store is shared outside the organisation",
-                    "critical" if sensitive else "medium",
-                    CATEGORY,
-                    name,
-                    "External principals or anonymous access are configured on the store.",
-                    "Remove external principals and require authenticated, audited access.",
-                )
-            )
-
-        if sensitive:
-            key_type = str(field(store, "encryption_key_type", "key_type", default="")).lower()
-            if key_type in {"provider", "provider_managed", "default", "service"}:
-                findings.append(
-                    PostureFinding(
-                        "DSPM-CMK",
-                        "Sensitive data uses a provider-managed key",
-                        "medium",
-                        CATEGORY,
-                        name,
-                        f"Encryption key type is {key_type!r}.",
-                        "Use a customer-managed key so access can be revoked independently of the provider.",
-                    )
-                )
-            retention = number(store, "retention_days", "object_lock_days")
-            if retention is not None and retention < 30:
-                findings.append(
-                    PostureFinding(
-                        "DSPM-RETENTION",
-                        "Sensitive data retention is shorter than 30 days",
-                        "low",
-                        CATEGORY,
-                        name,
-                        f"Retention is {retention} days.",
-                        "Confirm the retention matches policy; short retention can destroy investigation evidence.",
-                    )
-                )
-            if not any(key in store for key in ("classification", "data_classification", "data_types", "contains_pii", "tags", "labels")):
-                findings.append(
-                    PostureFinding(
-                        "DSPM-UNCLASSIFIED",
-                        "Data store has no classification",
-                        "low",
-                        CATEGORY,
-                        name,
-                        "No classification field is present, so sensitive-data handling cannot be verified.",
-                        "Add a classification tag and include it in the inventory export.",
-                    )
-                )
+        findings.extend(_store_findings(store))
 
     return result(
         CATEGORY,
@@ -154,6 +59,108 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
         findings,
         empty_note="No storage resources were present in the snapshot.",
     )
+
+
+def _store_findings(store: dict[str, Any]) -> list[PostureFinding]:
+    """Per-item checks, kept out of the loop so ``analyse`` stays flat."""
+    findings: list[PostureFinding] = []
+    name = resource_name(store)
+    sensitive = is_sensitive(store)
+    public = _public(store)
+    encrypted = _encrypted(store)
+
+    if public and sensitive:
+        findings.append(
+            PostureFinding(
+                "DSPM-PUBLIC-SENSITIVE",
+                "Sensitive data store is publicly accessible",
+                "critical",
+                CATEGORY,
+                name,
+                "The store is marked public and holds data classified as sensitive.",
+                "Remove public access, then review access logs for the exposure window.",
+            )
+        )
+    elif public:
+        findings.append(
+            PostureFinding(
+                "DSPM-PUBLIC-STORE",
+                "Data store is publicly accessible",
+                "high",
+                CATEGORY,
+                name,
+                "The store allows public access, whether or not it holds sensitive data.",
+                "Block public access unless it is a deliberate static-hosting origin.",
+            )
+        )
+
+    if encrypted is False:
+        severity = "critical" if sensitive else "high"
+        findings.append(
+            PostureFinding(
+                "DSPM-ENCRYPTION",
+                "Data store is not encrypted at rest",
+                severity,
+                CATEGORY,
+                name,
+                "The export reports encryption at rest as disabled.",
+                "Enable provider-managed encryption at minimum, then move sensitive data to a customer-managed key.",
+            )
+        )
+
+    if _external_sharing(store):
+        findings.append(
+            PostureFinding(
+                "DSPM-EXTERNAL-SHARING",
+                "Data store is shared outside the organisation",
+                "critical" if sensitive else "medium",
+                CATEGORY,
+                name,
+                "External principals or anonymous access are configured on the store.",
+                "Remove external principals and require authenticated, audited access.",
+            )
+        )
+
+    if sensitive:
+        key_type = str(field(store, "encryption_key_type", "key_type", default="")).lower()
+        if key_type in {"provider", "provider_managed", "default", "service"}:
+            findings.append(
+                PostureFinding(
+                    "DSPM-CMK",
+                    "Sensitive data uses a provider-managed key",
+                    "medium",
+                    CATEGORY,
+                    name,
+                    f"Encryption key type is {key_type!r}.",
+                    "Use a customer-managed key so access can be revoked independently of the provider.",
+                )
+            )
+        retention = number(store, "retention_days", "object_lock_days")
+        if retention is not None and retention < 30:
+            findings.append(
+                PostureFinding(
+                    "DSPM-RETENTION",
+                    "Sensitive data retention is shorter than 30 days",
+                    "low",
+                    CATEGORY,
+                    name,
+                    f"Retention is {retention} days.",
+                    "Confirm the retention matches policy; short retention can destroy investigation evidence.",
+                )
+            )
+        if not any(key in store for key in ("classification", "data_classification", "data_types", "contains_pii", "tags", "labels")):
+            findings.append(
+                PostureFinding(
+                    "DSPM-UNCLASSIFIED",
+                    "Data store has no classification",
+                    "low",
+                    CATEGORY,
+                    name,
+                    "No classification field is present, so sensitive-data handling cannot be verified.",
+                    "Add a classification tag and include it in the inventory export.",
+                )
+            )
+    return findings
 
 
 __all__ = ["CATEGORY", "LABEL", "analyse", "is_sensitive"]

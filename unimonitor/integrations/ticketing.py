@@ -123,69 +123,81 @@ async def create_ticket(finding: Any, provider: str | None = None) -> dict[str, 
 
     async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS) as client:
         if slug == "jira":
-            response = await client.post(
-                f"{settings.JIRA_URL.rstrip('/')}/rest/api/2/issue",
-                auth=(settings.JIRA_EMAIL, settings.JIRA_API_TOKEN),
-                json={
-                    "fields": {
-                        "project": {"key": settings.JIRA_PROJECT_KEY},
-                        "issuetype": {"name": "Task"},
-                        "summary": _summary(finding),
-                        "description": _description(finding),
-                        "labels": ["unimonitor", finding.severity.lower()],
-                    }
-                },
-            )
-            _raise_for(response, definition)
-            body = response.json()
-            key = str(body.get("key", ""))
-            return {"provider": slug, "external_id": key, "url": f"{settings.JIRA_URL.rstrip('/')}/browse/{key}" if key else ""}
-
+            return await _create_jira(client, settings, finding, definition)
         if slug == "servicenow":
-            response = await client.post(
-                f"{settings.SERVICENOW_URL.rstrip('/')}/api/now/table/{settings.SERVICENOW_TABLE}",
-                auth=(settings.SERVICENOW_USERNAME, settings.SERVICENOW_PASSWORD),
-                headers={"Accept": "application/json", "Content-Type": "application/json"},
-                json={
-                    "short_description": _summary(finding),
-                    "description": _description(finding),
-                    "category": "security",
-                    "urgency": _SERVICENOW_URGENCY.get(finding.severity, "2"),
-                    "impact": _SERVICENOW_URGENCY.get(finding.severity, "2"),
-                    "correlation_id": finding.id,
-                },
-            )
-            _raise_for(response, definition)
-            record = (response.json() or {}).get("result", {})
-            sys_id = str(record.get("sys_id", ""))
-            number = str(record.get("number", sys_id))
-            return {
-                "provider": slug,
-                "external_id": number,
-                "url": f"{settings.SERVICENOW_URL.rstrip('/')}/nav_to.do?uri=incident.do?sys_id={sys_id}" if sys_id else "",
-            }
+            return await _create_servicenow(client, settings, finding, definition)
+        return await _create_webhook(client, settings, finding, definition)
 
-        # Generic webhook: enough for any other tracker's intake automation.
-        response = await client.post(
-            settings.TICKET_WEBHOOK_URL,
-            json={
-                "source": "unimonitor",
-                "finding_id": finding.id,
-                "tenant_id": finding.tenant_id,
-                "control": finding.external_control_id,
-                "title": finding.title,
-                "severity": finding.severity,
-                "state": finding.state,
+
+async def _create_jira(client: httpx.AsyncClient, settings: Any, finding: Any, definition: TicketProvider) -> dict[str, Any]:
+    """POST one issue to Jira and normalise the response."""
+    response = await client.post(
+        f"{settings.JIRA_URL.rstrip('/')}/rest/api/2/issue",
+        auth=(settings.JIRA_EMAIL, settings.JIRA_API_TOKEN),
+        json={
+            "fields": {
+                "project": {"key": settings.JIRA_PROJECT_KEY},
+                "issuetype": {"name": "Task"},
+                "summary": _summary(finding),
                 "description": _description(finding),
-            },
-        )
-        _raise_for(response, definition)
+                "labels": ["unimonitor", finding.severity.lower()],
+            }
+        },
+    )
+    _raise_for(response, definition)
+    body = response.json()
+    key = str(body.get("key", ""))
+    return {"provider": definition.slug, "external_id": key, "url": f"{settings.JIRA_URL.rstrip('/')}/browse/{key}" if key else ""}
+
+
+async def _create_servicenow(client: httpx.AsyncClient, settings: Any, finding: Any, definition: TicketProvider) -> dict[str, Any]:
+    """POST one incident to ServiceNow and normalise the response."""
+    response = await client.post(
+        f"{settings.SERVICENOW_URL.rstrip('/')}/api/now/table/{settings.SERVICENOW_TABLE}",
+        auth=(settings.SERVICENOW_USERNAME, settings.SERVICENOW_PASSWORD),
+        headers={"Accept": "application/json", "Content-Type": "application/json"},
+        json={
+            "short_description": _summary(finding),
+            "description": _description(finding),
+            "category": "security",
+            "urgency": _SERVICENOW_URGENCY.get(finding.severity, "2"),
+            "impact": _SERVICENOW_URGENCY.get(finding.severity, "2"),
+            "correlation_id": finding.id,
+        },
+    )
+    _raise_for(response, definition)
+    record = (response.json() or {}).get("result", {})
+    sys_id = str(record.get("sys_id", ""))
+    number = str(record.get("number", sys_id))
+    return {
+        "provider": definition.slug,
+        "external_id": number,
+        "url": f"{settings.SERVICENOW_URL.rstrip('/')}/nav_to.do?uri=incident.do?sys_id={sys_id}" if sys_id else "",
+    }
+
+
+async def _create_webhook(client: httpx.AsyncClient, settings: Any, finding: Any, definition: TicketProvider) -> dict[str, Any]:
+    """POST the generic webhook payload any other tracker can ingest."""
+    response = await client.post(
+        settings.TICKET_WEBHOOK_URL,
+        json={
+            "source": "unimonitor",
+            "finding_id": finding.id,
+            "tenant_id": finding.tenant_id,
+            "control": finding.external_control_id,
+            "title": finding.title,
+            "severity": finding.severity,
+            "state": finding.state,
+            "description": _description(finding),
+        },
+    )
+    _raise_for(response, definition)
+    external_id = ""
+    try:
+        external_id = str((response.json() or {}).get("key") or (response.json() or {}).get("id") or "")
+    except ValueError:
         external_id = ""
-        try:
-            external_id = str((response.json() or {}).get("key") or (response.json() or {}).get("id") or "")
-        except ValueError:
-            external_id = ""
-        return {"provider": slug, "external_id": external_id, "url": ""}
+    return {"provider": definition.slug, "external_id": external_id, "url": ""}
 
 
 def _raise_for(response: httpx.Response, definition: TicketProvider) -> None:

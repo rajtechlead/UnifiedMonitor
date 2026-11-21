@@ -224,7 +224,6 @@ async def tenant_rollup(
     deliberately single-tenant.
     """
     from unimonitor.db.base import async_session_factory
-    from unimonitor.grc.scoring import compute_framework_coverage
 
     async with async_session_factory() as session:
         from sqlalchemy import func, select
@@ -267,16 +266,7 @@ async def tenant_rollup(
             compliance_score = (latest.compliance_score or 0.0) if latest else 0.0
             risk_score = (latest.risk_score or 0.0) if latest else 0.0
 
-            coverage_pct = 0.0
-            weakest_id: str | None = None
-            weakest_pct: float | None = None
-            if include_coverage:
-                coverages = await compute_framework_coverage(session, tenant_id=tenant.id)
-                scored = [(fw_id, cov) for fw_id, cov in coverages.items() if cov.get("controls_total")]
-                if scored:
-                    coverage_pct = round(sum(cov["coverage_pct"] for _, cov in scored) / len(scored), 2)
-                    weakest_id, weakest = min(scored, key=lambda item: item[1]["coverage_pct"])
-                    weakest_pct = weakest["coverage_pct"]
+            coverage_pct, weakest_id, weakest_pct = await _tenant_coverage(session, tenant.id) if include_coverage else (0.0, None, None)
 
             rows.append(
                 TenantRollupRow(
@@ -664,3 +654,16 @@ async def tenant_health(
         failed_runs_24h=stats.get("failed_runs", 0),
         graph_accessible=stats.get("graph_accessible", False),
     )
+
+
+async def _tenant_coverage(session: Any, tenant_id: str) -> tuple[float, str | None, float | None]:
+    """Mean framework coverage for one tenant, plus its weakest framework."""
+    from unimonitor.grc.scoring import compute_framework_coverage
+
+    coverages = await compute_framework_coverage(session, tenant_id=tenant_id)
+    scored = [(fw_id, cov) for fw_id, cov in coverages.items() if cov.get("controls_total")]
+    if not scored:
+        return 0.0, None, None
+    mean = round(sum(cov["coverage_pct"] for _, cov in scored) / len(scored), 2)
+    weakest_id, weakest = min(scored, key=lambda item: item[1]["coverage_pct"])
+    return mean, weakest_id, weakest["coverage_pct"]

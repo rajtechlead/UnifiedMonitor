@@ -204,9 +204,10 @@ class TestAcquireTokenForClient:
         mock_app = MagicMock()
         mock_app.acquire_token_silent.return_value = None
         mock_app.acquire_token_for_client.return_value = {"error": "invalid_client", "error_description": "Bad credentials"}
+        token = acquire_token_for_client()
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
             with pytest.raises(AuthenticationError):
-                _run(acquire_token_for_client())
+                _run(token)
 
     def test_per_tenant_credentials_use_tenant_app(self):
         from unimonitor.auth.oauth import acquire_token_for_client
@@ -255,9 +256,10 @@ class TestExchangeCodeForToken:
 
         mock_app = MagicMock()
         mock_app.acquire_token_by_authorization_code.return_value = {"error": "invalid_grant", "error_description": "Code expired"}
+        exchange = exchange_code_for_token("bad_code")
         with patch("unimonitor.auth.oauth.get_msal_app", return_value=mock_app):
             with pytest.raises(AuthenticationError):
-                _run(exchange_code_for_token("bad_code"))
+                _run(exchange)
 
 
 class TestGetEntraUserInfo:

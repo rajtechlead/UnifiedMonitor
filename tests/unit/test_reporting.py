@@ -374,5 +374,6 @@ class TestDocxGenerator:
         gen = _generator(docx_generator.DocxReportGenerator, tmp_path)
         import asyncio
 
+        coro = gen.generate()
         with pytest.raises(RuntimeError):
-            asyncio.run(gen.generate())
+            asyncio.run(coro)

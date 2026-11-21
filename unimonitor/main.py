@@ -56,24 +56,38 @@ class SpaFallbackMiddleware:
         self.index = self.root / "index.html"
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        path = self._static_path(scope)
+        if path is None:
+            await self.app(scope, receive, send)
+            return
+        asset = self._asset_for(path)
+        if asset is not None:
+            await FileResponse(asset)(scope, receive, send)
+            return
+        await self._serve_shell(scope, receive, send)
+
+    def _static_path(self, scope: dict[str, Any]) -> str | None:
+        """The path to serve statically, or None to let the app answer."""
         if scope["type"] != "http" or scope["method"] not in ("GET", "HEAD"):
-            await self.app(scope, receive, send)
-            return
-
+            return None
         path = scope["path"].lstrip("/")
-        if path.split("/", 1)[0] in self._PASSTHROUGH:
+        return None if path.split("/", 1)[0] in self._PASSTHROUGH else path
+
+    def _asset_for(self, path: str) -> Path | None:
+        """An existing file under the build root, if this path names one."""
+        if not path:
+            return None
+        candidate = (self.root / path).resolve()
+        if candidate.is_file() and candidate.is_relative_to(self.root):
+            return candidate
+        return None
+
+    async def _serve_shell(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        """Answer with the SPA shell, but never for a missing asset."""
+        path = scope["path"].lstrip("/")
+        if path and "." in path.rsplit("/", 1)[-1]:
             await self.app(scope, receive, send)
             return
-
-        if path:
-            candidate = (self.root / path).resolve()
-            if candidate.is_file() and candidate.is_relative_to(self.root):
-                await FileResponse(candidate)(scope, receive, send)
-                return
-            # a missing asset must not be answered with the HTML shell
-            if "." in path.rsplit("/", 1)[-1]:
-                await self.app(scope, receive, send)
-                return
 
         swallowed = False
 

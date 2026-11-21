@@ -258,48 +258,56 @@ async def export_siem(
     return Response(content="\n".join(finding_cef(row) for row in rows), media_type="text/plain")
 
 
+class FindingsFilter(BaseModel):
+    """Every filter and paging option the findings list accepts."""
+
+    tenant_id: str | None = None
+    severity: str | None = None
+    state: str | None = None
+    triage_status: str | None = None
+    category: str | None = None
+    service: str | None = None
+    is_suppressed: bool | None = None
+    search: str | None = None
+    page: int = Field(default=1, ge=1)
+    page_size: int = Field(default=25, ge=1, le=100)
+    sort_by: str = "last_seen_at"
+    sort_desc: bool = True
+
+
 @router.get("", responses={422: {"description": "Unprocessable entity"}})
 async def list_findings(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
-    severity: Annotated[str | None, Query()] = None,
-    state: Annotated[str | None, Query()] = None,
-    triage_status: Annotated[str | None, Query()] = None,
-    category: Annotated[str | None, Query()] = None,
-    service: Annotated[str | None, Query()] = None,
-    is_suppressed: Annotated[bool | None, Query()] = None,
-    search: Annotated[str | None, Query()] = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=100)] = 25,
-    sort_by: Annotated[str, Query()] = "last_seen_at",
-    sort_desc: Annotated[bool, Query()] = True,
+    filters: Annotated[FindingsFilter, Query()],
 ) -> PaginatedFindings:
     """List findings with filtering and pagination."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
 
     await _release_expired_suppressions(db)
 
-    if severity and severity.lower() not in VALID_SEVERITIES:
-        raise HTTPException(status_code=422, detail=f"Invalid severity: {severity}")
+    if filters.severity and filters.severity.lower() not in VALID_SEVERITIES:
+        raise HTTPException(status_code=422, detail=f"Invalid severity: {filters.severity}")
     # State filter: accept known states and pass-through unknown values (returns empty results)
 
     repo = FindingRepository(db)
     findings, total = await repo.list_paginated(
-        tenant_id=tenant_id,
-        severity=severity,
-        state=state,
-        triage_status=triage_status,
-        category=category,
-        service=service,
-        is_suppressed=is_suppressed,
-        search=search,
-        page=page,
-        page_size=page_size,
-        sort_by=sort_by,
-        sort_desc=sort_desc,
+        tenant_id=filters.tenant_id,
+        severity=filters.severity,
+        state=filters.state,
+        triage_status=filters.triage_status,
+        category=filters.category,
+        service=filters.service,
+        is_suppressed=filters.is_suppressed,
+        search=filters.search,
+        page=filters.page,
+        page_size=filters.page_size,
+        sort_by=filters.sort_by,
+        sort_desc=filters.sort_desc,
     )
 
+    page_size = filters.page_size
+    page = filters.page
     pages = max(1, (total + page_size - 1) // page_size)
     guidance = _control_remediation()
     return PaginatedFindings(

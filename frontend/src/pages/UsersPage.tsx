@@ -162,20 +162,23 @@ export default function UsersPage() {
         background: 'var(--color-surface)', border: '1px solid var(--color-border)',
         borderRadius: 12, overflow: 'hidden',
       }}>
-        {isLoading ? (
+        {isLoading && (
           <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>Loading users…</div>
-        ) : isError ? (
+        )}
+        {!isLoading && isError && (
           <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
             Could not load users. Only an administrator can view this page.{' '}
             <button onClick={() => refetch()} style={{ background: 'none', border: 'none', color: 'var(--color-brand)', cursor: 'pointer' }}>
               Retry
             </button>
           </div>
-        ) : shown.length === 0 ? (
+        )}
+        {!isLoading && !isError && shown.length === 0 && (
           <div style={{ padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)' }}>
             No users match these filters.
           </div>
-        ) : (
+        )}
+        {!isLoading && !isError && shown.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ background: 'var(--color-surface-2)', borderBottom: '1px solid var(--color-border)' }}>

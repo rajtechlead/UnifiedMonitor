@@ -43,6 +43,30 @@ def _percentile(values: list[float], fraction: float) -> float:
     return round(ordered[index], 2)
 
 
+def _mttr_entry(severity: str, hours: list[float]) -> dict[str, Any]:
+    """Mean/median/p90 time to remediate one severity, null when nothing resolved."""
+    return {
+        "severity": severity,
+        "resolved": len(hours),
+        "mean_hours": round(sum(hours) / len(hours), 2) if hours else None,
+        "median_hours": round(median(hours), 2) if hours else None,
+        "p90_hours": _percentile(hours, 0.9) if hours else None,
+        "sla_hours": SLA_HOURS.get(severity),
+    }
+
+
+def _sla_entry(severity: str, ages: list[float], target: float | None) -> dict[str, Any]:
+    """Open findings for one severity, and how many are past its SLA."""
+    breached = 0 if target is None else sum(1 for age in ages if age > target)
+    return {
+        "severity": severity,
+        "open": len(ages),
+        "breached": breached,
+        "sla_hours": target,
+        "oldest_hours": round(max(ages), 2) if ages else None,
+    }
+
+
 def summarise_remediation(
     resolved: list[tuple[str, datetime, datetime]],
     open_findings: list[tuple[str, datetime]],
@@ -65,19 +89,7 @@ def summarise_remediation(
         hours = max(0.0, (_utc(resolved_at) - _utc(first_seen)).total_seconds() / 3600)
         buckets[key].append(hours)
 
-    mttr = []
-    for severity in SEVERITY_ORDER:
-        hours = buckets[severity]
-        mttr.append(
-            {
-                "severity": severity,
-                "resolved": len(hours),
-                "mean_hours": round(sum(hours) / len(hours), 2) if hours else None,
-                "median_hours": round(median(hours), 2) if hours else None,
-                "p90_hours": _percentile(hours, 0.9) if hours else None,
-                "sla_hours": SLA_HOURS.get(severity),
-            }
-        )
+    mttr = [_mttr_entry(severity, buckets[severity]) for severity in SEVERITY_ORDER]
 
     breaches = []
     for severity in SEVERITY_ORDER:
@@ -87,21 +99,7 @@ def summarise_remediation(
             for row_severity, first_seen in open_findings
             if (row_severity or "").lower() == severity
         ]
-        if target is None:
-            breaches.append(
-                {"severity": severity, "open": len(ages), "breached": 0, "sla_hours": None, "oldest_hours": round(max(ages), 2) if ages else None}
-            )
-            continue
-        overdue = [age for age in ages if age > target]
-        breaches.append(
-            {
-                "severity": severity,
-                "open": len(ages),
-                "breached": len(overdue),
-                "sla_hours": target,
-                "oldest_hours": round(max(ages), 2) if ages else None,
-            }
-        )
+        breaches.append(_sla_entry(severity, ages, target))
 
     return {"mttr": mttr, "open_sla": breaches}
 

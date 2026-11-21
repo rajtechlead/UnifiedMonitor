@@ -300,11 +300,12 @@ export default function AssessmentsPage() {
         </div>
       )}
 
-      {isLoading ? (
+      {isLoading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--color-text-muted)', fontSize: 13 }}>
           Loading assessments…
         </div>
-      ) : assessments.length === 0 ? (
+      )}
+      {!isLoading && assessments.length === 0 && (
         <div style={{
           textAlign: 'center', padding: 64,
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
@@ -312,7 +313,8 @@ export default function AssessmentsPage() {
         }}>
           No assessments configured yet. Create your first one to get started.
         </div>
-      ) : (
+      )}
+      {!isLoading && assessments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           {assessments.map(a => <AssessmentCard key={a.id} a={a} />)}
         </div>

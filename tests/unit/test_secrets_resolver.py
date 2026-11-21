@@ -78,8 +78,9 @@ class TestSecretResolverGet:
         primary = _make_provider("local_vault")
         primary.get_secret = AsyncMock(side_effect=KeyError("not_found"))
         resolver = _make_resolver(primary=primary, failover_enabled=False)
+        lookup = resolver.get("missing")
         with pytest.raises(KeyError):
-            _run(resolver.get("missing"))
+            _run(lookup)
 
     def test_failover_to_fallback_on_primary_error(self):
         primary = _make_provider("local_vault")
@@ -95,8 +96,9 @@ class TestSecretResolverGet:
         primary.get_secret = AsyncMock(side_effect=RuntimeError("conn error"))
         fallback = _make_provider("local_vault")
         resolver = _make_resolver(primary=primary, fallback=fallback, failover_enabled=False)
+        lookup = resolver.get("secret_key")
         with pytest.raises(RuntimeError):
-            _run(resolver.get("secret_key"))
+            _run(lookup)
         fallback.get_secret.assert_not_awaited()
 
     def test_no_failover_when_no_fallback(self):
@@ -105,8 +107,9 @@ class TestSecretResolverGet:
         primary = _make_provider("local_vault")
         primary.get_secret = AsyncMock(side_effect=RuntimeError("gone"))
         resolver = _make_resolver(primary=primary, fallback=None, failover_enabled=True)
+        lookup = resolver.get("key")
         with pytest.raises(RuntimeError):
-            _run(resolver.get("key"))
+            _run(lookup)
 
     def test_get_with_version(self):
         primary = _make_provider("local_vault")

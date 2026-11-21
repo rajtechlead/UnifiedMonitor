@@ -118,8 +118,9 @@ class TestAWSSecretsManagerProvider:
             "GetSecretValue",
         )
         provider = self._make_provider(client)
+        lookup = provider.get_secret("missing-secret")
         with pytest.raises(KeyError):
-            _run(provider.get_secret("missing-secret"))
+            _run(lookup)
 
     def test_get_secret_invalid_request_raises_key_error(self):
         from botocore.exceptions import ClientError
@@ -130,8 +131,9 @@ class TestAWSSecretsManagerProvider:
             "GetSecretValue",
         )
         provider = self._make_provider(client)
+        lookup = provider.get_secret("bad-request")
         with pytest.raises(KeyError):
-            _run(provider.get_secret("bad-request"))
+            _run(lookup)
 
     def test_set_secret_update_existing(self):
         client = MagicMock()
@@ -271,14 +273,16 @@ class TestAzureKeyVaultProvider:
         secret_obj = MagicMock()
         secret_obj.value = None
         provider._client.get_secret.return_value = secret_obj
+        lookup = provider.get_secret("empty-secret")
         with pytest.raises(KeyError):
-            _run(provider.get_secret("empty-secret"))
+            _run(lookup)
 
     def test_get_secret_not_found_raises_key_error(self):
         provider = self._make_provider()
         provider._client.get_secret.side_effect = _ResourceNotFoundError("not found")
+        lookup = provider.get_secret("missing")
         with pytest.raises(KeyError):
-            _run(provider.get_secret("missing"))
+            _run(lookup)
 
     def test_set_secret_success(self):
         provider = self._make_provider()

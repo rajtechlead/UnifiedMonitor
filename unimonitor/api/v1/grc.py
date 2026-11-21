@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
+from unimonitor.api.v1.lookups import evidence_by_finding, latest_findings_by_control
 from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.db.session import get_db
 
@@ -170,10 +171,7 @@ async def framework_controls(
     if not fw_info:
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
 
-    from sqlalchemy import select
-
     from unimonitor.db.base import async_session_factory
-    from unimonitor.db.models.finding import Finding, FindingEvidence
     from unimonitor.grc.control_loader import controls_for_framework
 
     # Canonical aliases: every control mapped to the framework, none dropped by a
@@ -182,21 +180,8 @@ async def framework_controls(
 
     result = []
     async with async_session_factory() as session:
-        findings: dict[str, Finding] = {}
-        if controls:
-            stmt = select(Finding).where(Finding.external_control_id.in_([c.id for c in controls]))
-            if tenant_id:
-                stmt = stmt.where(Finding.tenant_id == tenant_id)
-            stmt = stmt.order_by(Finding.last_seen_at.desc())
-            for finding in (await session.execute(stmt)).scalars():
-                findings.setdefault(finding.external_control_id, finding)
-
-        evidence: dict[str, list[FindingEvidence]] = {}
-        finding_ids = [f.id for f in findings.values()]
-        if finding_ids:
-            rows = (await session.execute(select(FindingEvidence).where(FindingEvidence.finding_id.in_(finding_ids)))).scalars()
-            for row in rows:
-                evidence.setdefault(row.finding_id, []).append(row)
+        findings = await latest_findings_by_control(session, [c.id for c in controls], tenant_id)
+        evidence = await evidence_by_finding(session, [f.id for f in findings.values()])
 
         for control in controls:
             finding = findings.get(control.id)

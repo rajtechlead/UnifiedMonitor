@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -199,37 +200,10 @@ async def platform_coverage(db: AsyncSession, tenant_id: str, platform: str) -> 
     evidence = {control_id: _control_evidence(control, states, coverage) for control_id, control in controls.items()}
 
     tests = tests_for(platform)
-    gaps: list[TestEvidence] = []
-    evidenced = 0
     if tests:
-        for test in tests:
-            mapped = [evidence[cid] for cid in test.control_ids if cid in evidence]
-            if not mapped:
-                gaps.append(
-                    TestEvidence(
-                        test.id,
-                        test.title,
-                        test.pillar,
-                        "No UniMonitor control collects evidence for this test.",
-                    )
-                )
-                continue
-            if any(item.has_evidence for item in mapped):
-                evidenced += 1
-                continue
-            reason = (
-                "Mapped controls have not been assessed yet."
-                if not any(item.has_finding for item in mapped)
-                else "Collector data for the mapped controls is incomplete."
-            )
-            gaps.append(TestEvidence(test.id, test.title, test.pillar, reason, mapped))
+        evidenced, gaps = _mapped_gaps(tests, evidence)
     else:
-        # Microsoft: a test with no mapped control is a mapping gap, reported by
-        # the mapping endpoint; here we report controls with no runtime evidence.
-        evidenced = sum(1 for item in evidence.values() if item.has_evidence)
-        for item in evidence.values():
-            if not item.has_evidence:
-                gaps.append(TestEvidence(item.id, item.title, item.pillar, _gap_reason(item), [item]))
+        evidenced, gaps = _unmapped_gaps(evidence)
 
     lacking = [item for item in evidence.values() if not item.has_evidence]
     return PlatformCoverage(
@@ -254,3 +228,31 @@ def _gap_reason(item: ControlEvidence) -> str:
     if not item.has_finding:
         return "This control has not been assessed yet."
     return "The finding carries no collector evidence."
+
+
+def _mapped_gaps(tests: Sequence[Any], evidence: dict[str, Any]) -> tuple[int, list[TestEvidence]]:
+    """Gaps for a platform whose tests map to controls."""
+    gaps: list[TestEvidence] = []
+    evidenced = 0
+    for test in tests:
+        mapped = [evidence[cid] for cid in test.control_ids if cid in evidence]
+        if not mapped:
+            gaps.append(TestEvidence(test.id, test.title, test.pillar, "No UniMonitor control collects evidence for this test."))
+            continue
+        if any(item.has_evidence for item in mapped):
+            evidenced += 1
+            continue
+        reason = (
+            "Mapped controls have not been assessed yet."
+            if not any(item.has_finding for item in mapped)
+            else "Collector data for the mapped controls is incomplete."
+        )
+        gaps.append(TestEvidence(test.id, test.title, test.pillar, reason, mapped))
+    return evidenced, gaps
+
+
+def _unmapped_gaps(evidence: dict[str, Any]) -> tuple[int, list[TestEvidence]]:
+    """Microsoft: a test with no mapped control is a mapping gap, reported by the
+    mapping endpoint, so here we report controls with no runtime evidence."""
+    gaps = [TestEvidence(item.id, item.title, item.pillar, _gap_reason(item), [item]) for item in evidence.values() if not item.has_evidence]
+    return sum(1 for item in evidence.values() if item.has_evidence), gaps

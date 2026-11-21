@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
+from typing import Any
 
 import yaml
 
@@ -373,9 +374,8 @@ def controls_for_framework(framework_id: str, _seen: set[str] | None = None) -> 
     primary source; :mod:`unimonitor.grc.framework_mappings` adds frameworks that
     are listed explicitly (CPCSC, NIS2, DORA) or derived from another framework.
     """
-    from unimonitor.grc.framework_mappings import derivation, explicit_control_ids
+    from unimonitor.grc.framework_mappings import derivation
     from unimonitor.grc.frameworks import framework_keys
-    from unimonitor.grc.pillars import pillar_for
 
     seen = set(_seen or ())
     if framework_id in seen:
@@ -383,30 +383,47 @@ def controls_for_framework(framework_id: str, _seen: set[str] | None = None) -> 
     seen.add(framework_id)
 
     controls = all_controls()
-    by_id = {control.id: control for control in controls}
     keys = framework_keys(framework_id)
     selected: dict[str, ControlDefinition] = {control.id: control for control in controls if keys & set(control.compliance_mapping)}
-    for control_id in explicit_control_ids(framework_id):
-        if control_id in by_id:
-            selected.setdefault(control_id, by_id[control_id])
+    for control in explicit_controls(framework_id, controls):
+        selected.setdefault(control.id, control)
 
     rule = derivation(framework_id)
     if rule:
-        if rule.get("source"):
-            pool = controls_for_framework(rule["source"], seen)
-        else:
-            pool = list(controls)
-        if rule.get("pillars"):
-            wanted = set(rule["pillars"])
-            pool = [
-                control
-                for control in pool
-                if any(pillar_for(str(mapping)) in wanted for mapping in control.compliance_mapping.get("zero_trust", []) or [])
-            ]
-        if rule.get("services"):
-            services = set(rule["services"])
-            pool = [control for control in pool if control.service in services]
-        for control in pool:
+        pool = derived_pool(rule, controls, seen)
+        for control in _filter_pool(pool, rule):
             selected.setdefault(control.id, control)
 
     return list(selected.values())
+
+
+def explicit_controls(framework_id: str, controls: list[ControlDefinition]) -> list[ControlDefinition]:
+    """Controls this framework lists explicitly, ignoring ids that no longer exist."""
+    from unimonitor.grc.framework_mappings import explicit_control_ids
+
+    by_id = {control.id: control for control in controls}
+    return [by_id[control_id] for control_id in explicit_control_ids(framework_id) if control_id in by_id]
+
+
+def derived_pool(rule: dict[str, Any], controls: list[ControlDefinition], seen: set[str]) -> list[ControlDefinition]:
+    """The controls a derived framework starts from: its source, or all of them."""
+    if rule.get("source"):
+        return controls_for_framework(rule["source"], seen)
+    return list(controls)
+
+
+def _filter_pool(pool: list[ControlDefinition], rule: dict[str, Any]) -> list[ControlDefinition]:
+    """Apply a derived framework's pillar and service filters."""
+    from unimonitor.grc.pillars import pillar_for
+
+    if rule.get("pillars"):
+        wanted = set(rule["pillars"])
+        pool = [
+            control
+            for control in pool
+            if any(pillar_for(str(mapping)) in wanted for mapping in control.compliance_mapping.get("zero_trust", []) or [])
+        ]
+    if rule.get("services"):
+        services = set(rule["services"])
+        pool = [control for control in pool if control.service in services]
+    return pool

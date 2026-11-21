@@ -68,10 +68,12 @@ def test_pdf_is_a_real_document():
 
 def test_export_returns_media_type_and_filename():
     content, media_type, filename = export(_scorecard(), "csv")
-    assert content and media_type == "text/csv"
+    assert content
+    assert media_type == "text/csv"
     assert filename.endswith(".csv")
 
 
 def test_export_rejects_unknown_format():
+    scorecard = _scorecard()
     with pytest.raises(ValueError):
-        export(_scorecard(), "docx")
+        export(scorecard, "docx")

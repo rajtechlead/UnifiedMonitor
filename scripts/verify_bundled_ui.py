@@ -72,58 +72,11 @@ def main() -> int:
 
     base = f"http://127.0.0.1:{port}"
     try:
-        deadline = time.time() + STARTUP_TIMEOUT
-        ready = False
-        while time.time() < deadline:
-            if server.poll() is not None:
-                break
-            try:
-                if fetch(f"{base}/api/v1/health")[0] == 200:
-                    ready = True
-                    break
-            except OSError:
-                pass
-            time.sleep(0.5)
-
+        ready, detail = _wait_until_ready(server, base)
         if not ready:
-            stderr = (server.stderr.read() or b"").decode(errors="replace")[-2000:]
-            print(f"server did not start\n{stderr}")
+            print(f"server did not start\n{detail}")
             return 1
-
-        status, ctype, body = fetch(f"{base}/")
-        check("GET / returns the app shell", status == 200 and "text/html" in ctype, f"{status} {ctype}")
-        check("GET / renders index.html", ROOT_ELEMENT in body.decode(errors="replace"))
-
-        asset = re.search(r"/assets/[\w.\-]+\.js", html)
-        check("index.html references a hashed asset", asset is not None)
-        if asset:
-            status, ctype, _ = fetch(base + asset.group(0))
-            check("hashed JS asset is served", status == 200 and "javascript" in ctype, f"{status} {ctype}")
-
-        status, ctype, body = fetch(f"{base}/clouds")
-        check(
-            "deep link /clouds falls back to the SPA",
-            status == 200 and ROOT_ELEMENT in body.decode(errors="replace"),
-            f"{status} {ctype}",
-        )
-
-        status, ctype, body = fetch(f"{base}/api/v1/health")
-        check(
-            "API health still returns JSON",
-            status == 200 and "application/json" in ctype and json.loads(body)["status"] == "ok",
-            f"{status} {ctype}",
-        )
-
-        status, ctype, _ = fetch(f"{base}/api/v1/dashboard/clouds")
-        check("authenticated API route is not shadowed by the SPA", status == 401, f"{status} {ctype}")
-
-        # routes declared with an empty path ("/api/v1/tenants") were the ones a
-        # catch-all SPA route used to hide
-        status, ctype, _ = fetch(f"{base}/api/v1/tenants")
-        check("collection route /api/v1/tenants still answers (401, not SPA 404)", status == 401, f"{status} {ctype}")
-
-        status, ctype, _ = fetch(f"{base}/api/v1/does-not-exist")
-        check("unknown API path stays a 404 JSON error", status == 404, f"{status} {ctype}")
+        _check_routes(base, html)
     finally:
         server.terminate()
         try:
@@ -140,3 +93,57 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+
+
+def _wait_until_ready(server: subprocess.Popen, base: str) -> tuple[bool, str]:
+    """Poll the health route until it answers, the process dies, or time runs out."""
+    deadline = time.time() + STARTUP_TIMEOUT
+    while time.time() < deadline:
+        if server.poll() is not None:
+            break
+        try:
+            if fetch(f"{base}/api/v1/health")[0] == 200:
+                return True, ""
+        except OSError:
+            pass
+        time.sleep(0.5)
+    stderr = (server.stderr.read() or b"").decode(errors="replace")[-2000:]
+    return False, stderr
+
+
+def _check_routes(base: str, html: str) -> None:
+    """Every assertion this script makes against the running app."""
+    status, ctype, body = fetch(f"{base}/")
+    check("GET / returns the app shell", status == 200 and "text/html" in ctype, f"{status} {ctype}")
+    check("GET / renders index.html", ROOT_ELEMENT in body.decode(errors="replace"))
+
+    asset = re.search(r"/assets/[\w.\-]+\.js", html)
+    check("index.html references a hashed asset", asset is not None)
+    if asset:
+        status, ctype, _ = fetch(base + asset.group(0))
+        check("hashed JS asset is served", status == 200 and "javascript" in ctype, f"{status} {ctype}")
+
+    status, ctype, body = fetch(f"{base}/clouds")
+    check(
+        "deep link /clouds falls back to the SPA",
+        status == 200 and ROOT_ELEMENT in body.decode(errors="replace"),
+        f"{status} {ctype}",
+    )
+
+    status, ctype, body = fetch(f"{base}/api/v1/health")
+    check(
+        "API health still returns JSON",
+        status == 200 and "application/json" in ctype and json.loads(body)["status"] == "ok",
+        f"{status} {ctype}",
+    )
+
+    status, ctype, _ = fetch(f"{base}/api/v1/dashboard/clouds")
+    check("authenticated API route is not shadowed by the SPA", status == 401, f"{status} {ctype}")
+
+    # routes declared with an empty path ("/api/v1/tenants") were the ones a
+    # catch-all SPA route used to hide
+    status, ctype, _ = fetch(f"{base}/api/v1/tenants")
+    check("collection route /api/v1/tenants still answers (401, not SPA 404)", status == 401, f"{status} {ctype}")
+
+    status, ctype, _ = fetch(f"{base}/api/v1/does-not-exist")
+    check("unknown API path stays a 404 JSON error", status == 404, f"{status} {ctype}")

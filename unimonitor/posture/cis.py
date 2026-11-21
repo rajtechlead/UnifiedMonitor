@@ -90,6 +90,20 @@ def _setting_rule(
     return Rule(id=rule_id, title=title, severity=severity, check=check, remediation=remediation, tags=tags)
 
 
+def _numeric_settings(settings: list[dict[str, Any]], names: tuple[str, ...]) -> list[float]:
+    """Numeric values of a setting, skipping absent and non-numeric entries."""
+    present: list[float] = []
+    for item in settings:
+        value = field(item, *names)
+        if value is None:
+            continue
+        try:
+            present.append(float(str(value)))
+        except (TypeError, ValueError):
+            continue
+    return present
+
+
 def _number_rule(
     rule_id: str,
     title: str,
@@ -106,15 +120,7 @@ def _number_rule(
         settings = groups.get("tenant_settings", [])
         if not settings:
             return no_resources("tenant settings")
-        values = [field(item, *names) for item in settings]
-        present = []
-        for value in values:
-            if value is None:
-                continue
-            try:
-                present.append(float(str(value)))
-            except ValueError:
-                continue
+        present = _numeric_settings(settings, names)
         if not present:
             return None, f"tenant settings do not include {'/'.join(names)}"
         value = present[0]

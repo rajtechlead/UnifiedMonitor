@@ -238,11 +238,12 @@ export default function ReportsPage() {
       )}
 
       {/* Reports list */}
-      {isLoading ? (
+      {isLoading && (
         <div style={{ textAlign: 'center', padding: 48, color: 'var(--color-text-muted)', fontSize: 13 }}>
           Loading reports…
         </div>
-      ) : reportList.length === 0 ? (
+      )}
+      {!isLoading && reportList.length === 0 && (
         <div style={{
           textAlign: 'center', padding: 64,
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
@@ -250,7 +251,8 @@ export default function ReportsPage() {
         }}>
           No reports generated yet.
         </div>
-      ) : (
+      )}
+      {!isLoading && reportList.length > 0 && (
         <div style={{
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
           borderRadius: 12, overflow: 'hidden',

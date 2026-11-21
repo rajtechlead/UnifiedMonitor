@@ -77,19 +77,21 @@ def _reachable(identity: dict[str, Any], graph: dict[str, list[str]], index: dic
     return found
 
 
-def _severity(identity: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
+# exposure → (severity, impact) for a data store: (public, sensitive).
+_STORAGE_IMPACT = {
+    (True, True): ("critical", "public exposure of sensitive data"),
+    (False, True): ("critical", "access to sensitive data"),
+    (True, False): ("high", "access to a public data store"),
+    (False, False): ("high", "access to a data store"),
+}
+
+
+def _severity(_identity: dict[str, Any], target: dict[str, Any]) -> tuple[str, str]:
     """Return (severity, impact) for an identity→target pair."""
     target_type = target.get("type")
     if target_type == "storage":
         public = flag(target, "public", "public_access", "is_public", "publicly_accessible")
-        sensitive = is_sensitive(target)
-        if public and sensitive:
-            return "critical", "public exposure of sensitive data"
-        if sensitive:
-            return "critical", "access to sensitive data"
-        if public:
-            return "high", "access to a public data store"
-        return "high", "access to a data store"
+        return _STORAGE_IMPACT[(bool(public), is_sensitive(target))]
     if target_type == "cluster":
         if flag(target, "public_endpoint", "public_api_server", "public"):
             return "critical", "cluster takeover through a public API server"

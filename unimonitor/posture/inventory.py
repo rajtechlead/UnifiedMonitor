@@ -136,27 +136,34 @@ def text_list(resource: dict[str, Any], *names: str) -> list[str]:
     return []
 
 
+def _dicts(value: Any) -> list[dict[str, Any]]:
+    return [dict(item) for item in value if isinstance(item, dict)] if isinstance(value, list) else []
+
+
+def _typed_mapping(payload: dict[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split a ``{"storage": [...], "edges": [...]}`` export into resources and edges."""
+    resources: list[dict[str, Any]] = []
+    edges = _dicts(payload.get("edges"))
+    for key, value in payload.items():
+        resource_type = _TYPE_ALIASES.get(key.lower())
+        if key == "edges" or resource_type is None:
+            continue
+        resources.extend({**item, "type": item.get("type") or resource_type} for item in _dicts(value))
+    return resources, edges
+
+
 def normalise(payload: Any) -> dict[str, Any]:
     """Return ``{"resources": [...], "edges": [...]}`` from any accepted shape."""
     resources: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
 
     if isinstance(payload, list):
-        resources = [dict(item) for item in payload if isinstance(item, dict)]
+        resources = _dicts(payload)
     elif isinstance(payload, dict) and isinstance(payload.get("resources"), list):
-        resources = [dict(item) for item in payload["resources"] if isinstance(item, dict)]
-        edges = [dict(item) for item in payload.get("edges", []) if isinstance(item, dict)]
+        resources = _dicts(payload["resources"])
+        edges = _dicts(payload.get("edges"))
     elif isinstance(payload, dict):
-        for key, value in payload.items():
-            if key == "edges" and isinstance(value, list):
-                edges = [dict(item) for item in value if isinstance(item, dict)]
-                continue
-            resource_type = _TYPE_ALIASES.get(key.lower())
-            if resource_type is None or not isinstance(value, list):
-                continue
-            for item in value:
-                if isinstance(item, dict):
-                    resources.append({**item, "type": item.get("type") or resource_type})
+        resources, edges = _typed_mapping(payload)
 
     for resource in resources:
         resource.setdefault("type", "unknown")

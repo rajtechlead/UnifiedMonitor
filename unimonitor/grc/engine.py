@@ -71,16 +71,8 @@ class AssessmentEngine:
 
         try:
             # 1. Load controls via new ControlLoader (new list-format YAML)
-            loader = ControlLoader()
-            all_ctrl_defs = loader.load_all()
-            # Filter by framework if specified
-            if frameworks:
-                fw_set = {f.lower() for f in frameworks}
-                controls: list[ControlDefinition] = [c for c in all_ctrl_defs if any(fw.lower() in fw_set for fw in c.compliance_mapping.keys())]
-                if not controls:
-                    controls = all_ctrl_defs  # fallback: run all if none match
-            else:
-                controls = all_ctrl_defs
+            all_ctrl_defs = ControlLoader().load_all()
+            controls = _select_controls(all_ctrl_defs, frameworks)
             logger.info("Controls loaded", extra={"count": len(controls), "run_id": run.id})
 
             # 2. Collect data from Graph API
@@ -129,42 +121,12 @@ class AssessmentEngine:
                 self.db.add(finding)
             await self.db.flush()
 
-            # 4b. Append the immutable per-control state used by the trend series.
-            # Findings are overwritten in place on later runs, so without this the
-            # history of a control cannot be reconstructed.
-            for finding in findings:
-                self.db.add(
-                    ControlSnapshot(
-                        tenant_id=self.tenant_id,
-                        assessment_run_id=run.id,
-                        control_id=finding.control_id or finding.external_control_id,
-                        external_control_id=finding.external_control_id,
-                        severity=finding.severity,
-                        state=finding.state,
-                    )
-                )
-
-            # 4c. Retention: snapshots are append-only, so prune past the window in
-            # the same transaction; otherwise the table grows with every collection.
-            retention_days = get_settings().CONTROL_SNAPSHOT_RETENTION_DAYS
-            pruned = await prune_control_snapshots(self.db, self.tenant_id, retention_days)
-            if pruned:
-                logger.info("Control snapshots pruned", extra={"rows": pruned, "retention_days": retention_days})
+            # 4b/4c. Append the immutable per-control state used by the trend series
+            # and prune past the retention window in the same transaction.
+            await self._record_snapshots(findings, run.id)
 
             # 5. Score the run
-            scores = calculate_scores(findings)
-            run.security_score = scores["security_score"]
-            run.compliance_score = scores["compliance_score"]
-            run.risk_score = scores["risk_score"]
-            run.total_controls_checked = evaluated
-            run.controls_passed = passed
-            run.critical_count = scores["critical_count"]
-            run.high_count = scores["high_count"]
-            run.medium_count = scores["medium_count"]
-            run.low_count = scores["low_count"]
-            run.informational_count = scores["informational_count"]
-            run.status = AssessmentStatus.COMPLETED.value
-            run.completed_at = datetime.now(UTC)
+            _apply_scores(run, calculate_scores(findings), evaluated, passed)
 
             await self.db.commit()
             logger.info(
@@ -185,6 +147,28 @@ class AssessmentEngine:
             run.completed_at = datetime.now(UTC)
             await self.db.commit()
             raise
+
+    async def _record_snapshots(self, findings: list[Finding], run_id: str) -> None:
+        """Write the per-control history and prune it in one transaction.
+
+        Findings are overwritten in place on later runs, so without these rows the
+        history of a control cannot be reconstructed.
+        """
+        for finding in findings:
+            self.db.add(
+                ControlSnapshot(
+                    tenant_id=self.tenant_id,
+                    assessment_run_id=run_id,
+                    control_id=finding.control_id or finding.external_control_id,
+                    external_control_id=finding.external_control_id,
+                    severity=finding.severity,
+                    state=finding.state,
+                )
+            )
+        retention_days = get_settings().CONTROL_SNAPSHOT_RETENTION_DAYS
+        pruned = await prune_control_snapshots(self.db, self.tenant_id, retention_days)
+        if pruned:
+            logger.info("Control snapshots pruned", extra={"rows": pruned, "retention_days": retention_days})
 
     async def _evaluate_control(
         self,
@@ -222,27 +206,8 @@ class AssessmentEngine:
         if keys and len(missing) == len(keys):
             state = FindingState.NOT_APPLICABLE.value
             evidence_text = f"No collected data for: {', '.join(missing)}"
-
-        if not (keys and len(missing) == len(keys)):
-            try:
-                raw = control_def.run_evaluate(eval_data)
-                status_map = {
-                    "implemented": FindingState.IMPLEMENTED.value,
-                    "pass": FindingState.IMPLEMENTED.value,
-                    "partially_implemented": FindingState.PARTIALLY_IMPLEMENTED.value,
-                    "warning": FindingState.PARTIALLY_IMPLEMENTED.value,
-                    "not_implemented": FindingState.NOT_IMPLEMENTED.value,
-                    "fail": FindingState.NOT_IMPLEMENTED.value,
-                    "not_applicable": FindingState.NOT_APPLICABLE.value,
-                }
-                state = status_map.get(str(raw).lower(), FindingState.NOT_IMPLEMENTED.value)
-            except Exception as exc:
-                logger.debug(
-                    "Control eval error",
-                    extra={"control": control_id, "error": str(exc)},
-                )
-                state = FindingState.NOT_IMPLEMENTED.value
-                evidence_text = f"Evaluation error: {exc}"
+        else:
+            state, evidence_text = _evaluate_state(control_def, eval_data, control_id)
 
         # Determine severity (YAML uses uppercase; model stores lowercase)
         raw_sev = (control_def.severity or "MEDIUM").upper()
@@ -255,23 +220,7 @@ class AssessmentEngine:
         }
         severity = sev_map.get(raw_sev, FindingSeverity.MEDIUM.value)
 
-        # Risk score (0 when implemented; proportional otherwise)
-        severity_risk_map = {
-            FindingSeverity.CRITICAL.value: 10,
-            FindingSeverity.HIGH.value: 8,
-            FindingSeverity.MEDIUM.value: 5,
-            FindingSeverity.LOW.value: 3,
-            FindingSeverity.INFORMATIONAL.value: 1,
-        }
-        base_risk = severity_risk_map.get(severity, 5)
-        if state == FindingState.IMPLEMENTED.value:
-            risk_score = 0
-        elif state == FindingState.NOT_APPLICABLE.value:
-            risk_score = 0
-        elif state == FindingState.PARTIALLY_IMPLEMENTED.value:
-            risk_score = base_risk // 2
-        else:
-            risk_score = base_risk
+        risk_score = _risk_score(state, severity)
 
         finding = Finding(
             tenant_id=self.tenant_id,
@@ -304,3 +253,65 @@ class AssessmentEngine:
             )
 
         return finding
+
+
+_STATUS_MAP = {
+    "implemented": FindingState.IMPLEMENTED.value,
+    "pass": FindingState.IMPLEMENTED.value,
+    "partially_implemented": FindingState.PARTIALLY_IMPLEMENTED.value,
+    "warning": FindingState.PARTIALLY_IMPLEMENTED.value,
+    "not_implemented": FindingState.NOT_IMPLEMENTED.value,
+    "fail": FindingState.NOT_IMPLEMENTED.value,
+    "not_applicable": FindingState.NOT_APPLICABLE.value,
+}
+
+# Risk contribution of a finding at each severity when it is not implemented.
+_SEVERITY_RISK = {
+    FindingSeverity.CRITICAL.value: 10,
+    FindingSeverity.HIGH.value: 8,
+    FindingSeverity.MEDIUM.value: 5,
+    FindingSeverity.LOW.value: 3,
+    FindingSeverity.INFORMATIONAL.value: 1,
+}
+
+
+def _select_controls(all_controls: list[ControlDefinition], frameworks: list[str]) -> list[ControlDefinition]:
+    """Controls mapped to any requested framework, or all of them if none match."""
+    if not frameworks:
+        return all_controls
+    wanted = {name.lower() for name in frameworks}
+    matched = [control for control in all_controls if any(fw.lower() in wanted for fw in control.compliance_mapping)]
+    return matched or all_controls
+
+
+def _evaluate_state(control_def: ControlDefinition, eval_data: dict[str, Any], control_id: str) -> tuple[str, str | None]:
+    """Run the control's evaluate function, mapping its answer to a finding state."""
+    try:
+        raw = control_def.run_evaluate(eval_data)
+    except Exception as exc:  # noqa: BLE001 - a broken control must not abort the run
+        logger.debug("Control eval error", extra={"control": control_id, "error": str(exc)})
+        return FindingState.NOT_IMPLEMENTED.value, f"Evaluation error: {exc}"
+    return _STATUS_MAP.get(str(raw).lower(), FindingState.NOT_IMPLEMENTED.value), None
+
+
+def _risk_score(state: str, severity: str) -> int:
+    """Risk weight of a finding: zero when implemented or not applicable."""
+    if state in (FindingState.IMPLEMENTED.value, FindingState.NOT_APPLICABLE.value):
+        return 0
+    base = _SEVERITY_RISK.get(severity, 5)
+    return base // 2 if state == FindingState.PARTIALLY_IMPLEMENTED.value else base
+
+
+def _apply_scores(run: AssessmentRun, scores: dict[str, Any], evaluated: int, passed: int) -> None:
+    run.security_score = scores["security_score"]
+    run.compliance_score = scores["compliance_score"]
+    run.risk_score = scores["risk_score"]
+    run.total_controls_checked = evaluated
+    run.controls_passed = passed
+    run.critical_count = scores["critical_count"]
+    run.high_count = scores["high_count"]
+    run.medium_count = scores["medium_count"]
+    run.low_count = scores["low_count"]
+    run.informational_count = scores["informational_count"]
+    run.status = AssessmentStatus.COMPLETED.value
+    run.completed_at = datetime.now(UTC)

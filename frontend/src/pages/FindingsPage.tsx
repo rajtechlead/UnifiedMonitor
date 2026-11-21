@@ -254,15 +254,17 @@ export default function FindingsPage() {
         background: 'var(--color-surface)', border: '1px solid var(--color-border)',
         borderRadius: 12, overflow: 'hidden',
       }}>
-        {isLoading ? (
+        {isLoading && (
           <div style={{ textAlign: 'center', padding: 48, color: 'var(--color-text-muted)', fontSize: 13 }}>
             Loading findings…
           </div>
-        ) : findings.length === 0 ? (
+        )}
+        {!isLoading && findings.length === 0 && (
           <div style={{ textAlign: 'center', padding: 48, color: 'var(--color-text-muted)', fontSize: 13 }}>
             No findings match your filters.
           </div>
-        ) : (
+        )}
+        {!isLoading && findings.length > 0 && (
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>

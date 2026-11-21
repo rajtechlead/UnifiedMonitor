@@ -23,10 +23,17 @@
   endpoints and an admin panel. `GET /tenants/{id}/summary` is the guarded consumer.
 - ✅ Tests: posture engines, exporters, posture API, control trends and branding
   (26 new tests).
-- Remaining Sonar items are the large mechanical refactors (`S8410` Annotated
-  dependency style, `S8415` `responses=` documentation on older endpoints, the
-  remaining `S3776` complexity functions, `S5778` exception-test shape and the
-  deprecated recharts `Cell`).
+- ✅ Sonar backlog: `S8410` Annotated dependency style and `S8415` documented
+  responses are cleared across `unimonitor/api`; `S107` on `list_findings` uses a
+  Pydantic filter model; the test-only `S5778`/`S9073` findings are fixed; the
+  nested JSX ternaries on the findings/framework/users/reports/assessments pages
+  are flat conditional blocks; and the `S3776` complexity findings are refactored
+  for the posture analysers, GRC engine and trends, auditor portal, control
+  loader, tenant rollup, zero-trust coverage, ticketing and the SPA middleware.
+- Remaining Sonar items: the complexity of the cloud-provider collectors
+  (`graph/collectors/cloud_providers.py`, `extended.py`), the PDF and DOCX
+  generators, `onboarding/service.py`, the two largest page components
+  (`AuditPage`, `SetupPage`), and the deprecated recharts `Cell`.
 
 ## 2026-11-21 — installer build + SonarQube cleanup
 

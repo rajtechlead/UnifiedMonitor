@@ -56,117 +56,7 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
     findings: list[PostureFinding] = []
 
     for identity in identities:
-        name = resource_name(identity)
-        actions = actions_of(identity)
-        privileged = is_privileged(identity)
-        kind = str(field(identity, "kind", "principal_type", "type_name", default="identity")).lower()
-
-        if has_wildcard(actions):
-            findings.append(
-                PostureFinding(
-                    "CIEM-WILDCARD",
-                    "Identity has wildcard permissions",
-                    "critical" if privileged else "high",
-                    CATEGORY,
-                    name,
-                    f"Granted actions include a wildcard: {', '.join(sorted({a for a in actions if '*' in a or a == 'all'})) or '*'}.",
-                    "Replace wildcards with the specific actions the workload calls, then re-check with access analyser data.",
-                )
-            )
-
-        if privileged and flag(identity, "service_account", "is_service_account", "workload_identity"):
-            findings.append(
-                PostureFinding(
-                    "CIEM-SERVICE-ADMIN",
-                    "Service account holds administrative rights",
-                    "critical",
-                    CATEGORY,
-                    name,
-                    "A non-human identity carries an administrative role or wildcard grant.",
-                    "Move the workload to a scoped role; keep admin for just-in-time human elevation.",
-                )
-            )
-
-        if privileged and not flag(identity, "mfa_enabled", "mfa", "strong_auth", default=False):
-            findings.append(
-                PostureFinding(
-                    "CIEM-PRIVILEGED-NO-MFA",
-                    "Privileged identity has no strong authentication",
-                    "critical",
-                    CATEGORY,
-                    name,
-                    "The identity is administrative but the export reports no MFA or strong authentication.",
-                    "Require phishing-resistant MFA for every administrative identity.",
-                )
-            )
-
-        if _IAM_ROLE_FORWARDING_ACTION in actions and any(action in _ESCALATION_ACTIONS for action in actions):
-            findings.append(
-                PostureFinding(
-                    "CIEM-ESCALATION",
-                    "Identity can escalate its own privilege",
-                    "critical",
-                    CATEGORY,
-                    name,
-                    "iam:PassRole is combined with an action that can attach or create policy.",
-                    "Remove the pair; use permission boundaries and an approval workflow for role changes.",
-                )
-            )
-
-        age = number(identity, "key_age_days", "credential_age_days")
-        if age is not None and age > 90:
-            findings.append(
-                PostureFinding(
-                    "CIEM-LONG-LIVED-KEY",
-                    "Long-lived credential on identity",
-                    "high" if privileged else "medium",
-                    CATEGORY,
-                    name,
-                    f"The reported credential is {age} days old.",
-                    "Move to short-lived federation (OIDC/workload identity) and retire static keys.",
-                )
-            )
-
-        unused = number(identity, "unused_permissions", "unused_permission_count")
-        if unused is not None and unused > 0:
-            findings.append(
-                PostureFinding(
-                    "CIEM-UNUSED-GRANTS",
-                    "Identity has unused permissions",
-                    "low",
-                    CATEGORY,
-                    name,
-                    f"{unused} granted permissions were unused during the observation window.",
-                    "Trim unused grants so a compromised credential reaches less.",
-                )
-            )
-
-        trusted = " ".join(text_list(identity, "trusted_accounts", "trusted_principals", "assume_role_principals")).lower()
-        if "*" in trusted or "any" in trusted:
-            findings.append(
-                PostureFinding(
-                    "CIEM-TRUST-ANYONE",
-                    "Identity trusts any principal",
-                    "critical",
-                    CATEGORY,
-                    name,
-                    "The trust policy accepts any account or principal.",
-                    "Restrict the trust policy to named accounts and require an external ID.",
-                )
-            )
-
-        if kind in {"ci", "cicd", "pipeline", "build"} and privileged:
-            findings.append(
-                PostureFinding(
-                    "CIEM-CI-ADMIN",
-                    "Build pipeline identity is over-privileged",
-                    "high",
-                    CATEGORY,
-                    name,
-                    "A CI/CD identity carries administrative or wildcard rights.",
-                    "Scope the pipeline role to the artefacts it deploys; use separate roles per environment.",
-                )
-            )
+        findings.extend(_identity_findings(identity))
 
     return result(
         CATEGORY,
@@ -174,6 +64,123 @@ def analyse(resources: list[dict[str, Any]], _edges: list[dict[str, Any]] | None
         findings,
         empty_note="No identity resources were present in the snapshot.",
     )
+
+
+def _identity_findings(identity: dict[str, Any]) -> list[PostureFinding]:
+    """Per-item checks, kept out of the loop so ``analyse`` stays flat."""
+    findings: list[PostureFinding] = []
+    name = resource_name(identity)
+    actions = actions_of(identity)
+    privileged = is_privileged(identity)
+    kind = str(field(identity, "kind", "principal_type", "type_name", default="identity")).lower()
+
+    if has_wildcard(actions):
+        findings.append(
+            PostureFinding(
+                "CIEM-WILDCARD",
+                "Identity has wildcard permissions",
+                "critical" if privileged else "high",
+                CATEGORY,
+                name,
+                f"Granted actions include a wildcard: {', '.join(sorted({a for a in actions if '*' in a or a == 'all'})) or '*'}.",
+                "Replace wildcards with the specific actions the workload calls, then re-check with access analyser data.",
+            )
+        )
+
+    if privileged and flag(identity, "service_account", "is_service_account", "workload_identity"):
+        findings.append(
+            PostureFinding(
+                "CIEM-SERVICE-ADMIN",
+                "Service account holds administrative rights",
+                "critical",
+                CATEGORY,
+                name,
+                "A non-human identity carries an administrative role or wildcard grant.",
+                "Move the workload to a scoped role; keep admin for just-in-time human elevation.",
+            )
+        )
+
+    if privileged and not flag(identity, "mfa_enabled", "mfa", "strong_auth", default=False):
+        findings.append(
+            PostureFinding(
+                "CIEM-PRIVILEGED-NO-MFA",
+                "Privileged identity has no strong authentication",
+                "critical",
+                CATEGORY,
+                name,
+                "The identity is administrative but the export reports no MFA or strong authentication.",
+                "Require phishing-resistant MFA for every administrative identity.",
+            )
+        )
+
+    if _IAM_ROLE_FORWARDING_ACTION in actions and any(action in _ESCALATION_ACTIONS for action in actions):
+        findings.append(
+            PostureFinding(
+                "CIEM-ESCALATION",
+                "Identity can escalate its own privilege",
+                "critical",
+                CATEGORY,
+                name,
+                "iam:PassRole is combined with an action that can attach or create policy.",
+                "Remove the pair; use permission boundaries and an approval workflow for role changes.",
+            )
+        )
+
+    age = number(identity, "key_age_days", "credential_age_days")
+    if age is not None and age > 90:
+        findings.append(
+            PostureFinding(
+                "CIEM-LONG-LIVED-KEY",
+                "Long-lived credential on identity",
+                "high" if privileged else "medium",
+                CATEGORY,
+                name,
+                f"The reported credential is {age} days old.",
+                "Move to short-lived federation (OIDC/workload identity) and retire static keys.",
+            )
+        )
+
+    unused = number(identity, "unused_permissions", "unused_permission_count")
+    if unused is not None and unused > 0:
+        findings.append(
+            PostureFinding(
+                "CIEM-UNUSED-GRANTS",
+                "Identity has unused permissions",
+                "low",
+                CATEGORY,
+                name,
+                f"{unused} granted permissions were unused during the observation window.",
+                "Trim unused grants so a compromised credential reaches less.",
+            )
+        )
+
+    trusted = " ".join(text_list(identity, "trusted_accounts", "trusted_principals", "assume_role_principals")).lower()
+    if "*" in trusted or "any" in trusted:
+        findings.append(
+            PostureFinding(
+                "CIEM-TRUST-ANYONE",
+                "Identity trusts any principal",
+                "critical",
+                CATEGORY,
+                name,
+                "The trust policy accepts any account or principal.",
+                "Restrict the trust policy to named accounts and require an external ID.",
+            )
+        )
+
+    if kind in {"ci", "cicd", "pipeline", "build"} and privileged:
+        findings.append(
+            PostureFinding(
+                "CIEM-CI-ADMIN",
+                "Build pipeline identity is over-privileged",
+                "high",
+                CATEGORY,
+                name,
+                "A CI/CD identity carries administrative or wildcard rights.",
+                "Scope the pipeline role to the artefacts it deploys; use separate roles per environment.",
+            )
+        )
+    return findings
 
 
 __all__ = ["CATEGORY", "LABEL", "actions_of", "analyse", "has_wildcard", "is_privileged"]

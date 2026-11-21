@@ -141,20 +141,23 @@ export default function FrameworkPage() {
         </select>
       </div>
 
-      {isLoading ? (
+      {isLoading && (
         <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Loading controls…</div>
-      ) : isError ? (
+      )}
+      {!isLoading && isError && (
         <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
           Could not load this framework's controls. Check that the API is reachable.
         </div>
-      ) : rows.length === 0 ? (
+      )}
+      {!isLoading && !isError && rows.length === 0 && (
         <div style={{
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
           borderRadius: 12, padding: 40, textAlign: 'center', fontSize: 13, color: 'var(--color-text-muted)',
         }}>
           No controls match these filters.
         </div>
-      ) : (
+      )}
+      {!isLoading && !isError && rows.length > 0 && (
         <div style={{
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
           borderRadius: 12, overflow: 'hidden',

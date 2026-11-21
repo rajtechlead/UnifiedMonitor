@@ -237,7 +237,8 @@ class TestConnectPlatforms:
         assert r.status_code == 200, r.text
         providers = sorted(c["provider"] for c in r.json()["connections"])
         assert providers == ["gcp", "google_workspace"]
-        assert seen["project"] == "proj-1" and seen["admin"] == "admin@example.com"
+        assert seen["project"] == "proj-1"
+        assert seen["admin"] == "admin@example.com"
 
         status = (await client.get("/api/v1/onboarding/status")).json()
         assert status["connected_providers"] == ["gcp", "google_workspace"]
@@ -364,7 +365,8 @@ class TestCertificateRotation:
         )
         assert r.status_code == 200, r.text
         new_thumbprint = r.json()["connection"]["config"]["certificate_thumbprint"]
-        assert new_thumbprint and new_thumbprint != old.thumbprint
+        assert new_thumbprint
+        assert new_thumbprint != old.thumbprint
         assert r.json()["connection"]["config"]["certificate_expires_at"]
 
         assert ("add", "obj-1", new_thumbprint) in calls

@@ -10,6 +10,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
+from unimonitor.api.v1.lookups import latest_findings_by_control
 from unimonitor.auth.dependencies import require_compliance
 
 router = APIRouter()
@@ -85,30 +86,10 @@ async def framework_requirements(
 
     rows: list[RequirementRow] = []
     for requirement in cpcsc_requirements():
-        counts = {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0, "not_run": 0}
-        for control_id in requirement["controls"]:
-            state = states.get(control_id, "not_run")
-            if state == "implemented":
-                counts["implemented"] += 1
-            elif state == "partially_implemented":
-                counts["partial"] += 1
-            elif state == "not_applicable":
-                counts["not_applicable"] += 1
-            elif state == "not_run":
-                counts["not_run"] += 1
-            else:
-                counts["not_implemented"] += 1
-
+        counts = _requirement_counts(requirement, states)
         applicable = sum(counts[key] for key in ("implemented", "partial", "not_implemented", "not_run"))
         coverage = round(((counts["implemented"] + counts["partial"] * 0.5) / applicable) * 100, 2) if applicable else 0.0
-        if counts["implemented"] == applicable and applicable:
-            status = "implemented"
-        elif counts["implemented"] or counts["partial"]:
-            status = "partial"
-        elif counts["not_run"] == applicable:
-            status = "not_run"
-        else:
-            status = "gap"
+        status = _requirement_status(counts, applicable)
 
         rows.append(
             RequirementRow(
@@ -156,7 +137,7 @@ async def evidence_package(
 
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
     from unimonitor.db.base import async_session_factory
-    from unimonitor.db.models.finding import Finding, FindingEvidence
+    from unimonitor.db.models.finding import FindingEvidence
     from unimonitor.grc.control_loader import controls_for_framework
     from unimonitor.grc.frameworks import get_framework
 
@@ -168,14 +149,7 @@ async def evidence_package(
     meta = get_framework(framework_id)
 
     async with async_session_factory() as session:
-        findings: dict[str, Finding] = {}
-        if controls:
-            stmt = select(Finding).where(Finding.external_control_id.in_([control.id for control in controls]))
-            if tenant_id:
-                stmt = stmt.where(Finding.tenant_id == tenant_id)
-            stmt = stmt.order_by(Finding.last_seen_at.desc())
-            for finding in (await session.execute(stmt)).scalars():
-                findings.setdefault(finding.external_control_id, finding)
+        findings = await latest_findings_by_control(session, [control.id for control in controls], tenant_id)
 
         evidence: dict[str, list[dict[str, Any]]] = {}
         if include_evidence and findings:
@@ -240,3 +214,23 @@ async def evidence_package(
     }
     digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     return {**payload, "digest_sha256": digest, "digest_algorithm": "sha256"}
+
+
+def _requirement_counts(requirement: dict[str, Any], states: dict[str, str]) -> dict[str, int]:
+    """How many of a requirement's controls sit in each state."""
+    counts = {"implemented": 0, "partial": 0, "not_implemented": 0, "not_applicable": 0, "not_run": 0}
+    bucket_for = {"implemented": "implemented", "partially_implemented": "partial", "not_applicable": "not_applicable", "not_run": "not_run"}
+    for control_id in requirement["controls"]:
+        counts[bucket_for.get(states.get(control_id, "not_run"), "not_implemented")] += 1
+    return counts
+
+
+def _requirement_status(counts: dict[str, int], applicable: int) -> str:
+    """Implemented, partial, not run, or a gap — in that order of precedence."""
+    if applicable and counts["implemented"] == applicable:
+        return "implemented"
+    if counts["implemented"] or counts["partial"]:
+        return "partial"
+    if counts["not_run"] == applicable:
+        return "not_run"
+    return "gap"

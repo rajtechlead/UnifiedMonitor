@@ -170,9 +170,10 @@ class TestSendTeamsWebhook:
         mock_client.__aexit__ = AsyncMock(return_value=None)
         mock_client.post = AsyncMock(return_value=mock_resp)
 
+        send = d._send_teams_webhook("https://hook.url", "Subject", "Body")
         with patch("httpx.AsyncClient", return_value=mock_client):
-            with pytest.raises(Exception):
-                _run(d._send_teams_webhook("https://hook.url", "Subject", "Body"))
+            with pytest.raises(httpx.HTTPStatusError):
+                _run(send)
 
 
 # ---------------------------------------------------------------------------

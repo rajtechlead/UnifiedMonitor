@@ -186,7 +186,8 @@ class TestEvaluateControl:
 
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
         # Evidence should capture the error
-        assert finding.evidence is not None and len(finding.evidence) > 0
+        assert finding.evidence is not None
+        assert len(finding.evidence) > 0
         assert "boom" in finding.evidence[0].content
 
     def test_severity_mapping_medium(self):

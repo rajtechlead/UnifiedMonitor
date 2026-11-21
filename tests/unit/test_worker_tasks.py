@@ -54,8 +54,9 @@ class TestRunAsyncHelper:
         async def _coro():
             raise ValueError("test error")
 
+        coro = _coro()
         with pytest.raises(ValueError, match="test error"):
-            _run_async(_coro())
+            _run_async(coro)
 
 
 # ---------------------------------------------------------------------------
