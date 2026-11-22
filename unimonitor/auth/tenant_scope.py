@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import Depends, Request
+from fastapi import Depends, Query
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -63,12 +63,17 @@ async def resolve_tenant(session: AsyncSession, user: Any, requested: str | None
 
 
 async def tenant_scope(
-    request: Request,
     current_user: Annotated[Any, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_async_session)],
+    tenant_id: Annotated[
+        str | None,
+        Query(description="Tenant to read. Administrators may omit it for the whole install."),
+    ] = None,
 ) -> str | None:
     """The tenant this request may read, or 403 when it may not read it."""
-    return await resolve_tenant(session, current_user, request.query_params.get("tenant_id") or None)
+    # Declared as a Query so the parameter appears in the OpenAPI document the SPA is
+    # written against; reading request.query_params hid it from every client generator.
+    return await resolve_tenant(session, current_user, tenant_id)
 
 
 __all__ = ["has_tenant_access", "resolve_tenant", "tenant_scope"]

@@ -101,15 +101,16 @@ export const findingsApi = {
     api.get('/findings/summary', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
   priority: (tenantId?: string) =>
     api.get('/findings/priority', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
-  getRemediation: (id: string) =>
-    api.get(`/findings/${id}/remediation`).then((r) => r.data),
 }
 
 export const assessmentsApi = {
   list: () => api.get('/assessments').then((r) => r.data),
   create: (data: Record<string, unknown>) =>
     api.post('/assessments', data).then((r) => r.data),
-  run: (id: string) => api.post(`/assessments/${id}/run`).then((r) => r.data),
+  run: (id: string) =>
+    api
+      .post(`/assessments/${id}/run`)
+      .then((r) => r.data as { run_id: string; status: string; message: string }),
   getRuns: (id: string) =>
     api.get(`/assessments/${id}/runs`).then((r) => r.data),
 }

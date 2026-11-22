@@ -52,6 +52,13 @@ function AssessmentCard({ a, labels }: Readonly<{ a: Assessment; labels: Record<
     queryKey: ['assessments', a.id, 'runs'],
     queryFn: () => assessmentsApi.getRuns(a.id),
     enabled: expanded,
+    // A manual run finishes seconds after it is accepted; keep polling while it is
+    // queued so a failure (and its error) appears without a reload.
+    refetchInterval: (query) => {
+      const items: AssessmentRun[] = query.state.data?.items || []
+      const active = items.some(r => r.status === 'pending' || r.status === 'running')
+      return active ? 2000 : false
+    },
   })
 
   const runMutation = useMutation({
@@ -110,7 +117,7 @@ function AssessmentCard({ a, labels }: Readonly<{ a: Assessment; labels: Record<
             </span>
           )}
           <button
-            onClick={e => { e.stopPropagation(); runMutation.mutate() }}
+            onClick={e => { e.stopPropagation(); setExpanded(true); runMutation.mutate() }}
             disabled={runMutation.isPending}
             style={{
               padding: '6px 14px', fontSize: 12, background: 'var(--color-brand)',
@@ -129,6 +136,14 @@ function AssessmentCard({ a, labels }: Readonly<{ a: Assessment; labels: Record<
 
       {expanded && (
         <div style={{ borderTop: '1px solid var(--color-border)', padding: '16px 20px' }}>
+          {runMutation.data?.status === 'failed' && (
+            <div style={{
+              marginBottom: 12, padding: '8px 10px', borderRadius: 6, fontSize: 12,
+              background: 'rgba(239,68,68,0.1)', color: '#EF4444',
+            }}>
+              {runMutation.data.message}
+            </div>
+          )}
           <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: 10 }}>
             RECENT RUNS
           </div>

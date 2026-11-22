@@ -1,3 +1,14 @@
+## 2026-11-22 (third) — notification vault, manual-run fix, contract tests
+
+- ✅ One notification store for both APIs; SMTP + four webhook credentials in the vault.
+- ✅ Manual runs work again: the handler imported a task the worker package never
+  exported. Failures now return and store `ExceptionType: message`.
+- ✅ `tests/integration/test_spa_api_contract.py` — SPA paths, query parameters and
+  response fields checked against the API's OpenAPI document.
+- Remaining queued items: evidence status model, automatic posture, key rotation,
+  per-provider coverage, auditor catalogue, Graph resilience, tenant lifecycle, findings
+  workspace, diagnostics bundle, framework-id registry test, findings indexes.
+
 ## 2026-11-22 (later) — tenant scoping audit and SOC metrics
 
 - ✅ Every API read that accepts `tenant_id` is scoped (`unimonitor/auth/tenant_scope.py`):

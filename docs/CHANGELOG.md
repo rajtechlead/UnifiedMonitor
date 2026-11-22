@@ -18,11 +18,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Both notification APIs write one document (`unimonitor/notifications/preferences.py`).
+  The SMTP password and the Teams, Slack and generic webhook credentials are stored in
+  the secret provider and masked on read; the nested API previously wrote an attribute
+  that did not exist and silently dropped them.
+- SPA/API contract tests compare `useApi.ts` with the OpenAPI document: paths, query
+  parameters and response fields.
 - SOC dashboard metrics: active, acknowledged and 24-hour resolved alert counts, mean
   time to acknowledge and resolve, and a seven-day incident trend, all from `Alert` rows.
 - Assessment runs display their `error_message` when a run fails.
 
 ### Fixed
+
+- Manual assessment runs: `run_assessment_task` is exported from `unimonitor.worker.tasks`
+  again (its absence made every manual run fail), and a dispatch failure now returns the
+  real error instead of "queued successfully".
+- `tenant_id` now appears in the OpenAPI document for every endpoint scoped through the
+  tenant dependency.
+- The assessment runs response includes `triggered_by` and `findings_count`, which the
+  runs table reads.
 
 - Local vault writes are atomic (temp file + `fsync` + `os.replace`) for the ciphertext,
   the metadata and a newly generated master key, so a crash mid-write cannot truncate

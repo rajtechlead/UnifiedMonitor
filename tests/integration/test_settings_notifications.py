@@ -44,9 +44,9 @@ def vault(tmp_path, monkeypatch):
 
 
 async def _stored(provider, tenant_id: str) -> str:
-    from unimonitor.api.v1.settings import _smtp_secret_name
+    from unimonitor.notifications.preferences import secret_name
 
-    return await provider.get_secret(_smtp_secret_name(tenant_id))
+    return await provider.get_secret(secret_name(tenant_id, "smtp_password"))
 
 
 class TestNotificationPreferences:

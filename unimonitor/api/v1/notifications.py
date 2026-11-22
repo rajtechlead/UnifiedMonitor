@@ -15,6 +15,9 @@ from unimonitor.core.logging import get_logger
 from unimonitor.db.base import get_session
 from unimonitor.db.models.tenant import Tenant
 from unimonitor.db.models.user import User
+from unimonitor.notifications.preferences import NotificationPreferences
+from unimonitor.notifications.preferences import load as load_preferences
+from unimonitor.notifications.preferences import save as save_preferences
 
 logger = get_logger(__name__)
 router = APIRouter()
@@ -116,27 +119,56 @@ async def _get_tenant(tenant_id: str, db: AsyncSession) -> Tenant:
     return tenant
 
 
-def _mask(value: str) -> str:
-    if not value:
-        return ""
-    return value[:4] + "***" if len(value) > 4 else "***"
+def _nested(prefs, tenant_id: str) -> NotificationSettings:
+    """Present the one stored document in the nested shape this API exposes."""
+    return NotificationSettings(
+        tenant_id=tenant_id,
+        smtp=SmtpSettings(
+            host=prefs.smtp_host,
+            port=prefs.smtp_port,
+            username=prefs.smtp_username,
+            password=prefs.smtp_password,
+            from_address=prefs.smtp_from_address or prefs.smtp_username,
+            use_tls=prefs.smtp_use_tls,
+            enabled=prefs.smtp_enabled,
+        ),
+        teams=TeamsSettings(webhook_url=prefs.teams_webhook_url, enabled=bool(prefs.teams_webhook_url)),
+        slack=SlackSettings(webhook_url=prefs.slack_webhook_url, enabled=bool(prefs.slack_webhook_url)),
+        generic_webhook=WebhookSettings(
+            url=prefs.generic_webhook_url,
+            secret=prefs.generic_webhook_secret,
+            enabled=bool(prefs.generic_webhook_url),
+        ),
+        thresholds=AlertThresholds(**prefs.alert_thresholds) if prefs.alert_thresholds else AlertThresholds(),
+        daily_digest_enabled=prefs.daily_digest,
+        weekly_digest_enabled=prefs.weekly_digest,
+    )
 
 
-_CHANNEL_SECRET_FIELDS = {
-    "smtp": "password",
-    "teams": "webhook_url",
-    "slack": "webhook_url",
-    "generic_webhook": "secret",
-}
-
-
-def _merge_channel(raw: dict[str, Any], channel_name: str, update_model: BaseModel) -> None:
-    """Merge one channel's update, keeping the stored secret when it comes back masked."""
-    merged = update_model.model_dump()
-    secret_field = _CHANNEL_SECRET_FIELDS[channel_name]
-    if str(merged.get(secret_field, "")).endswith("***"):
-        merged[secret_field] = (raw.get(channel_name) or {}).get(secret_field, "")
-    raw[channel_name] = merged
+def _apply(prefs, update: NotificationSettingsUpdate):
+    """Fold a nested update into the flat document, leaving untouched fields alone."""
+    if update.smtp is not None:
+        prefs.smtp_enabled = update.smtp.enabled
+        prefs.smtp_host = update.smtp.host
+        prefs.smtp_port = update.smtp.port
+        prefs.smtp_username = update.smtp.username
+        prefs.smtp_password = update.smtp.password
+        prefs.smtp_from_address = update.smtp.from_address
+        prefs.smtp_use_tls = update.smtp.use_tls
+    if update.teams is not None:
+        prefs.teams_webhook_url = update.teams.webhook_url
+    if update.slack is not None:
+        prefs.slack_webhook_url = update.slack.webhook_url
+    if update.generic_webhook is not None:
+        prefs.generic_webhook_url = update.generic_webhook.url
+        prefs.generic_webhook_secret = update.generic_webhook.secret
+    if update.thresholds is not None:
+        prefs.alert_thresholds = update.thresholds.model_dump()
+    if update.daily_digest_enabled is not None:
+        prefs.daily_digest = update.daily_digest_enabled
+    if update.weekly_digest_enabled is not None:
+        prefs.weekly_digest = update.weekly_digest_enabled
+    return prefs
 
 
 # ── Endpoints ──────────────────────────────────────────────────────────────
@@ -152,63 +184,11 @@ async def get_notification_settings(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> NotificationSettings:
-    """Return notification settings for a tenant (secrets masked)."""
-    tenant = await _get_tenant(tenant_id, db)
+    """Notification settings for a tenant, with every credential masked."""
+    from unimonitor.auth.tenant_scope import resolve_tenant
 
-    raw: dict[str, Any] = {}
-    if hasattr(tenant, "notification_settings") and tenant.notification_settings:
-        try:
-            raw = json.loads(tenant.notification_settings)
-        except (json.JSONDecodeError, TypeError):
-            raw = {}
-
-    settings = NotificationSettings(tenant_id=tenant_id)
-
-    # Apply stored values
-    if "smtp" in raw:
-        s = raw["smtp"]
-        settings.smtp = SmtpSettings(
-            host=s.get("host", ""),
-            port=s.get("port", 587),
-            username=s.get("username", ""),
-            password=_mask(s.get("password", "")),
-            from_address=s.get("from_address", ""),
-            use_tls=s.get("use_tls", True),
-            enabled=s.get("enabled", False),
-        )
-    if "teams" in raw:
-        t = raw["teams"]
-        settings.teams = TeamsSettings(
-            webhook_url=_mask(t.get("webhook_url", "")),
-            enabled=t.get("enabled", False),
-            send_on_critical=t.get("send_on_critical", True),
-            send_on_high=t.get("send_on_high", True),
-            send_on_medium=t.get("send_on_medium", False),
-            digest_mode=t.get("digest_mode", False),
-        )
-    if "slack" in raw:
-        s = raw["slack"]
-        settings.slack = SlackSettings(
-            webhook_url=_mask(s.get("webhook_url", "")),
-            channel=s.get("channel", "#security-alerts"),
-            enabled=s.get("enabled", False),
-            send_on_critical=s.get("send_on_critical", True),
-            send_on_high=s.get("send_on_high", True),
-            send_on_medium=s.get("send_on_medium", False),
-            digest_mode=s.get("digest_mode", False),
-        )
-    if "thresholds" in raw:
-        settings.thresholds = AlertThresholds(**raw["thresholds"])
-    if "daily_digest_enabled" in raw:
-        settings.daily_digest_enabled = raw["daily_digest_enabled"]
-    if "daily_digest_time" in raw:
-        settings.daily_digest_time = raw["daily_digest_time"]
-    if "weekly_digest_enabled" in raw:
-        settings.weekly_digest_enabled = raw["weekly_digest_enabled"]
-    if "weekly_digest_day" in raw:
-        settings.weekly_digest_day = raw["weekly_digest_day"]
-
-    return settings
+    tenant = await _get_tenant(await resolve_tenant(db, current_user, tenant_id), db)
+    return _nested(await load_preferences(tenant), tenant.id)
 
 
 @router.put(
@@ -222,47 +202,19 @@ async def update_notification_settings(
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> NotificationSettings:
-    """Persist notification settings for a tenant."""
-    tenant = await _get_tenant(tenant_id, db)
+    """Persist notification settings in the shared document and secret provider."""
+    from unimonitor.auth.tenant_scope import resolve_tenant
 
-    # Load existing
-    try:
-        raw: dict[str, Any] = json.loads(tenant.notification_settings or "{}")
-    except (json.JSONDecodeError, TypeError):
-        raw = {}
-
-    # Merge updates. A masked secret ("******") echoed back keeps its stored value.
-    for channel_name, update_model in (
-        ("smtp", update.smtp),
-        ("teams", update.teams),
-        ("slack", update.slack),
-        ("generic_webhook", update.generic_webhook),
-    ):
-        if update_model is not None:
-            _merge_channel(raw, channel_name, update_model)
-
-    if update.thresholds is not None:
-        raw["thresholds"] = update.thresholds.model_dump()
-    for field_name in ("daily_digest_enabled", "daily_digest_time", "weekly_digest_enabled", "weekly_digest_day"):
-        value = getattr(update, field_name)
-        if value is not None:
-            raw[field_name] = value
-
-    if not hasattr(tenant, "notification_settings"):
-        # Store as metadata on tenant record if column exists
-        pass
-    else:
-        tenant.notification_settings = json.dumps(raw)
-        await db.commit()
-
-    logger.info("Notification settings updated", tenant_id=tenant_id, user_id=str(current_user.id))
-
-    # Return the sanitised view
-    return await get_notification_settings(tenant_id=tenant_id, current_user=current_user, db=db)
+    tenant = await _get_tenant(await resolve_tenant(db, current_user, tenant_id), db)
+    prefs = _apply(await load_preferences(tenant), update)
+    saved = await save_preferences(tenant, prefs)
+    await db.flush()
+    logger.info("Notification settings updated", tenant_id=tenant.id, user_id=str(current_user.id))
+    return _nested(saved, tenant.id)
 
 
-async def _teams_test(raw: dict[str, Any], tenant: Tenant, current_user: User) -> TestNotificationResponse:
-    webhook_url = raw.get("teams", {}).get("webhook_url", "")
+async def _teams_test(prefs: NotificationPreferences, tenant: Tenant, current_user: User) -> TestNotificationResponse:
+    webhook_url = prefs.teams_webhook_url
     if not webhook_url:
         return TestNotificationResponse(channel="teams", success=False, message="Teams webhook URL not configured")
     import httpx
@@ -284,8 +236,8 @@ async def _teams_test(raw: dict[str, Any], tenant: Tenant, current_user: User) -
     return TestNotificationResponse(channel="teams", success=False, message=f"Teams returned HTTP {resp.status_code}")
 
 
-async def _slack_test(raw: dict[str, Any], tenant: Tenant, current_user: User) -> TestNotificationResponse:
-    webhook_url = raw.get("slack", {}).get("webhook_url", "")
+async def _slack_test(prefs: NotificationPreferences, tenant: Tenant, current_user: User) -> TestNotificationResponse:
+    webhook_url = prefs.slack_webhook_url
     if not webhook_url:
         return TestNotificationResponse(channel="slack", success=False, message="Slack webhook URL not configured")
     import httpx
@@ -303,13 +255,12 @@ async def _slack_test(raw: dict[str, Any], tenant: Tenant, current_user: User) -
 
 
 def _email_test(
-    raw: dict[str, Any],
+    prefs: NotificationPreferences,
     tenant: Tenant,
     current_user: User,
     request: TestNotificationRequest,
 ) -> TestNotificationResponse:
-    smtp_cfg = raw.get("smtp", {})
-    if not smtp_cfg.get("enabled") or not smtp_cfg.get("host"):
+    if not prefs.smtp_enabled or not prefs.smtp_host:
         return TestNotificationResponse(channel="email", success=False, message="SMTP not configured or disabled")
     recipient = request.recipient or current_user.email
     import smtplib
@@ -317,36 +268,35 @@ def _email_test(
 
     msg = MIMEText(f"Test notification from UniMonitor.\n\nTenant: {tenant.name}\nSent by: {current_user.email}")
     msg["Subject"] = "UniMonitor — Test Notification"
-    msg["From"] = smtp_cfg.get("from_address", smtp_cfg.get("username", ""))
+    msg["From"] = prefs.smtp_from_address or prefs.smtp_username
     msg["To"] = recipient
-    with smtplib.SMTP(smtp_cfg["host"], smtp_cfg.get("port", 587)) as s:
-        if smtp_cfg.get("use_tls", True):
+    with smtplib.SMTP(prefs.smtp_host, prefs.smtp_port) as s:
+        if prefs.smtp_use_tls:
             s.starttls()
-        if smtp_cfg.get("username") and smtp_cfg.get("password"):
-            s.login(smtp_cfg["username"], smtp_cfg["password"])
+        if prefs.smtp_username and prefs.smtp_password:
+            s.login(prefs.smtp_username, prefs.smtp_password)
         s.send_message(msg)
     return TestNotificationResponse(channel="email", success=True, message=f"Email sent to {recipient}")
 
 
 async def _webhook_test(
-    raw: dict[str, Any],
+    prefs: NotificationPreferences,
     test_payload: dict[str, Any],
 ) -> TestNotificationResponse:
-    wh_cfg = raw.get("generic_webhook", {})
-    if not wh_cfg.get("enabled") or not wh_cfg.get("url"):
+    if not prefs.generic_webhook_url:
         return TestNotificationResponse(channel="webhook", success=False, message="Webhook not configured or disabled")
     import hashlib
     import hmac
 
     import httpx
 
-    headers = {**wh_cfg.get("headers", {}), "Content-Type": "application/json"}
-    if wh_cfg.get("secret"):
+    headers = {"Content-Type": "application/json"}
+    if prefs.generic_webhook_secret:
         body = json.dumps(test_payload).encode()
-        sig = hmac.new(wh_cfg["secret"].encode(), body, hashlib.sha256).hexdigest()
+        sig = hmac.new(prefs.generic_webhook_secret.encode(), body, hashlib.sha256).hexdigest()
         headers["X-UniMonitor-Signature"] = f"sha256={sig}"
     async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.post(wh_cfg["url"], json=test_payload, headers=headers)
+        resp = await client.post(prefs.generic_webhook_url, json=test_payload, headers=headers)
     if resp.is_success:
         return TestNotificationResponse(channel="webhook", success=True, message="Webhook delivered successfully")
     return TestNotificationResponse(channel="webhook", success=False, message=f"Webhook returned HTTP {resp.status_code}")
@@ -367,12 +317,11 @@ async def test_notification(
     db: Annotated[AsyncSession, Depends(get_session)],
 ) -> TestNotificationResponse:
     """Send a test notification via the specified channel."""
-    tenant = await _get_tenant(tenant_id, db)
+    from unimonitor.auth.tenant_scope import resolve_tenant
 
-    try:
-        raw: dict[str, Any] = json.loads(tenant.notification_settings or "{}")
-    except (json.JSONDecodeError, TypeError):
-        raw = {}
+    tenant = await _get_tenant(await resolve_tenant(db, current_user, tenant_id), db)
+    # Delivery needs the real credentials, not the masked view the GET returns.
+    prefs = await load_preferences(tenant, reveal=True)
 
     channel = request.channel
     if channel not in ("email", "teams", "slack", "webhook"):
@@ -387,12 +336,12 @@ async def test_notification(
 
     try:
         if channel == "teams":
-            return await _teams_test(raw, tenant, current_user)
+            return await _teams_test(prefs, tenant, current_user)
         if channel == "slack":
-            return await _slack_test(raw, tenant, current_user)
+            return await _slack_test(prefs, tenant, current_user)
         if channel == "email":
-            return _email_test(raw, tenant, current_user, request)
-        return await _webhook_test(raw, test_payload)
+            return _email_test(prefs, tenant, current_user, request)
+        return await _webhook_test(prefs, test_payload)
     except Exception as exc:
         logger.error("Test notification failed", channel=channel, error=str(exc))
         return TestNotificationResponse(channel=channel, success=False, message=f"Error: {str(exc)[:200]}")

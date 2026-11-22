@@ -247,18 +247,48 @@ Covered by `tests/integration/test_tenant_scope.py`.
 |---|---|---|
 | 1 | Tenant scoping on every read | ✅ 44 reads + 4 body-carried ids; 403 not 500 |
 | 3 | Real SOC alert metrics | ✅ active/acknowledged/resolved-24h, MTTA, MTTR and a 7-day alert trend from `Alert` rows; empty install reports zeros, not constants |
-| 7 | Assessment failure surfaced | 🟡 the run's `error_message` now renders under the failed status; root-cause capture still needs a failing run |
+| 7 | Assessment failure surfaced | ✅ root cause found (see second round): the handler imported a task the worker package never exported, so every manual run failed; the response now reports the real error |
 
 ### Still queued
 
 | Rank | Item | Why it is queued |
 |---|---|---|
-| 2 | Unify the two notification stores | Needs a schema decision: the `notifications` API writes `Tenant.notification_settings`, which does not exist, so its secrets are silently dropped today |
+| 2 | Unify the two notification stores | ✅ done in the second round |
 | 4 | Evaluated / stale / never-run evidence model | Architectural: every check row needs status + `evaluated_at` + `source_run_id` before scores can be derived |
 | 5 | Automatic posture inventory | Collector-to-engine bridge; needs an inventory assembly step on each collection run |
 | 6 | Vault key rotation and provider migration | MultiFernet re-encryption plus a copy-into-provider path |
 | 8 | Per-provider framework coverage | The provider detail API already maps per-provider controls; needs a check of the aggregate page against real data |
-| 9 | SPA/API contract tests | Not started; the three shape defects this round argue for it |
+| 9 | SPA/API contract tests | ✅ done in the second round |
 | 10 | Auditor requirement/level model | Largest item: catalogue generalisation for every framework |
 | 11 | Graph resilience | Consent-vs-outage classification and last-good caching; needs a live tenant to verify |
 | 12–16 | Tenant lifecycle, findings workspace, diagnostics bundle, framework-id registry test, findings indexes | Not started |
+
+### Second follow-up round
+
+**One notification document.** `/settings/notifications` (flat) and
+`/notifications/settings` (nested) now share `unimonitor/notifications/preferences.py`.
+The nested API had been writing `Tenant.notification_settings`, an attribute that does
+not exist, so every webhook saved through it was discarded. Non-secret fields live in
+`Tenant.settings_json["notifications"]`; the SMTP password and the four webhook values
+(Teams, Slack, generic URL and its HMAC secret — all bearer credentials) live in the
+secret provider, masked on read. A save through either API merges only the fields it
+carries, so editing SMTP no longer clears the webhooks, and a credential left in the
+settings row by the earlier build moves into the provider on the next save.
+
+**Manual runs were failing for a mundane reason.** `trigger_run` imports
+`run_assessment_task` from `unimonitor.worker.tasks`, and that package only re-exported
+`generate_report_task`. The import raised, the handler caught it, marked the run
+`failed`, and then answered `status="pending", "queued successfully"` — which is why a
+broken run looked healthy until the runs table was refreshed. The task is exported now,
+failures return the real `ExceptionType: message` in both the response and the run row,
+and the SPA polls while a run is queued, auto-expands the card on Run Now, and shows a
+failed banner.
+
+**Contract tests.** `tests/integration/test_spa_api_contract.py` parses the calls in
+`frontend/src/hooks/useApi.ts`, resolves the API's own OpenAPI document, and asserts
+every SPA path exists, every query parameter the SPA sends is declared, and the fields
+the SPA reads appear in the response schema. It found four defects on first run: the
+dead `GET /findings/{id}/remediation` call, and `tenant_id` missing from the OpenAPI
+document for every endpoint scoped through a dependency (the dependency read
+`request.query_params`; it now declares a `Query`, so all 44 reads are documented), plus
+`triggered_by`/`findings_count` missing from the runs response that the runs table reads.

@@ -8,6 +8,18 @@ Last Updated: 2026-11-22 UTC
 
 - `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
 
+### Session 2026-11-22 (third) — notifications, manual runs, contract tests
+
+- `unimonitor/notifications/preferences.py` is the single notification document: JSON
+  fields in the tenant row, SMTP + four webhook credentials in the secret provider,
+  masked on read, merged on save. Both `/settings/notifications` and
+  `/notifications/settings` use it.
+- `run_assessment_task` was never exported from `unimonitor.worker.tasks`, so every
+  manual run failed at the import; fixed, and dispatch failures now report the real
+  error. The SPA polls queued runs and shows a failed banner.
+- `tests/integration/test_spa_api_contract.py` checks `useApi.ts` against OpenAPI.
+- Suite: 761 passed; ruff/mypy/tsc/eslint/build clean.
+
 ### Session 2026-11-22 (later) — tenant scoping audit
 
 - `unimonitor/auth/tenant_scope.py`: `tenant_scope` (query-parameter dependency) and

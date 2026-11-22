@@ -7,7 +7,7 @@ from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
@@ -57,8 +57,15 @@ class RunSummary(BaseModel):
     completed_at: datetime | None
     duration_seconds: float | None
     error_message: str | None
+    triggered_by: str | None = None
 
     model_config = {"from_attributes": True}
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def findings_count(self) -> int:
+        """High and critical findings, the number the runs table shows."""
+        return self.critical_count + self.high_count
 
 
 class AssessmentResponse(BaseModel):
@@ -257,6 +264,7 @@ async def trigger_run(
 
     # Dispatch on Celery, or in-process when this install has no worker
     task_id = f"local-{run.id}"
+    failure: str | None = None
     try:
         from unimonitor.worker.inline import dispatch
         from unimonitor.worker.tasks import run_assessment_task
@@ -275,16 +283,24 @@ async def trigger_run(
         await repo.update_run(run.id, task_id=task_id)
         await db.commit()
     except Exception as exc:
-        logger.warning("celery_dispatch_failed", error=str(exc))
-        await repo.update_run(run.id, task_id=task_id, status="failed", error_message=f"Could not queue run: {exc}"[:2000])
+        # Keep the real cause: "queued successfully" while the run is failed is how a
+        # broken manual run looked healthy.
+        failure = f"{type(exc).__name__}: {exc}"
+        logger.warning("assessment_dispatch_failed", run_id=run.id, error=failure[:500])
+        await repo.update_run(
+            run.id,
+            task_id=task_id,
+            status="failed",
+            error_message=f"Could not start the run: {failure}"[:2000],
+        )
         await db.commit()
 
     logger.info("assessment_run_triggered", run_id=run.id, task_id=task_id, by=current_user.id)
     return TriggerRunResponse(
         run_id=run.id,
         task_id=task_id,
-        status="pending",
-        message=f"Assessment run {run.id} queued successfully",
+        status="failed" if failure else "pending",
+        message=(f"Could not start the run: {failure}" if failure else f"Assessment run {run.id} queued successfully"),
     )
 
 

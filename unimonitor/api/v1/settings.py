@@ -23,6 +23,9 @@ from unimonitor.config import get_settings
 from unimonitor.db.models.tenant import Tenant
 from unimonitor.db.session import get_db
 from unimonitor.graph.collectors.snapshot import load_snapshot
+from unimonitor.notifications.preferences import NotificationPreferences
+from unimonitor.notifications.preferences import load as load_notification_preferences
+from unimonitor.notifications.preferences import save as save_notification_preferences
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -124,86 +127,8 @@ async def put_branding(
     return body
 
 
-NOTIFICATIONS_KEY = "notifications"
-MASK = "******"
-SMTP_VAULT_KEY_TEMPLATE = "unimonitor-tenant-{tenant_id}-smtp-credential"
-
-
-class NotificationPreferences(BaseModel):
-    """The flat notification shape the Settings page edits.
-
-    Stored in ``Tenant.settings_json`` so no schema change is needed; the SMTP
-    password is write-only from the client's point of view and is masked on read.
-    """
-
-    smtp_enabled: bool = False
-    smtp_host: str = ""
-    smtp_port: int = Field(default=587, ge=1, le=65535)
-    smtp_username: str = ""
-    smtp_password: str = ""
-    smtp_to_emails: list[str] = Field(default_factory=list)
-    teams_webhook_url: str = ""
-    slack_webhook_url: str = ""
-    immediate_alerts: bool = True
-    daily_digest: bool = False
-    weekly_digest: bool = True
-    alert_severity_threshold: str = "HIGH"
-
-
-def _mask(secret: str) -> str:
-    return MASK if secret else ""
-
-
-def _smtp_secret_name(tenant_id: str) -> str:
-    """Vault entry holding one tenant's SMTP password."""
-    return SMTP_VAULT_KEY_TEMPLATE.format(tenant_id=tenant_id)
-
-
-async def _read_smtp_password(tenant: Tenant | None) -> str:
-    """The stored SMTP password from the secret provider; empty when unset."""
-    if tenant is None:
-        return ""
-    from unimonitor.secrets import get_secret_resolver
-
-    resolver = await get_secret_resolver()
-    try:
-        return await resolver.get(_smtp_secret_name(tenant.id))
-    except KeyError:
-        # One release wrote this password into the settings row; treat it as set
-        # until the next save moves it into the provider.
-        legacy = _tenant_settings(tenant).get(NOTIFICATIONS_KEY)
-        if isinstance(legacy, dict) and legacy.get("smtp_password"):
-            return str(legacy["smtp_password"])
-        return ""
-
-
-async def _store_smtp_password(tenant_id: str, value: str) -> None:
-    """Write or clear the SMTP password in the secret provider."""
-    from unimonitor.secrets import get_secret_resolver
-
-    resolver = await get_secret_resolver()
-    if value:
-        await resolver.set(_smtp_secret_name(tenant_id), value, tags={"purpose": "smtp"})
-        return
-    try:
-        await resolver.delete(_smtp_secret_name(tenant_id))
-    except KeyError:
-        pass
-
-
-def _notification_preferences(tenant: Tenant | None, password: str) -> NotificationPreferences:
-    if tenant is None:
-        return NotificationPreferences()
-    raw = _tenant_settings(tenant).get(NOTIFICATIONS_KEY)
-    if not isinstance(raw, dict):
-        raw = {}
-    try:
-        prefs = NotificationPreferences(**raw)
-    except ValidationError:
-        logger.warning("notification_settings_invalid", tenant_id=tenant.id)
-        prefs = NotificationPreferences()
-    prefs.smtp_password = _mask(password)
-    return prefs
+async def _caller_tenant(current_user: Any, db: AsyncSession) -> Tenant | None:
+    return await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
 
 
 @router.get("/notifications", responses={401: {"description": "Not authenticated"}})
@@ -211,9 +136,8 @@ async def get_notification_preferences(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> NotificationPreferences:
-    """Notification channels for the caller's tenant (secrets masked)."""
-    tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
-    return _notification_preferences(tenant, await _read_smtp_password(tenant))
+    """Notification channels for the caller's tenant (credentials masked)."""
+    return await load_notification_preferences(await _caller_tenant(current_user, db))
 
 
 @router.put(
@@ -233,29 +157,19 @@ async def put_notification_preferences(
     """Persist SMTP, webhook and digest preferences for the tenant."""
     if not current_user.tenant_id:
         raise HTTPException(status_code=400, detail="This account is not attached to a tenant")
-    tenant = await db.get(Tenant, current_user.tenant_id)
+    tenant = await _caller_tenant(current_user, db)
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    payload = body.model_dump()
-    incoming = payload.pop("smtp_password")
-    stored_password = await _read_smtp_password(tenant)
-    # The client round-trips the mask; keep the secret it stands for. An empty
-    # value clears the stored password, and the settings row never holds it.
-    if incoming == MASK:
-        password = stored_password
-    else:
-        password = incoming
-    await _store_smtp_password(tenant.id, password)
-
-    settings = _tenant_settings(tenant)
-    settings[NOTIFICATIONS_KEY] = payload
-    tenant.settings_json = json.dumps(settings, sort_keys=True)
+    # Only the fields this request carries are replaced; a form that edits SMTP
+    # must not clear the webhook credentials stored by the other API.
+    current = await load_notification_preferences(tenant)
+    for field in body.model_fields_set:
+        setattr(current, field, getattr(body, field))
+    updated = await save_notification_preferences(tenant, current)
     await db.flush()
     logger.info("notification_settings_updated", tenant_id=tenant.id, by=current_user.id)
-
-    body.smtp_password = _mask(password)
-    return body
+    return updated
 
 
 def _snapshot_path() -> Path | None:

@@ -43,7 +43,7 @@ async def _fail_run(run_id: str, exc: Exception) -> None:
             run = await session.get(AssessmentRun, run_id)
             if run is not None and run.status in ("pending", "running"):
                 run.status = "failed"
-                run.error_message = str(exc)[:2000]
+                run.error_message = f"{type(exc).__name__}: {exc}"[:2000]
                 run.completed_at = datetime.now(UTC)
                 await session.commit()
     except Exception as mark_exc:  # noqa: BLE001 - the original failure is what matters
