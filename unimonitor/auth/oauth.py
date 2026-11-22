@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import msal
 
 from unimonitor.config import get_settings
@@ -66,7 +68,20 @@ async def acquire_token_for_client(
     client_id: str | None = None,
     client_secret: str | None = None,
 ) -> str:
-    """Acquire an application token (client credentials flow) for Graph API."""
+    """Acquire an application token (client credentials flow) for Graph API.
+
+    MSAL is a blocking HTTP client, so the call runs on a worker thread and the
+    coroutine contract callers already await is unchanged.
+    """
+    return await asyncio.to_thread(_acquire_token_for_client_sync, tenant_id, client_id, client_secret)
+
+
+def _acquire_token_for_client_sync(
+    tenant_id: str | None,
+    client_id: str | None,
+    client_secret: str | None,
+) -> str:
+    """Blocking client-credentials flow, off the event loop."""
     get_settings()
     if client_id and client_secret and tenant_id:
         app = get_msal_app_for_tenant(client_id, client_secret, tenant_id)
@@ -112,10 +127,7 @@ def build_authorize_url(state: str) -> str:
 
 async def exchange_code_for_token(code: str) -> dict:
     """Exchange the auth code for tokens (delegated flow, async wrapper)."""
-    import asyncio
-
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, _exchange_code_for_token_sync, code)
+    return await asyncio.to_thread(_exchange_code_for_token_sync, code)
 
 
 def _exchange_code_for_token_sync(code: str) -> dict:

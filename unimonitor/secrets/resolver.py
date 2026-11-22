@@ -22,6 +22,7 @@ Failover:
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 
@@ -180,7 +181,8 @@ async def get_secret_resolver() -> SecretResolver:
     audit_file_path = os.environ.get("SECRETS_AUDIT_LOG_PATH")
     audit_file = Path(audit_file_path) if audit_file_path else None
 
-    primary = _build_provider(provider_name)
+    # Building a provider reads keys and config files, so it runs off the loop.
+    primary = await asyncio.to_thread(_build_provider, provider_name)
 
     # Always have Local Vault available as fallback (unless it IS the primary)
     fallback = None
@@ -188,7 +190,7 @@ async def get_secret_resolver() -> SecretResolver:
         try:
             from unimonitor.secrets.local_vault import LocalVaultProvider
 
-            fallback = LocalVaultProvider()
+            fallback = await asyncio.to_thread(LocalVaultProvider)
         except Exception as exc:
             logger.warning("Could not initialize Local Vault fallback", error=str(exc))
 

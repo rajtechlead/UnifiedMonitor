@@ -23,6 +23,7 @@ Requires:
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import stat
@@ -156,12 +157,16 @@ class LocalVaultProvider:
     async def get_secret(self, name: str, version: str | None = None) -> str:
         # Protocol argument: the local vault stores a single version per secret.
         del version
-        vault = self._read_vault()
+        vault = await asyncio.to_thread(self._read_vault)
         if name not in vault:
             raise KeyError(f"Secret '{name}' not found in local vault")
         return vault[name]
 
     async def set_secret(self, name: str, value: str, tags: dict[str, str] | None = None) -> SecretMetadata:
+        return await asyncio.to_thread(self._store_secret, name, value, tags)
+
+    def _store_secret(self, name: str, value: str, tags: dict[str, str] | None) -> SecretMetadata:
+        """Blocking encrypt-and-write, kept on one thread so read/modify/write stays ordered."""
         vault = self._read_vault()
         vault[name] = value
         self._write_vault(vault)
@@ -182,6 +187,9 @@ class LocalVaultProvider:
         )
 
     async def delete_secret(self, name: str) -> None:
+        await asyncio.to_thread(self._remove_secret, name)
+
+    def _remove_secret(self, name: str) -> None:
         vault = self._read_vault()
         if name not in vault:
             return
@@ -194,6 +202,9 @@ class LocalVaultProvider:
         logger.info("Local vault secret deleted", name=name)
 
     async def list_secrets(self, prefix: str = "") -> list[SecretMetadata]:
+        return await asyncio.to_thread(self._secret_metadata, prefix)
+
+    def _secret_metadata(self, prefix: str) -> list[SecretMetadata]:
         meta = self._read_meta()
         results = []
         for name, m in meta.items():
@@ -214,6 +225,9 @@ class LocalVaultProvider:
         return await self.set_secret(name, new_value)
 
     async def health_check(self) -> HealthStatus:
+        return await asyncio.to_thread(self._probe_health)
+
+    def _probe_health(self) -> HealthStatus:
         start = time.monotonic()
         try:
             self._ensure_vault_dir()
