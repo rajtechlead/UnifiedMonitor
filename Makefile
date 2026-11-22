@@ -229,8 +229,8 @@ audit-frontend: ## Run npm audit to check for known CVEs in JS deps
 # ─────────────────────────────────────────────────────────────────────────────
 # Setup
 # ─────────────────────────────────────────────────────────────────────────────
-setup: ## Run the first-run setup wizard
-	$(PYTHON) scripts/setup_wizard.py
+setup: ## Create the database, then finish setup in the browser wizard
+	$(PYTHON) -m unimonitor.cli setup
 
 setup-dev: ## Quick dev environment setup (SQLite + local vault)
 	@cp -n .env.example .env 2>/dev/null || true

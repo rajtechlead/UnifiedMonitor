@@ -27,6 +27,7 @@ import asyncio
 import json
 import os
 import stat
+import threading
 import time
 from datetime import UTC, datetime
 from pathlib import Path
@@ -68,6 +69,9 @@ class LocalVaultProvider:
         self._meta_path = self._vault_dir / _VAULT_META_FILE
         self._key_path = Path(key_path or os.environ.get("VAULT_KEY_PATH", self._vault_dir / _VAULT_KEY_FILE))
         self._fernet: Fernet | None = None
+        # Vault I/O runs on worker threads, so mutations are serialised here to
+        # keep read-modify-write whole and never expose a half-written file.
+        self._io_lock = threading.RLock()
         logger.info("Local Vault provider initialized", vault_dir=str(self._vault_dir))
 
     # ------------------------------------------------------------------
@@ -116,39 +120,43 @@ class LocalVaultProvider:
 
     def _read_vault(self) -> dict[str, str]:
         """Decrypt and return the vault contents as {name: value}."""
-        if not self._enc_path.exists():
-            return {}
-        try:
-            ciphertext = self._enc_path.read_bytes()
-            plaintext = self._get_fernet().decrypt(ciphertext)
-            return json.loads(plaintext.decode("utf-8"))
-        except Exception as exc:
-            logger.error("Vault decryption failed", error=str(exc))
-            raise RuntimeError(f"Cannot read local vault: {exc}") from exc
+        with self._io_lock:
+            if not self._enc_path.exists():
+                return {}
+            try:
+                ciphertext = self._enc_path.read_bytes()
+                plaintext = self._get_fernet().decrypt(ciphertext)
+                return json.loads(plaintext.decode("utf-8"))
+            except Exception as exc:
+                logger.error("Vault decryption failed", error=str(exc))
+                raise RuntimeError(f"Cannot read local vault: {exc}") from exc
 
     def _write_vault(self, data: dict[str, str]) -> None:
         """Encrypt and persist the vault."""
-        self._ensure_vault_dir()
-        plaintext = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        ciphertext = self._get_fernet().encrypt(plaintext)
-        self._enc_path.write_bytes(ciphertext)
-        try:
-            os.chmod(self._enc_path, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:  # noqa: S110
-            pass
+        with self._io_lock:
+            self._ensure_vault_dir()
+            plaintext = json.dumps(data, ensure_ascii=False).encode("utf-8")
+            ciphertext = self._get_fernet().encrypt(plaintext)
+            self._enc_path.write_bytes(ciphertext)
+            try:
+                os.chmod(self._enc_path, stat.S_IRUSR | stat.S_IWUSR)
+            except Exception:  # noqa: S110
+                pass
 
     def _read_meta(self) -> dict[str, dict]:
         """Return metadata dict (non-sensitive)."""
-        if not self._meta_path.exists():
-            return {}
-        try:
-            return json.loads(self._meta_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
+        with self._io_lock:
+            if not self._meta_path.exists():
+                return {}
+            try:
+                return json.loads(self._meta_path.read_text(encoding="utf-8"))
+            except Exception:
+                return {}
 
     def _write_meta(self, meta: dict[str, dict]) -> None:
-        self._ensure_vault_dir()
-        self._meta_path.write_text(json.dumps(meta, default=str, indent=2), encoding="utf-8")
+        with self._io_lock:
+            self._ensure_vault_dir()
+            self._meta_path.write_text(json.dumps(meta, default=str, indent=2), encoding="utf-8")
 
     # ------------------------------------------------------------------
     # Provider interface
@@ -166,18 +174,19 @@ class LocalVaultProvider:
         return await asyncio.to_thread(self._store_secret, name, value, tags)
 
     def _store_secret(self, name: str, value: str, tags: dict[str, str] | None) -> SecretMetadata:
-        """Blocking encrypt-and-write, kept on one thread so read/modify/write stays ordered."""
-        vault = self._read_vault()
-        vault[name] = value
-        self._write_vault(vault)
+        """Blocking encrypt-and-write; the lock keeps read-modify-write atomic."""
+        with self._io_lock:
+            vault = self._read_vault()
+            vault[name] = value
+            self._write_vault(vault)
 
-        # Update metadata
-        meta = self._read_meta()
-        meta[name] = {
-            "created_at": str(datetime.now(UTC)),
-            "tags": tags or {},
-        }
-        self._write_meta(meta)
+            # Update metadata
+            meta = self._read_meta()
+            meta[name] = {
+                "created_at": str(datetime.now(UTC)),
+                "tags": tags or {},
+            }
+            self._write_meta(meta)
 
         return SecretMetadata(
             name=name,
@@ -190,16 +199,17 @@ class LocalVaultProvider:
         await asyncio.to_thread(self._remove_secret, name)
 
     def _remove_secret(self, name: str) -> None:
-        vault = self._read_vault()
-        if name not in vault:
-            return
-        del vault[name]
-        self._write_vault(vault)
+        with self._io_lock:
+            vault = self._read_vault()
+            if name not in vault:
+                return
+            del vault[name]
+            self._write_vault(vault)
 
-        meta = self._read_meta()
-        meta.pop(name, None)
-        self._write_meta(meta)
-        logger.info("Local vault secret deleted", name=name)
+            meta = self._read_meta()
+            meta.pop(name, None)
+            self._write_meta(meta)
+            logger.info("Local vault secret deleted", name=name)
 
     async def list_secrets(self, prefix: str = "") -> list[SecretMetadata]:
         return await asyncio.to_thread(self._secret_metadata, prefix)

@@ -91,10 +91,6 @@ def main() -> int:
     return 0
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-
 def _wait_until_ready(server: subprocess.Popen, base: str) -> tuple[bool, str]:
     """Poll the health route until it answers, the process dies, or time runs out."""
     deadline = time.time() + STARTUP_TIMEOUT
@@ -107,7 +103,7 @@ def _wait_until_ready(server: subprocess.Popen, base: str) -> tuple[bool, str]:
         except OSError:
             pass
         time.sleep(0.5)
-    stderr = (server.stderr.read() or b"").decode(errors="replace")[-2000:]
+    stderr = (server.stderr.read() if server.stderr else b"").decode(errors="replace")[-2000:]
     return False, stderr
 
 
@@ -147,3 +143,7 @@ def _check_routes(base: str, html: str) -> None:
 
     status, ctype, _ = fetch(f"{base}/api/v1/does-not-exist")
     check("unknown API path stays a 404 JSON error", status == 404, f"{status} {ctype}")
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

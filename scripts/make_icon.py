@@ -51,7 +51,7 @@ def draw_icon(size: int) -> Image.Image:
         width=max(2, int(canvas * 0.055)),
         joint="curve",
     )
-    return img.resize((size, size), Image.LANCZOS)
+    return img.resize((size, size), Image.Resampling.LANCZOS)
 
 
 def main() -> None:
