@@ -146,9 +146,10 @@ class TestFailover:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(429)
 
-        async with _client(handler) as client:
-            with pytest.raises(AIUnavailableError):
-                await complete("sys", "user", providers=[_provider("a"), _provider("b")], client=client)
+        client = _client(handler)
+        with pytest.raises(AIUnavailableError):
+            await complete("sys", "user", providers=[_provider("a"), _provider("b")], client=client)
+        await client.aclose()
 
     @pytest.mark.asyncio
     async def test_an_empty_chain_raises(self):

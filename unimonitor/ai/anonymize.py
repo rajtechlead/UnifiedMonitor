@@ -27,6 +27,7 @@ DOMAIN = re.compile(
     re.IGNORECASE,
 )
 NUMBER = re.compile(r"\b\d{8,}\b")
+PATH_PLACEHOLDER = "[PATH]"
 
 # Order matters: longest/most specific patterns first, so a URL is not half-consumed
 # by the domain rule and an email is not mangled by the domain rule either.
@@ -34,9 +35,9 @@ _RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (URL, "[URL]"),
     (EMAIL, "[EMAIL]"),
     (GUID, "[GUID]"),
-    (WINDOWS_PATH, "[PATH]"),
-    (UNC_PATH, "[PATH]"),
-    (UNIX_PATH, "[PATH]"),
+    (WINDOWS_PATH, PATH_PLACEHOLDER),
+    (UNC_PATH, PATH_PLACEHOLDER),
+    (UNIX_PATH, PATH_PLACEHOLDER),
     (IPV4, "[IP]"),
     (IPV6, "[IP]"),
     (DOMAIN, "[DOMAIN]"),

@@ -7,7 +7,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from unimonitor.db.base import Base
@@ -57,6 +57,7 @@ class Finding(Base):
     """A security or compliance finding from a monitoring assessment."""
 
     __tablename__ = "findings"
+    __table_args__ = (Index("ix_findings_tenant_state_severity_seen", "tenant_id", "state", "severity", "last_seen_at"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     tenant_id: Mapped[str] = mapped_column(String(36), ForeignKey("tenants.id", ondelete="CASCADE"), index=True)

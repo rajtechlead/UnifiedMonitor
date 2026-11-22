@@ -126,13 +126,57 @@ class LocalVaultProvider:
         logger.info("New vault master key generated", key_path=str(self._key_path))
         return key
 
+    @property
+    def _previous_key_path(self) -> Path:
+        return self._key_path.with_name(self._key_path.name + ".previous")
+
+    def _load_keys(self) -> list[bytes]:
+        """The current key followed by any retained older keys.
+
+        Retained keys make rotation non-destructive: the vault is decrypted with
+        whichever key it was written under, then re-encrypted with the newest one.
+        """
+        keys = [self._load_or_create_key()]
+        if self._previous_key_path.exists():
+            for line in self._previous_key_path.read_text().splitlines():
+                candidate = line.strip().encode()
+                if candidate:
+                    keys.append(candidate)
+        return keys
+
     def _get_fernet(self):
-        from cryptography.fernet import Fernet
+        from cryptography.fernet import Fernet, MultiFernet
 
         if self._fernet is None:
-            key = self._load_or_create_key()
-            self._fernet = Fernet(key)
+            self._fernet = MultiFernet([Fernet(key) for key in self._load_keys()])
         return self._fernet
+
+    def rotate_master_key(self) -> int:
+        """Re-encrypt the vault under a freshly generated master key.
+
+        Returns the number of secrets re-encrypted. The previous keys are kept in
+        ``vault.key.previous`` so an interrupted rotation can still read the old
+        ciphertext; delete that file once the new key is verified.
+        """
+        from cryptography.fernet import Fernet, MultiFernet
+
+        with self._io_lock:
+            data = self._read_vault()
+            old_keys = self._load_keys()
+            new_key = Fernet.generate_key()
+            _atomic_write(self._previous_key_path, b"\n".join(old_keys))
+            _atomic_write(self._key_path, new_key)
+            try:
+                os.chmod(self._key_path, stat.S_IRUSR | stat.S_IWUSR)
+            except Exception:  # noqa: S110 - Windows
+                pass
+            # Write with only the new key: the ciphertext must not stay readable by
+            # the retired keys.
+            self._fernet = MultiFernet([Fernet(new_key)])
+            self._write_vault(data)
+            self._fernet = MultiFernet([Fernet(new_key), *[Fernet(key) for key in old_keys]])
+        logger.info("Vault master key rotated", secrets=len(data))
+        return len(data)
 
     # ------------------------------------------------------------------
     # Vault read/write helpers

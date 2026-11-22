@@ -1,3 +1,17 @@
+## 2026-11-22 (sixth) — rotation, registry test, findings index, Sonar
+
+- ✅ Vault master-key rotation (`MultiFernet`, previous key retained) and provider
+  migration (`migrate_secrets`).
+- ✅ Framework-id registry test: every offered framework resolves controls and the
+  ids are unique slugs.
+- ✅ Composite findings index (`tenant_id, state, severity, last_seen_at`) plus
+  migration 009.
+- ✅ Sonar: composite assertions split, exception tests take one invocation, duplicated
+  literals extracted, `complete()` split to cut cognitive complexity.
+- Remaining: #5 automatic posture inventory, #10 auditor requirement/level model,
+  #11 Graph resilience (needs a live tenant), #8 per-provider coverage check,
+  #12–14 tenant lifecycle UI, findings workspace, diagnostics bundle.
+
 ## 2026-11-22 (fifth) — evidence status model
 
 - ✅ Controls now report `evidence_status` (evaluated / stale / never evaluated),

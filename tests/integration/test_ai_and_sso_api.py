@@ -63,7 +63,8 @@ class TestAiStatus:
         body = r.json()
         assert body["anonymised"] is True
         assert isinstance(body["providers"], list)
-        assert "api_key" not in r.text and "sk-" not in r.text
+        assert "api_key" not in r.text
+        assert "sk-" not in r.text
 
     async def test_ask_requires_authentication(self, client: AsyncClient):
         assert (await client.get("/api/v1/ai/status")).status_code == 401

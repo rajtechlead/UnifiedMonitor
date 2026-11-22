@@ -103,3 +103,26 @@ class RotationManager:
         except Exception as exc:
             logger.warning("Error listing rotation-due secrets", error=str(exc))
         return due
+
+
+async def migrate_secrets(source, target, prefix: str = "") -> int:
+    """Copy every secret from one provider into another.
+
+    Used when a deployment moves from the local vault to Key Vault or Secrets
+    Manager: it reads each value from the source and writes it to the target with its
+    tags, so the switch is a configuration change rather than a re-entry of every
+    credential. Returns the number of secrets migrated.
+    """
+    migrated = 0
+    for metadata in await source.list_secrets(prefix=prefix):
+        value = await source.get_secret(metadata.name)
+        await target.set_secret(metadata.name, value, tags=dict(metadata.tags))
+        migrated += 1
+
+    logger.info(
+        "Secrets migrated",
+        count=migrated,
+        source=str(source.provider_type),
+        target=str(target.provider_type),
+    )
+    return migrated

@@ -18,6 +18,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Vault master-key rotation with retained previous keys, and `migrate_secrets()` to
+  copy secrets (with tags) to another provider when changing backends.
+- Framework registry test and a composite findings index (migration 009).
+
 - Custom AI providers: a tenant can register an OpenAI-compatible endpoint (Settings →
   AI remediation providers), tried before the built-in chain, with the key in the secret
   provider. Azure OpenAI was removed from the provider list.

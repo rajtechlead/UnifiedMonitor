@@ -21,6 +21,8 @@ logger = get_logger(__name__)
 
 # Statuses that mean "this provider will not serve us now" rather than "the request
 # was wrong": quota exhausted (402/403/429), rate limited (429), unavailable (5xx).
+JSON_CONTENT = "application/json"
+
 _FAILOVER_STATUS = {401, 402, 403, 404, 408, 409, 425, 429}
 
 
@@ -42,7 +44,7 @@ def _should_failover(status_code: int) -> bool:
 
 def _openai_request(provider: Provider, system_prompt: str, user_prompt: str, max_tokens: int) -> tuple[str, dict, dict]:
     url = f"{provider.base_url.rstrip('/')}/chat/completions"
-    headers = {"Authorization": f"Bearer {provider.api_key}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {provider.api_key}", "Content-Type": JSON_CONTENT}
     payload = {
         "model": provider.model,
         "messages": [
@@ -61,7 +63,7 @@ def _anthropic_request(provider: Provider, system_prompt: str, user_prompt: str,
     headers = {
         "x-api-key": provider.api_key,
         "anthropic-version": "2023-06-01",
-        "Content-Type": "application/json",
+        "Content-Type": JSON_CONTENT,
     }
     payload = {
         "model": provider.model,
@@ -78,6 +80,47 @@ def _extract(provider: Provider, body: dict) -> str:
         blocks = body.get("content") or []
         return "".join(str(block.get("text", "")) for block in blocks if isinstance(block, dict))
     return str(body["choices"][0]["message"]["content"])
+
+
+async def _attempt(
+    provider: Provider,
+    system_prompt: str,
+    user_prompt: str,
+    max_tokens: int,
+    http: httpx.AsyncClient,
+    attempts: list[str],
+) -> AIResponse | None:
+    """One provider's turn: an answer, or ``None`` when the next one should be tried."""
+    build = {"openai": _openai_request, "anthropic": _anthropic_request}[provider.kind]
+    url, headers, payload = build(provider, system_prompt, user_prompt, max_tokens)
+    try:
+        response = await http.post(url, json=payload, headers=headers)
+    except httpx.HTTPError as exc:
+        attempts.append(f"{provider.name}: {type(exc).__name__}")
+        logger.warning("ai_provider_unreachable", provider=provider.name, error=str(exc)[:200])
+        return None
+
+    if response.status_code >= 400:
+        attempts.append(f"{provider.name}: HTTP {response.status_code}")
+        if not _should_failover(response.status_code):
+            raise AIUnavailableError(f"{provider.name} rejected the request: HTTP {response.status_code}")
+        # Quota/limit/auth/outage: the next provider gets the request.
+        logger.info("ai_provider_failover", provider=provider.name, status=response.status_code)
+        return None
+
+    try:
+        text = _extract(provider, response.json())
+    except (ValueError, KeyError, IndexError, TypeError) as exc:
+        attempts.append(f"{provider.name}: bad response")
+        logger.warning("ai_provider_bad_response", provider=provider.name, error=str(exc)[:200])
+        return None
+
+    if not text.strip():
+        attempts.append(f"{provider.name}: empty answer")
+        return None
+
+    logger.info("ai_provider_answered", provider=provider.name, model=provider.model)
+    return AIResponse(text=text, provider=provider.name, model=provider.model, attempts=attempts)
 
 
 async def complete(
@@ -99,36 +142,9 @@ async def complete(
     http = client or httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS)
     try:
         for provider in chain:
-            build = {"openai": _openai_request, "anthropic": _anthropic_request}[provider.kind]
-            url, headers, payload = build(provider, system_prompt, user_prompt, max_tokens)
-            try:
-                response = await http.post(url, json=payload, headers=headers)
-            except httpx.HTTPError as exc:
-                attempts.append(f"{provider.name}: {type(exc).__name__}")
-                logger.warning("ai_provider_unreachable", provider=provider.name, error=str(exc)[:200])
-                continue
-
-            if response.status_code >= 400:
-                attempts.append(f"{provider.name}: HTTP {response.status_code}")
-                if _should_failover(response.status_code):
-                    # Quota/limit/auth/outage: the next provider gets the request.
-                    logger.info("ai_provider_failover", provider=provider.name, status=response.status_code)
-                    continue
-                raise AIUnavailableError(f"{provider.name} rejected the request: HTTP {response.status_code}")
-
-            try:
-                text = _extract(provider, response.json())
-            except (ValueError, KeyError, IndexError, TypeError) as exc:
-                attempts.append(f"{provider.name}: bad response")
-                logger.warning("ai_provider_bad_response", provider=provider.name, error=str(exc)[:200])
-                continue
-
-            if not text.strip():
-                attempts.append(f"{provider.name}: empty answer")
-                continue
-
-            logger.info("ai_provider_answered", provider=provider.name, model=provider.model)
-            return AIResponse(text=text, provider=provider.name, model=provider.model, attempts=attempts)
+            answer = await _attempt(provider, system_prompt, user_prompt, max_tokens, http, attempts)
+            if answer is not None:
+                return answer
     finally:
         if owned_client:
             await http.aclose()

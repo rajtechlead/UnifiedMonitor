@@ -88,8 +88,9 @@ class TestExchange:
         from unimonitor.exceptions import AuthenticationError
 
         client = httpx.AsyncClient(transport=httpx.MockTransport(lambda request: httpx.Response(400)))
+        google = oidc.providers()["google"]
         with pytest.raises(AuthenticationError):
-            await oidc.exchange_code(oidc.providers()["google"], "bad", client=client)
+            await oidc.exchange_code(google, "bad", client=client)
 
     @pytest.mark.asyncio
     async def test_google_profile_is_normalised(self, configured):

@@ -256,12 +256,12 @@ Covered by `tests/integration/test_tenant_scope.py`.
 | 2 | Unify the two notification stores | ✅ done in the second round |
 | 4 | Evaluated / stale / never-run evidence model | ✅ `unimonitor/grc/evidence_status.py`: per-control `evaluated` / `stale` / `never_evaluated` with `evaluated_at`, age and source run; `GET /grc/frameworks/{id}/evidence-coverage` reports coverage |
 | 5 | Automatic posture inventory | Collector-to-engine bridge; needs an inventory assembly step on each collection run |
-| 6 | Vault key rotation and provider migration | MultiFernet re-encryption plus a copy-into-provider path |
+| 6 | Vault key rotation and provider migration | ✅ `rotate_master_key()` re-encrypts under a new MultiFernet key (previous keys retained for recovery); `migrate_secrets()` copies values and tags between providers |
 | 8 | Per-provider framework coverage | The provider detail API already maps per-provider controls; needs a check of the aggregate page against real data |
 | 9 | SPA/API contract tests | ✅ done in the second round |
 | 10 | Auditor requirement/level model | Largest item: catalogue generalisation for every framework |
 | 11 | Graph resilience | Consent-vs-outage classification and last-good caching; needs a live tenant to verify |
-| 12–16 | Tenant lifecycle, findings workspace, diagnostics bundle, framework-id registry test, findings indexes | Not started |
+| 12–16 | Tenant lifecycle, findings workspace, diagnostics bundle, framework-id registry test, findings indexes | ✅ framework-id registry test; ✅ composite findings index + migration 009. Tenant lifecycle UI, findings workspace and diagnostics bundle remain |
 
 ### Second follow-up round
 
