@@ -1,3 +1,17 @@
+## 2026-11-22 (later) — tenant scoping audit and SOC metrics
+
+- ✅ Every API read that accepts `tenant_id` is scoped (`unimonitor/auth/tenant_scope.py`):
+  44 query parameters across nine routers, plus tenant ids carried in `FindingsFilter`,
+  Zero Trust import/run, alert templates and report generation. Admins keep the
+  cross-tenant view; everyone else is pinned to their home tenant plus delegated grants.
+- ✅ `AuthorisationError` now maps to 403 instead of falling through to the generic 500.
+- ✅ SOC dashboard metrics come from `Alert` rows: active, acknowledged, resolved in 24h,
+  mean time to acknowledge/resolve and a seven-day trend. Empty install reports zero.
+- 🟡 Assessment runs show their `error_message` in the runs table; the failing run itself
+  still needs reproducing to fix OBS-11.
+- Tests: `test_tenant_scope.py` (6), `test_soc_metrics.py` (3).
+- Queued follow-ups and reasons: `docs/PLATFORM_OBSERVATIONS_2026-11-22.md#follow-up-round`.
+
 ## 2026-11-22 — owner observations, atomic vault writes, case-insensitive severity
 
 Full register: [`docs/PLATFORM_OBSERVATIONS_2026-11-22.md`](docs/PLATFORM_OBSERVATIONS_2026-11-22.md).

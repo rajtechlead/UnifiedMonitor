@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from unimonitor.config import get_settings
 from unimonitor.exceptions import (
     AuthenticationError,
+    AuthorisationError,
     GraphAPIError,
     GraphPermissionError,
     NotFoundError,
@@ -267,6 +268,11 @@ def create_app() -> FastAPI:
     @app.exception_handler(AuthenticationError)
     async def auth_error_handler(request: Request, exc: AuthenticationError) -> JSONResponse:
         return JSONResponse(status_code=401, content={"detail": str(exc), "error_code": "AUTHENTICATION_FAILED"})
+
+    @app.exception_handler(AuthorisationError)
+    async def authorisation_error_handler(request: Request, exc: AuthorisationError) -> JSONResponse:
+        logger.warning("Authorisation denied", path=request.url.path, error=str(exc))
+        return JSONResponse(status_code=403, content={"detail": str(exc), "error_code": "FORBIDDEN"})
 
     @app.exception_handler(NotFoundError)
     async def not_found_handler(request: Request, exc: NotFoundError) -> JSONResponse:

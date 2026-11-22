@@ -12,6 +12,7 @@ from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.core.audit import write_audit
 from unimonitor.db.session import get_db
 
@@ -115,7 +116,7 @@ async def list_templates(current_user: Annotated[Any, Depends(get_current_user)]
 async def alert_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> AlertSummary:
     from unimonitor.db.models.alert import Alert
 
@@ -139,7 +140,7 @@ async def alert_summary(
 async def list_policies(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[PolicyResponse]:
     from unimonitor.db.models.alert import AlertPolicy
 
@@ -170,7 +171,7 @@ async def create_policy(
     body: PolicyRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> PolicyResponse:
     from unimonitor.db.models.alert import METRICS, AlertPolicy
 
@@ -219,8 +220,10 @@ async def create_policy_from_template(
     template = next((t for t in ALERT_TEMPLATES if t["key"] == body.template_key), None)
     if template is None:
         raise HTTPException(status_code=404, detail=f"Unknown template '{body.template_key}'")
+    from unimonitor.auth.tenant_scope import resolve_tenant
+
     policy = AlertPolicy(
-        tenant_id=await _tenant_for(db, body.tenant_id),
+        tenant_id=await _tenant_for(db, await resolve_tenant(db, current_user, body.tenant_id)),
         name=template["name"],
         description=template["description"],
         kind=template["kind"],
@@ -292,7 +295,7 @@ async def delete_policy(
 async def evaluate_now(
     current_user: Annotated[Any, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> dict:
     """Evaluate policies immediately instead of waiting for the schedule."""
     from unimonitor.alerts.engine import evaluate_tenant
@@ -306,7 +309,7 @@ async def evaluate_now(
 async def list_alerts(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     status_filter: Annotated[str | None, Query(alias="status")] = None,
     severity: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,

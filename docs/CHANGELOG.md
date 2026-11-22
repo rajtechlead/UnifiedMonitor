@@ -8,6 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased] — 2026-11-22
 
+### Security
+
+- Every endpoint that accepts `tenant_id` now resolves it through
+  `unimonitor/auth/tenant_scope.py` (44 query parameters plus body/model-carried ids),
+  so a non-administrator cannot read another tenant by editing the URL. An account with
+  no grant is pinned to its home tenant.
+- `AuthorisationError` returns 403; it previously fell through to the generic 500 handler.
+
+### Added
+
+- SOC dashboard metrics: active, acknowledged and 24-hour resolved alert counts, mean
+  time to acknowledge and resolve, and a seven-day incident trend, all from `Alert` rows.
+- Assessment runs display their `error_message` when a run fails.
+
 ### Fixed
 
 - Local vault writes are atomic (temp file + `fsync` + `os.replace`) for the ciphertext,

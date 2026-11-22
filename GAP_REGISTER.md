@@ -12,6 +12,12 @@ None
 
 None
 
+## Security — resolved 2026-11-22
+
+| ID | Description | Resolution |
+|---|---|---|
+| S-001 | Every API read that accepts `tenant_id` trusted the caller's parameter, so a non-admin could read another tenant by editing the URL; `AuthorisationError` also had no handler and surfaced as 500 | All 44 query parameters resolve through `auth/tenant_scope.py`; tenant ids in request bodies/query models validated with `resolve_tenant()`; 403 handler added. Tests: `tests/integration/test_tenant_scope.py` |
+
 ## Platform observations — 2026-11-22
 
 Owner review of the running platform. Full register with root causes and plans:

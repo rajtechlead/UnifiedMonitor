@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
@@ -108,7 +109,7 @@ async def download_scorecard(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     fmt: Annotated[ScorecardFormat, Query(description="csv, xlsx or pdf")] = "xlsx",
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     run_id: Annotated[str | None, Query()] = None,
 ) -> Response:
     """Download the control-level scorecard as a file.
@@ -132,13 +133,16 @@ async def download_scorecard(
 async def generate_report(
     body: ReportGenerateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ReportStatusResponse:
     """Queue a report generation task for one assessment run."""
     if not body.run_id:
         raise HTTPException(status_code=400, detail="run_id is required to generate a report")
 
+    from unimonitor.auth.tenant_scope import resolve_tenant
+
     formats = body.formats or ([body.report_format] if body.report_format else ["pdf"])
-    tenant_id = body.tenant_id or await _tenant_for_run(body.run_id)
+    tenant_id = await resolve_tenant(db, current_user, body.tenant_id) or await _tenant_for_run(body.run_id)
     if not tenant_id:
         raise HTTPException(status_code=404, detail=f"Assessment run '{body.run_id}' not found")
 
@@ -199,7 +203,7 @@ async def generate_report(
 @router.get("")
 async def list_reports(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     report_type: Annotated[str | None, Query()] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -275,7 +279,7 @@ class PaginatedRunReports(BaseModel):
 @router.get("/runs")
 async def list_report_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     page: Annotated[int, Query(ge=1)] = 1,
     page_size: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PaginatedRunReports:

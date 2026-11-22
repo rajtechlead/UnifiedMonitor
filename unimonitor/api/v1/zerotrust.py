@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.core.audit import write_audit
 from unimonitor.db.session import get_db
 from unimonitor.zerotrust import coverage, service
@@ -235,7 +236,7 @@ def _check_response(check: Any) -> CheckResponse:
 async def zerotrust_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> SummaryResponse:
     """Latest score for every platform, so the page can compare them side by side."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -291,7 +292,7 @@ async def zerotrust_summary(
 async def zerotrust_checks(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     source: Annotated[SourceLiteral, Query()] = "microsoft",
     pillar: Annotated[str | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
@@ -383,7 +384,7 @@ async def zerotrust_mapping(
 async def zerotrust_evidence_gaps(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     source: Annotated[str, Query()] = "all",
 ) -> GapsResponse:
     """Which tests and controls lack collected evidence, and what to collect."""
@@ -426,7 +427,7 @@ async def zerotrust_evidence_gaps(
 async def zerotrust_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[RunResponse]:
     tenant = await _resolve_tenant(db, tenant_id)
     return [_run_response(run) for run in await service.list_runs(db, tenant)]
@@ -454,7 +455,9 @@ async def zerotrust_import(
             detail="No checks found in that payload. Expected a list, or an object with a tests/results/checks array.",
         )
 
-    tenant = await _resolve_tenant(db, body.tenant_id)
+    from unimonitor.auth.tenant_scope import resolve_tenant
+
+    tenant = await _resolve_tenant(db, await resolve_tenant(db, current_user, body.tenant_id))
     run, summary = await service.store_run(
         db,
         tenant_id=tenant,
@@ -484,7 +487,9 @@ async def zerotrust_run_platform(
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ImportResponse:
     """Evaluate a platform's checks from the latest collected evidence."""
-    tenant = await _resolve_tenant(db, body.tenant_id)
+    from unimonitor.auth.tenant_scope import resolve_tenant
+
+    tenant = await _resolve_tenant(db, await resolve_tenant(db, current_user, body.tenant_id))
     checks = await service.cloud_checks(db, tenant, body.platform)
     if not checks:
         raise HTTPException(
@@ -518,7 +523,7 @@ async def zerotrust_run_platform(
 async def zerotrust_run_all(
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> RunAllResponse:
     """Evaluate every platform with the Python engine in one pass.
 

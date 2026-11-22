@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
 from unimonitor.api.v1.lookups import evidence_by_finding, latest_findings_by_control
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
@@ -103,7 +104,7 @@ class EvidenceUploadResponse(BaseModel):
 @router.get("/frameworks")
 async def list_frameworks_with_coverage(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[FrameworkCoverage]:
     """List all supported frameworks with current compliance coverage."""
     from unimonitor.db.base import async_session_factory
@@ -134,7 +135,7 @@ async def list_frameworks_with_coverage(
 async def framework_coverage(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> FrameworkCoverage:
     """Get detailed compliance coverage for a specific framework."""
     fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
@@ -164,7 +165,7 @@ async def framework_coverage(
 async def framework_controls(
     framework_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[dict]:
     """Get all controls for a framework with current finding state."""
     fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
@@ -220,7 +221,7 @@ async def framework_controls(
 async def controls_trend(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     days: Annotated[int, Query(ge=1, le=365, description="Window in days")] = 30,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     only_changed: Annotated[bool, Query(description="Only controls whose state changed")] = False,
@@ -239,7 +240,7 @@ async def single_control_trend(
     control_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     days: Annotated[int, Query(ge=1, le=365)] = 90,
 ) -> dict[str, Any]:
     """State series for one control."""
@@ -289,7 +290,7 @@ async def control_crosswalk(
 @router.get("/gap-analysis")
 async def gap_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     framework_id: Annotated[str | None, Query()] = None,
     min_severity: Annotated[str, Query()] = "medium",
 ) -> GapAnalysisResponse:
@@ -353,7 +354,7 @@ async def gap_analysis(
 @router.get("/risk-scoring")
 async def risk_scoring(
     current_user: Annotated[Any, Depends(get_current_user)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> RiskScoringResponse:
     """Overall risk scoring with breakdown by category."""
     from unimonitor.db.base import async_session_factory

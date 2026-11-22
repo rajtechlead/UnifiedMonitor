@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
@@ -122,7 +123,7 @@ def _assessment_to_response(
 async def list_assessments(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     is_active: Annotated[bool | None, Query()] = None,
 ) -> PaginatedAssessments:
     """List assessments, optionally filtered by tenant."""

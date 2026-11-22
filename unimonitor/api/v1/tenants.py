@@ -328,16 +328,9 @@ def _rollup_totals(rows: list[TenantRollupRow]) -> TenantRollupTotals:
 
 async def _has_tenant_access(session: Any, user: Any, tenant_id: str) -> bool:
     """A user reaches a tenant through their home tenant, a grant, or the admin role."""
-    from sqlalchemy import select
+    from unimonitor.auth.tenant_scope import has_tenant_access
 
-    from unimonitor.db.models.tenant_access import TenantAccess
-
-    if getattr(user, "role", "") == "admin":
-        return True
-    if getattr(user, "tenant_id", None) == tenant_id:
-        return True
-    granted = await session.execute(select(TenantAccess.id).where(TenantAccess.user_id == user.id, TenantAccess.tenant_id == tenant_id))
-    return granted.scalar_one_or_none() is not None
+    return await has_tenant_access(session, user, tenant_id)
 
 
 @router.get(

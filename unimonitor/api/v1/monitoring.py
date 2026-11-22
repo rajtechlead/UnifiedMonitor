@@ -11,6 +11,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 from unimonitor.core.tenants import resolve_tenant as _resolve_tenant
@@ -254,7 +255,7 @@ async def get_platform_health(
 async def get_collectors(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[CollectorStatus]:
     """Return the status of all data collectors for a given tenant.
 
@@ -320,7 +321,7 @@ async def run_collector(
     collector_name: str,
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> CollectorRunResponse:
     """Trigger a named collector to run immediately for a tenant."""
     valid_names = {d["name"] for d in COLLECTOR_DEFINITIONS}
@@ -368,7 +369,7 @@ async def get_collection_history(
     db: Annotated[AsyncSession, Depends(get_session)],
     current_user: Annotated[User, Depends(get_current_user)],
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
-    tenant_id: Annotated[str | None, Query(description=TENANT_QUERY_DESCRIPTION)] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> list[CollectionHistoryEntry]:
     """Return the last N assessment runs for a tenant."""
     from unimonitor.db.models.assessment import Assessment
@@ -499,7 +500,7 @@ async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
 async def get_collection_schedule(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> CollectionScheduleResponse:
     """Automatic collection interval and the next expected run."""
     from unimonitor.config import get_settings
@@ -528,7 +529,7 @@ async def get_collection_schedule(
 async def collect_now(
     current_user: Annotated[User, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> CollectNowResponse:
     """Run a full collection immediately, creating a default assessment if needed."""
     import uuid
@@ -607,7 +608,7 @@ async def collect_now(
 async def get_licensing(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> LicensingResponse:
     """Licence posture: seats bought, assigned, idle and suspended per SKU."""
     tenant = await _resolve_tenant(db, tenant_id)
@@ -661,7 +662,7 @@ async def get_licensing(
 async def get_service_health(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> ServiceHealthResponse:
     """Microsoft 365 service health and unresolved advisories."""
     tenant = await _resolve_tenant(db, tenant_id)

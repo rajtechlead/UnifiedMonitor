@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
@@ -195,7 +196,7 @@ async def _release_expired_suppressions(db: AsyncSession) -> int:
 async def findings_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> FindingSummaryResponse:
     """Return aggregated finding counts by severity, state, and category."""
     from unimonitor.db.repositories.finding_repo import FindingRepository
@@ -218,7 +219,7 @@ async def findings_summary(
 async def export_siem(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     severity: Annotated[str | None, Query()] = None,
     fmt: Annotated[Literal["cef", "json"], Query(alias="format")] = "cef",
     limit: Annotated[int, Query(ge=1, le=5000)] = 1000,
@@ -290,6 +291,11 @@ async def list_findings(
     severity = filters.severity.lower() if filters.severity else None
     if severity and severity not in VALID_SEVERITIES:
         raise HTTPException(status_code=422, detail=f"Invalid severity: {filters.severity}")
+    # The filter model carries tenant_id as a query field, so it bypasses the
+    # parameter dependency and has to be scoped here.
+    from unimonitor.auth.tenant_scope import resolve_tenant
+
+    filters.tenant_id = await resolve_tenant(db, current_user, filters.tenant_id)
     # State filter: accept known states and pass-through unknown values (returns empty results)
 
     repo = FindingRepository(db)
@@ -325,7 +331,7 @@ async def list_findings(
 async def priority_queue(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
 ) -> PriorityQueueResponse:
     """Open findings ranked by return on remediation effort (ROI).

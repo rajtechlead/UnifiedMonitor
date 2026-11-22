@@ -1,5 +1,8 @@
 # Platform observations — 2026-11-22
 
+> Follow-up round (same day): tenant scoping audit and the first ranked
+> follow-ups. See [Follow-up round](#follow-up-round) at the end.
+
 Owner review of the running platform, top to bottom. Each observation has a stable
 id (`OBS-nn`), the root cause where one was established from the code, the change
 made in this session, and what is still open. Status values:
@@ -215,3 +218,47 @@ Today mail goes through SMTP only. Using the UniMonitor app registration require
 `Mail.Send` application permission with admin consent and a `sendMail` call in the
 notification dispatcher, with SMTP kept as the fallback. Pending a tenant to consent and
 test.
+
+---
+
+## Follow-up round
+
+### Tenant scoping audit (all 44 reads)
+
+Every endpoint that accepts `tenant_id` as a query parameter now resolves it
+through `unimonitor/auth/tenant_scope.py`. Administrators may read any tenant and
+may omit the parameter to read the whole install; everyone else is pinned to their
+home tenant plus any `tenant_access` grant. The audit changed 44 parameters across
+`dashboard`, `grc`, `reports`, `findings`, `assessments`, `monitoring`,
+`audit_portal`, `zerotrust` and `alerts`. Tenant ids carried inside request bodies
+or Pydantic query models — `FindingsFilter`, `zerotrust` import/run,
+alert templates, report generation — are validated with `resolve_tenant()`.
+
+Two defects the audit exposed: `AuthorisationError` had no handler, so a refused
+role returned 500 instead of 403 (fixed in `main.py`), and the findings list took
+`tenant_id` through its filter model, bypassing any parameter dependency entirely
+(fixed, with a regression test).
+
+Covered by `tests/integration/test_tenant_scope.py`.
+
+### Delivered
+
+| Rank | Item | Result |
+|---|---|---|
+| 1 | Tenant scoping on every read | ✅ 44 reads + 4 body-carried ids; 403 not 500 |
+| 3 | Real SOC alert metrics | ✅ active/acknowledged/resolved-24h, MTTA, MTTR and a 7-day alert trend from `Alert` rows; empty install reports zeros, not constants |
+| 7 | Assessment failure surfaced | 🟡 the run's `error_message` now renders under the failed status; root-cause capture still needs a failing run |
+
+### Still queued
+
+| Rank | Item | Why it is queued |
+|---|---|---|
+| 2 | Unify the two notification stores | Needs a schema decision: the `notifications` API writes `Tenant.notification_settings`, which does not exist, so its secrets are silently dropped today |
+| 4 | Evaluated / stale / never-run evidence model | Architectural: every check row needs status + `evaluated_at` + `source_run_id` before scores can be derived |
+| 5 | Automatic posture inventory | Collector-to-engine bridge; needs an inventory assembly step on each collection run |
+| 6 | Vault key rotation and provider migration | MultiFernet re-encryption plus a copy-into-provider path |
+| 8 | Per-provider framework coverage | The provider detail API already maps per-provider controls; needs a check of the aggregate page against real data |
+| 9 | SPA/API contract tests | Not started; the three shape defects this round argue for it |
+| 10 | Auditor requirement/level model | Largest item: catalogue generalisation for every framework |
+| 11 | Graph resilience | Consent-vs-outage classification and last-good caching; needs a live tenant to verify |
+| 12–16 | Tenant lifecycle, findings workspace, diagnostics bundle, framework-id registry test, findings indexes | Not started |

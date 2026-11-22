@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.auth.dependencies import get_current_user
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
 
 logger = structlog.get_logger(__name__)
@@ -357,7 +358,7 @@ async def _build_framework_coverage(db: AsyncSession, tenant_id: str | None) -> 
 async def dashboard_overview(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> OverviewResponse:
     """Overview dashboard: scores, finding counts, monitoring health."""
     sec, comp, risk = await _get_scores_for_tenant(db, tenant_id)
@@ -429,7 +430,7 @@ async def dashboard_overview(
 async def dashboard_executive(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> ExecutiveSummaryResponse:
     """Executive dashboard view."""
     sec, comp, risk = await _get_scores_for_tenant(db, tenant_id)
@@ -471,7 +472,7 @@ async def dashboard_executive(
 async def dashboard_security(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> SecurityViewResponse:
     """Security operations dashboard view."""
     finding_counts = await _get_finding_counts(db, tenant_id)
@@ -514,7 +515,7 @@ async def dashboard_security(
 async def dashboard_compliance(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> ComplianceViewResponse:
     """Compliance dashboard view — framework coverage percentages."""
     _, comp, _ = await _get_scores_for_tenant(db, tenant_id)
@@ -532,7 +533,7 @@ async def dashboard_compliance(
 async def dashboard_risk(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> RiskViewResponse:
     """Risk dashboard — heatmap and every open risk, so nothing is hidden behind "critical"."""
     from sqlalchemy import select
@@ -597,20 +598,69 @@ async def dashboard_risk(
 async def dashboard_soc(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> SocViewResponse:
-    """SOC operations dashboard view."""
+    """SOC operations dashboard view.
+
+    The severity distribution counts findings, because the tiles link to the
+    findings list; the alert lifecycle numbers come from real ``Alert`` rows, so
+    an untouched install reports zero rather than a hard-coded reassurance.
+    """
+    from datetime import timedelta
+
+    from sqlalchemy import select
+
+    from unimonitor.db.models.alert import Alert
+
     finding_counts = await _get_finding_counts(db, tenant_id)
+    now = datetime.now(UTC)
+    window_start = now - timedelta(days=30)
+    stmt = select(Alert).where(Alert.triggered_at >= window_start)
+    if tenant_id:
+        stmt = stmt.where(Alert.tenant_id == tenant_id)
+    alerts = (await db.execute(stmt)).scalars().all()
+
+    def _aware(value: datetime | None) -> datetime | None:
+        if value is None:
+            return None
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+    def _mean_hours(pairs: list[tuple[datetime | None, datetime | None]]) -> float | None:
+        durations = [(end - start).total_seconds() for start, end in pairs if start is not None and end is not None and end >= start]
+        if not durations:
+            return None
+        return round(sum(durations) / len(durations) / 3600, 2)
+
+    acknowledged = [alert for alert in alerts if alert.status == "acknowledged"]
+    active = [alert for alert in alerts if alert.status in ("open", "acknowledged", "snoozed")]
+    resolved_24h = []
+    for alert in alerts:
+        resolved_at = _aware(alert.resolved_at)
+        if resolved_at is not None and resolved_at >= now - timedelta(hours=24):
+            resolved_24h.append(alert)
+    ack_pairs = [(_aware(alert.triggered_at), _aware(alert.acknowledged_at)) for alert in alerts if alert.acknowledged_at is not None]
+    resolve_pairs = [(_aware(alert.triggered_at), _aware(alert.resolved_at)) for alert in alerts if alert.resolved_at is not None]
+
+    trend: list[dict[str, Any]] = []
+    for days_ago in range(6, -1, -1):
+        day = (now - timedelta(days=days_ago)).date()
+        trend.append(
+            {
+                "date": day.isoformat(),
+                "alerts": sum(1 for alert in alerts if (_aware(alert.triggered_at) or now).date() == day),
+            }
+        )
 
     return SocViewResponse(
-        active_alerts=finding_counts.total,
-        acknowledged_alerts=0,
-        resolved_alerts_24h=0,
-        mean_time_to_acknowledge_hours=None,
-        mean_time_to_resolve_hours=None,
+        active_alerts=len(active),
+        acknowledged_alerts=len(acknowledged),
+        resolved_alerts_24h=len(resolved_24h),
+        mean_time_to_acknowledge_hours=_mean_hours(ack_pairs),
+        mean_time_to_resolve_hours=_mean_hours(resolve_pairs),
         alerts_by_severity=finding_counts,
-        incident_trend=[],
-        generated_at=datetime.now(UTC),
+        # No alerts means no history to show; seven empty rows would be noise.
+        incident_trend=trend if alerts else [],
+        generated_at=now,
     )
 
 
@@ -686,7 +736,7 @@ async def verify_audit_chain(
 async def dashboard_trends(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     window_days: Annotated[int, Query(ge=7, le=365)] = 30,
 ) -> TrendsResponse:
     """Historical score and finding trends, plus remediation SLA performance."""
@@ -958,7 +1008,7 @@ def _pillar_buckets(states: dict[str, str]) -> dict[str, dict[str, int]]:
 async def dashboard_zero_trust(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> ZeroTrustResponse:
     """Coverage per Zero Trust pillar, grouped from each control's ``zero_trust`` mapping."""
     from sqlalchemy import select
@@ -1008,7 +1058,7 @@ async def dashboard_zero_trust(
 async def dashboard_clouds(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> CloudAggregateResponse:
     """Aggregate multi-cloud dashboard: one row per provider plus totals."""
     from unimonitor.grc.providers import PROVIDERS
@@ -1052,7 +1102,7 @@ async def dashboard_cloud_provider(
     provider_id: str,
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> CloudProviderDetailResponse:
     """Single-cloud dashboard: scores, control coverage and findings for one provider."""
     from fastapi import HTTPException
@@ -1179,7 +1229,7 @@ class CisoDashboardResponse(BaseModel):
 async def dashboard_ciso(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    tenant_id: Annotated[str | None, Query()] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
     risk_limit: Annotated[int, Query(ge=1, le=50)] = 10,
 ) -> CisoDashboardResponse:
     """CISO view: residual risk across every monitored cloud."""

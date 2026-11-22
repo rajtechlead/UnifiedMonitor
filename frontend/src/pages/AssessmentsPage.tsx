@@ -23,6 +23,7 @@ type AssessmentRun = {
   total_controls: number
   findings_count: number
   triggered_by: string
+  error_message?: string | null
 }
 
 type FrameworkOption = { framework_id: string; framework_name: string }
@@ -155,6 +156,9 @@ function AssessmentCard({ a, labels }: Readonly<{ a: Assessment; labels: Record<
                           <RunStatusIcon status={r.status} />
                           <span style={{ textTransform: 'capitalize' }}>{r.status}</span>
                         </div>
+                        {r.error_message && (
+                          <div style={{ fontSize: 11, color: '#EF4444', marginTop: 4, maxWidth: 320 }}>{r.error_message}</div>
+                        )}
                       </td>
                       <td style={{ padding: '8px 10px', color: 'var(--color-text-muted)' }}>
                         {r.started_at ? new Date(r.started_at).toLocaleString() : '—'}

@@ -8,6 +8,22 @@ Last Updated: 2026-11-22 UTC
 
 - `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
 
+### Session 2026-11-22 (later) — tenant scoping audit
+
+- `unimonitor/auth/tenant_scope.py`: `tenant_scope` (query-parameter dependency) and
+  `resolve_tenant` (body/model values). Admins keep cross-tenant reads; everyone else is
+  pinned to their home tenant plus `tenant_access` grants. Applied to 44 reads across
+  dashboard, grc, reports, findings, assessments, monitoring, audit portal, Zero Trust
+  and alerts, plus `FindingsFilter`, Zero Trust import/run, alert templates and report
+  generation.
+- `AuthorisationError` now returns 403 instead of 500 (role refusals were reported as
+  internal errors).
+- SOC dashboard metrics are real: active/acknowledged/resolved-24h, MTTA, MTTR and a
+  seven-day trend from `Alert` rows; no hard-coded zeros.
+- Assessment runs render `error_message` when a run fails.
+- Tests: `test_tenant_scope.py`, `test_soc_metrics.py`. Queued follow-ups listed in
+  `docs/PLATFORM_OBSERVATIONS_2026-11-22.md#follow-up-round`.
+
 ### Session 2026-11-22 — atomic vault writes and owner observation fixes
 
 - Local vault: `_atomic_write` stages every blob (vault, metadata, a new master key)
