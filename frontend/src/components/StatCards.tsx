@@ -7,7 +7,7 @@ export interface StatCard {
 }
 
 /** KPI row shared by the dashboards: one card per metric on the 160px grid. */
-export default function StatCards({ cards }: { cards: StatCard[] }) {
+export default function StatCards({ cards }: Readonly<{ cards: StatCard[] }>) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16 }}>
       {cards.map(card => (

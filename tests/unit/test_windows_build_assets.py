@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import re
 from pathlib import Path
 
 import pytest
@@ -186,6 +187,22 @@ def test_pyinstaller_is_verified_and_run_as_a_module():
     assert '"import PyInstaller; print(PyInstaller.__version__)"' in script
     assert '"-m", "PyInstaller"' in script, "PyInstaller must be run as the PyInstaller module"
     assert '"-m", "pyinstaller"' not in script
+
+
+def test_build_script_does_not_depend_on_optional_cmdlets():
+    """Get-FileHash and the Archive module are missing on some hosts.
+
+    The first Windows run stopped at "The term 'Get-FileHash' is not recognized":
+    that cmdlet needs PowerShell 4+, and Expand-Archive/Compress-Archive need the
+    Microsoft.PowerShell.Archive module. Hashing and both zip steps therefore use
+    the .NET types every supported PowerShell ships.
+    """
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    for cmdlet in ("Get-FileHash", "Expand-Archive", "Compress-Archive"):
+        assert not re.search(rf"(?m)^\s*{cmdlet}\b", script), f"{cmdlet} is not available on every Windows PowerShell install"
+    assert "[System.Security.Cryptography.SHA256]::Create()" in script
+    assert "[System.IO.Compression.ZipFile]::ExtractToDirectory" in script
+    assert "[System.IO.Compression.ZipFile]::CreateFromDirectory" in script
 
 
 def test_dependency_install_goes_through_pip():

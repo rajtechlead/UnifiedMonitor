@@ -73,6 +73,42 @@ function Invoke-Checked([string]$Exe, [string[]]$Arguments) {
     }
 }
 
+# Hashing and zipping go through .NET rather than Get-FileHash / Expand-Archive /
+# Compress-Archive. Those cmdlets need PowerShell 4+ and the
+# Microsoft.PowerShell.Archive module, and on some hosts neither is loadable --
+# the build then stopped at "The term 'Get-FileHash' is not recognized". The
+# .NET types below ship with every PowerShell that can run this script.
+function Get-Sha256([string]$Path) {
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    $stream = [System.IO.File]::OpenRead($Path)
+    try {
+        $digest = $sha.ComputeHash($stream)
+        return ([System.BitConverter]::ToString($digest) -replace '-', '').ToLowerInvariant()
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
+}
+
+function Import-ZipAssembly {
+    # PowerShell 7 already ships the type; Windows PowerShell 5.1 needs the load.
+    if (-not ("System.IO.Compression.ZipFile" -as [type])) {
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+    }
+}
+
+function Expand-Zip([string]$Path, [string]$Destination) {
+    Import-ZipAssembly
+    if (Test-Path $Destination) { Remove-Item -Recurse -Force $Destination }
+    [System.IO.Compression.ZipFile]::ExtractToDirectory($Path, $Destination)
+}
+
+function Compress-Zip([string]$Source, [string]$Destination) {
+    Import-ZipAssembly
+    if (Test-Path $Destination) { Remove-Item -Force $Destination }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($Source, $Destination)
+}
+
 Push-Location $Root
 try {
     # -- 0. Version ------------------------------------------------------------
@@ -167,7 +203,7 @@ try {
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
     $zip = Join-Path $BuildDir "nssm.zip"
     Invoke-WebRequest -Uri $NssmUrl -OutFile $zip -UseBasicParsing
-    $hash = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+    $hash = Get-Sha256 $zip
     if ($NssmSha256) {
         if ($hash -ne $NssmSha256.ToLowerInvariant()) {
             Fail "NSSM checksum mismatch: expected $NssmSha256, downloaded $hash"
@@ -176,8 +212,7 @@ try {
         Write-Host "NSSM SHA256 $hash (pass -NssmSha256 $hash to pin it next time)"
     }
     $nssmTmp = Join-Path $BuildDir "nssm"
-    if (Test-Path $nssmTmp) { Remove-Item -Recurse -Force $nssmTmp }
-    Expand-Archive -Path $zip -DestinationPath $nssmTmp -Force
+    Expand-Zip -Path $zip -Destination $nssmTmp
     $nssmExe = Get-ChildItem -Path $nssmTmp -Filter "nssm.exe" -Recurse |
         Where-Object { $_.FullName -match "win64" } |
         Select-Object -First 1
@@ -247,7 +282,7 @@ try {
     Step "Creating the portable zip"
     $portable = Join-Path $Root "dist/UniMonitor-$Version-x64-portable.zip"
     if (Test-Path $portable) { Remove-Item -Force $portable }
-    Compress-Archive -Path (Join-Path $Root "dist/UniMonitor/*") -DestinationPath $portable
+    Compress-Zip -Source (Join-Path $Root "dist/UniMonitor") -Destination $portable
 
     $sizeMb = [math]::Round((Get-Item $installer).Length / 1MB, 1)
     Write-Host ""

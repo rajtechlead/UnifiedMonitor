@@ -37,6 +37,9 @@ SEVERITY_FILLS = {
 }
 SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}
 MAX_FINDINGS_PER_PROVIDER = 80
+MAX_FINDINGS_TOTAL = 200
+
+FINDING_HEADERS = ["Control ID", "Title", "Severity", "Status"]
 
 
 class DocxReportGenerator(BaseReportGenerator):
@@ -51,7 +54,23 @@ class DocxReportGenerator(BaseReportGenerator):
         providers = self._provider_breakdown()
 
         doc = Document()
+        self._write_header(doc)
+        self._write_score_table(doc, stats)
+        self._write_severity_table(doc, stats)
 
+        if providers:
+            self._write_provider_coverage(doc, providers)
+            self._write_provider_sections(doc, providers)
+
+        if report_type == "full":
+            self._write_all_findings(doc)
+
+        doc.save(str(output_path))
+        return str(output_path)
+
+    # ── Sections ─────────────────────────────────────────────────────────────
+
+    def _write_header(self, doc: Any) -> None:
         title = doc.add_heading("UniMonitor Security Assessment Report", level=0)
         title.runs[0].font.color.rgb = RGBColor.from_string(BRAND_BLUE)
 
@@ -62,7 +81,8 @@ class DocxReportGenerator(BaseReportGenerator):
         meta_run.font.size = Pt(9)
         meta_run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
 
-        # ── Aggregate executive summary (single org, unchanged) ───────────────
+    def _write_score_table(self, doc: Any, stats: dict[str, Any]) -> None:
+        """Aggregate executive summary (single org, unchanged)."""
         doc.add_heading("Executive Summary", level=1)
         score_rows = [
             ("Security Score", self._fmt(stats.get("security_score"))),
@@ -79,6 +99,7 @@ class DocxReportGenerator(BaseReportGenerator):
             cells[0].text = metric
             cells[1].text = value
 
+    def _write_severity_table(self, doc: Any, stats: dict[str, Any]) -> None:
         doc.add_heading("Finding Severity Breakdown", level=1)
         sev_table = doc.add_table(rows=1, cols=2)
         sev_table.style = TABLE_STYLE
@@ -90,87 +111,73 @@ class DocxReportGenerator(BaseReportGenerator):
             self._shade(cells[0], SEVERITY_FILLS.get(sev, "FFFFFF"))
             self._shade(cells[1], SEVERITY_FILLS.get(sev, "FFFFFF"))
 
-        # ── Cloud provider coverage table (colour-coded per provider) ─────────
-        if providers:
-            doc.add_heading("Cloud Provider Coverage", level=1)
-            prov_table = doc.add_table(rows=1, cols=6)
-            prov_table.style = TABLE_STYLE
-            self._header_row(
-                prov_table,
-                ["Provider", "Findings", "Critical", "High", "Coverage", "Score"],
-                BRAND_BLUE,
+    def _write_provider_coverage(self, doc: Any, providers: list[dict[str, Any]]) -> None:
+        """Cloud provider coverage table, colour-coded per provider."""
+        doc.add_heading("Cloud Provider Coverage", level=1)
+        prov_table = doc.add_table(rows=1, cols=6)
+        prov_table.style = TABLE_STYLE
+        self._header_row(prov_table, ["Provider", "Findings", "Critical", "High", "Coverage", "Score"], BRAND_BLUE)
+        for p in providers:
+            cells = prov_table.add_row().cells
+            cells[0].text = f"{p['short_name']} — {p['name']}"
+            cells[1].text = str(p["total"])
+            cells[2].text = str(p["severity_counts"]["CRITICAL"])
+            cells[3].text = str(p["severity_counts"]["HIGH"])
+            cells[4].text = f"{p['pass_rate']}%"
+            cells[5].text = f"{p['security_score']:.1f}"
+            self._shade(cells[0], p["colour"].lstrip("#"))
+            for run in cells[0].paragraphs[0].runs:
+                run.font.bold = True
+                run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    def _write_provider_sections(self, doc: Any, providers: list[dict[str, Any]]) -> None:
+        """One heading, score line and findings table per provider."""
+        doc.add_heading("Findings by Cloud Provider", level=1)
+        for p in providers:
+            heading = doc.add_heading(p["name"], level=2)
+            for run in heading.runs:
+                run.font.color.rgb = RGBColor.from_string(p["colour"].lstrip("#"))
+
+            states = p["state_counts"]
+            summary = doc.add_paragraph(
+                f"Score {p['security_score']:.1f}/100  |  Coverage {p['pass_rate']}%  |  "
+                f"{states['implemented']} implemented, {states['partially_implemented']} partial, "
+                f"{states['not_implemented']} not implemented, {states['not_applicable']} n/a  |  "
+                f"Severity: {p['severity_counts']['CRITICAL']} critical, "
+                f"{p['severity_counts']['HIGH']} high"
             )
-            for p in providers:
-                cells = prov_table.add_row().cells
-                cells[0].text = f"{p['short_name']} — {p['name']}"
-                cells[1].text = str(p["total"])
-                cells[2].text = str(p["severity_counts"]["CRITICAL"])
-                cells[3].text = str(p["severity_counts"]["HIGH"])
-                cells[4].text = f"{p['pass_rate']}%"
-                cells[5].text = f"{p['security_score']:.1f}"
-                self._shade(cells[0], p["colour"].lstrip("#"))
-                for run in cells[0].paragraphs[0].runs:
-                    run.font.bold = True
-                    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+            summary.runs[0].font.size = Pt(9)
+            summary.runs[0].font.color.rgb = RGBColor(0x4B, 0x5A, 0x7A)
 
-        # ── Per-provider sections (every report type) ─────────────────────────
-        if providers:
-            doc.add_heading("Findings by Cloud Provider", level=1)
-            for p in providers:
-                heading = doc.add_heading(p["name"], level=2)
-                for run in heading.runs:
-                    run.font.color.rgb = RGBColor.from_string(p["colour"].lstrip("#"))
-
-                states = p["state_counts"]
-                summary = doc.add_paragraph(
-                    f"Score {p['security_score']:.1f}/100  |  Coverage {p['pass_rate']}%  |  "
-                    f"{states['implemented']} implemented, {states['partially_implemented']} partial, "
-                    f"{states['not_implemented']} not implemented, {states['not_applicable']} n/a  |  "
-                    f"Severity: {p['severity_counts']['CRITICAL']} critical, "
-                    f"{p['severity_counts']['HIGH']} high"
-                )
-                summary.runs[0].font.size = Pt(9)
-                summary.runs[0].font.color.rgb = RGBColor(0x4B, 0x5A, 0x7A)
-
-                findings = sorted(
-                    p["findings"],
-                    key=lambda f: SEVERITY_ORDER.get((self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5),
-                )
-                table = doc.add_table(rows=1, cols=4)
-                table.style = TABLE_STYLE
-                self._header_row(table, ["Control ID", "Title", "Severity", "Status"], p["colour"].lstrip("#"))
-                for f in findings[:MAX_FINDINGS_PER_PROVIDER]:
-                    severity = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
-                    state = self._get_finding_attr(f, "state", "not_implemented") or "not_implemented"
-                    cells = table.add_row().cells
-                    cells[0].text = str(self._get_finding_attr(f, "external_control_id", "") or "")
-                    cells[1].text = (self._get_finding_attr(f, "title", "") or "")[:200]
-                    cells[2].text = severity
-                    cells[3].text = state.replace("_", " ").title()
-                    self._shade(cells[2], SEVERITY_FILLS.get(severity, "FFFFFF"))
-
-        # ── Aggregate findings detail ─────────────────────────────────────────
-        if report_type == "full":
-            doc.add_heading("All Findings", level=1)
-            table = doc.add_table(rows=1, cols=4)
-            table.style = TABLE_STYLE
-            self._header_row(table, ["Control ID", "Title", "Severity", "Status"], BRAND_BLUE)
-            ordered = sorted(
-                self.findings,
+            findings = sorted(
+                p["findings"],
                 key=lambda f: SEVERITY_ORDER.get((self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5),
             )
-            for f in ordered[:200]:
-                severity = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
-                state = self._get_finding_attr(f, "state", "not_implemented") or "not_implemented"
-                cells = table.add_row().cells
-                cells[0].text = str(self._get_finding_attr(f, "external_control_id", "") or "")
-                cells[1].text = (self._get_finding_attr(f, "title", "") or "")[:200]
-                cells[2].text = severity
-                cells[3].text = state.replace("_", " ").title()
-                self._shade(cells[2], SEVERITY_FILLS.get(severity, "FFFFFF"))
+            self._write_findings_table(doc, findings, MAX_FINDINGS_PER_PROVIDER, p["colour"].lstrip("#"))
 
-        doc.save(str(output_path))
-        return str(output_path)
+    def _write_all_findings(self, doc: Any) -> None:
+        """Aggregate findings detail for a full report."""
+        doc.add_heading("All Findings", level=1)
+        ordered = sorted(
+            self.findings,
+            key=lambda f: SEVERITY_ORDER.get((self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper(), 5),
+        )
+        self._write_findings_table(doc, ordered, MAX_FINDINGS_TOTAL, BRAND_BLUE)
+
+    def _write_findings_table(self, doc: Any, findings: list[Any], limit: int, header_fill: str) -> Any:
+        table = doc.add_table(rows=1, cols=4)
+        table.style = TABLE_STYLE
+        self._header_row(table, FINDING_HEADERS, header_fill)
+        for f in findings[:limit]:
+            severity = (self._get_finding_attr(f, "severity", "INFORMATIONAL") or "INFORMATIONAL").upper()
+            state = self._get_finding_attr(f, "state", "not_implemented") or "not_implemented"
+            cells = table.add_row().cells
+            cells[0].text = str(self._get_finding_attr(f, "external_control_id", "") or "")
+            cells[1].text = (self._get_finding_attr(f, "title", "") or "")[:200]
+            cells[2].text = severity
+            cells[3].text = state.replace("_", " ").title()
+            self._shade(cells[2], SEVERITY_FILLS.get(severity, "FFFFFF"))
+        return table
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 

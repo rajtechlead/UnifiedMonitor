@@ -330,7 +330,6 @@ def _email_test(
 
 async def _webhook_test(
     raw: dict[str, Any],
-    current_user: User,
     test_payload: dict[str, Any],
 ) -> TestNotificationResponse:
     wh_cfg = raw.get("generic_webhook", {})
@@ -393,7 +392,7 @@ async def test_notification(
             return await _slack_test(raw, tenant, current_user)
         if channel == "email":
             return _email_test(raw, tenant, current_user, request)
-        return await _webhook_test(raw, current_user, test_payload)
+        return await _webhook_test(raw, test_payload)
     except Exception as exc:
         logger.error("Test notification failed", channel=channel, error=str(exc))
         return TestNotificationResponse(channel=channel, success=False, message=f"Error: {str(exc)[:200]}")

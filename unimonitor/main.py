@@ -89,15 +89,15 @@ class SpaFallbackMiddleware:
             await self.app(scope, receive, send)
             return
 
-        swallowed = False
+        # A list rather than a bool: the flag is written from the relay closure, and
+        # reading a mutated closure variable twice reads as a constant condition.
+        swallowed: list[bool] = []
 
         async def relay(message: Any) -> None:
-            nonlocal swallowed
-            if message["type"] == "http.response.start":
-                if message["status"] == 404:
-                    swallowed = True
-                    return
-            elif swallowed:
+            if message["type"] == "http.response.start" and message["status"] == 404 and not swallowed:
+                swallowed.append(True)
+                return
+            if swallowed:
                 return
             await send(message)
 

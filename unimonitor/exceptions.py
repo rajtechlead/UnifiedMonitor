@@ -113,7 +113,7 @@ class DatabaseError(UniMonitorError):
 # ── FastAPI exception handlers ───────────────────────────────
 
 
-async def unimonitor_exception_handler(
+def unimonitor_exception_handler(
     _request: Request,
     exc: UniMonitorError,
 ) -> JSONResponse:
@@ -123,7 +123,7 @@ async def unimonitor_exception_handler(
     )
 
 
-async def generic_exception_handler(
+def generic_exception_handler(
     _request: Request,
     exc: Exception,
 ) -> JSONResponse:

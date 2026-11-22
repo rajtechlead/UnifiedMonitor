@@ -63,30 +63,30 @@ class TestSendToChannels:
     def test_smtp_called_when_enabled(self):
         d, _ = _make_dispatcher()
         settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails=["a@b.com"])
-        with patch.object(d, "_send_smtp", new_callable=AsyncMock) as mock_smtp:
+        with patch.object(d, "_send_smtp", new_callable=MagicMock) as mock_smtp:
             _run(d._send_to_channels("subj", "body", settings_obj))
-            mock_smtp.assert_awaited_once_with(["a@b.com"], "subj", "body")
+            mock_smtp.assert_called_once_with(["a@b.com"], "subj", "body")
 
     def test_smtp_emails_as_json_string(self):
         d, _ = _make_dispatcher()
         settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails='["a@b.com","c@d.com"]')
-        with patch.object(d, "_send_smtp", new_callable=AsyncMock) as mock_smtp:
+        with patch.object(d, "_send_smtp", new_callable=MagicMock) as mock_smtp:
             _run(d._send_to_channels("subj", "body", settings_obj))
-            mock_smtp.assert_awaited_once_with(["a@b.com", "c@d.com"], "subj", "body")
+            mock_smtp.assert_called_once_with(["a@b.com", "c@d.com"], "subj", "body")
 
     def test_smtp_emails_as_plain_string(self):
         """Non-JSON string treated as a single email address."""
         d, _ = _make_dispatcher()
         settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails="a@b.com")
-        with patch.object(d, "_send_smtp", new_callable=AsyncMock) as mock_smtp:
+        with patch.object(d, "_send_smtp", new_callable=MagicMock) as mock_smtp:
             _run(d._send_to_channels("subj", "body", settings_obj))
-            mock_smtp.assert_awaited_once_with(["a@b.com"], "subj", "body")
+            mock_smtp.assert_called_once_with(["a@b.com"], "subj", "body")
 
     def test_smtp_error_swallowed(self):
         """SMTP failures are caught and logged — do not propagate."""
         d, _ = _make_dispatcher()
         settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails=["a@b.com"])
-        with patch.object(d, "_send_smtp", new_callable=AsyncMock, side_effect=RuntimeError("conn refused")):
+        with patch.object(d, "_send_smtp", new_callable=MagicMock, side_effect=RuntimeError("conn refused")):
             _run(d._send_to_channels("subj", "body", settings_obj))  # must not raise
 
     def test_teams_called_when_configured(self):
@@ -124,12 +124,12 @@ class TestSendToChannels:
             slack_webhook_url="https://hooks.slack.com/xxx",
         )
         with (
-            patch.object(d, "_send_smtp", new_callable=AsyncMock) as smtp,
+            patch.object(d, "_send_smtp", new_callable=MagicMock) as smtp,
             patch.object(d, "_send_teams_webhook", new_callable=AsyncMock) as teams,
             patch.object(d, "_send_slack_webhook", new_callable=AsyncMock) as slack,
         ):
             _run(d._send_to_channels("subj", "body", settings_obj))
-            smtp.assert_awaited_once()
+            smtp.assert_called_once()
             teams.assert_awaited_once()
             slack.assert_awaited_once()
 
@@ -215,7 +215,7 @@ class TestSendSmtp:
         mock_server.__exit__ = MagicMock(return_value=None)
 
         with patch("smtplib.SMTP", return_value=mock_server):
-            _run(d._send_smtp(["a@b.com"], "Subject", "Body"))
+            d._send_smtp(["a@b.com"], "Subject", "Body")
 
         mock_server.sendmail.assert_called_once()
 
@@ -234,7 +234,7 @@ class TestSendSmtp:
             mock_settings.SMTP_PORT = 587
             mock_settings.SMTP_USER = "user"
             mock_settings.SMTP_PASSWORD = "pass"
-            _run(d._send_smtp(["a@b.com"], "Subject", "Body"))
+            d._send_smtp(["a@b.com"], "Subject", "Body")
 
         mock_server.login.assert_called_once_with("user", "pass")
         mock_server.sendmail.assert_called_once()
@@ -294,9 +294,9 @@ class TestPublicAPI:
         finding.description = "Multi-factor authentication is not enforced."
         settings_obj = _make_settings_obj(smtp_enabled=True, smtp_to_emails=["sec@corp.com"])
 
-        with patch.object(d, "_send_smtp", new_callable=AsyncMock) as mock_smtp:
+        with patch.object(d, "_send_smtp", new_callable=MagicMock) as mock_smtp:
             _run(d.send_finding_alert(finding, settings_obj))
-            mock_smtp.assert_awaited_once()
+            mock_smtp.assert_called_once()
             # _send_smtp is called with (to_emails, subject, body)
             args = mock_smtp.call_args[0]
             subject = args[1]

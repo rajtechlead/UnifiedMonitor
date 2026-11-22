@@ -109,17 +109,15 @@ def get_audit_logger() -> structlog.BoundLogger:
     return _audit_logger
 
 
-async def log_audit_event(
+def log_audit_event(
     *,
     action: str,
     tenant_id: str | None = None,
     user_id: str | None = None,
     resource_type: str | None = None,
     resource_id: str | None = None,
-    payload: dict | None = None,
-    ip_address: str | None = None,
 ) -> None:
-    """Log an audit event to both structlog and the DB."""
+    """Write an audit event to the audit logger."""
     get_audit_logger().info(
         action,
         tenant_id=tenant_id,

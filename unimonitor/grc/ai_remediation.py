@@ -162,7 +162,6 @@ async def generate_remediation(
     category: str,
     state: str,
     control_id: str,
-    tenant_context: dict | None = None,
 ) -> dict[str, Any]:
     """
     Generate AI-powered remediation for a finding.

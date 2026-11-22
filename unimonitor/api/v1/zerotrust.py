@@ -231,7 +231,7 @@ def _check_response(check: Any) -> CheckResponse:
     )
 
 
-@router.get("/summary")
+@router.get("/summary", responses={400: {"description": "Bad request"}})
 async def zerotrust_summary(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -287,7 +287,7 @@ async def zerotrust_summary(
     )
 
 
-@router.get("/checks")
+@router.get("/checks", responses={400: {"description": "Bad request"}})
 async def zerotrust_checks(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -422,7 +422,7 @@ async def zerotrust_evidence_gaps(
     return GapsResponse(platforms=platforms, generated_at=datetime.now().astimezone())
 
 
-@router.get("/runs")
+@router.get("/runs", responses={400: {"description": "Bad request"}})
 async def zerotrust_runs(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -477,7 +477,7 @@ async def zerotrust_import(
     return response
 
 
-@router.post("/run", responses={404: {"description": "Not found"}})
+@router.post("/run", responses={400: {"description": "Bad request"}, 404: {"description": "Not found"}})
 async def zerotrust_run_platform(
     body: RunRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
@@ -514,7 +514,7 @@ async def zerotrust_run_platform(
     return response
 
 
-@router.post("/run-all")
+@router.post("/run-all", responses={400: {"description": "Bad request"}})
 async def zerotrust_run_all(
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -554,7 +554,7 @@ async def zerotrust_run_all(
     return RunAllResponse(runs=runs, skipped=skipped)
 
 
-@router.get("/script", response_class=PlainTextResponse, responses={404: {"description": "Not found"}})
+@router.get("/script", response_class=PlainTextResponse, responses={400: {"description": "Bad request"}, 404: {"description": "Not found"}})
 async def zerotrust_script(current_user: Annotated[Any, Depends(get_current_user)]) -> PlainTextResponse:
     """The PowerShell runner, so the page can offer it for download."""
     if not SCRIPT_PATH.exists():

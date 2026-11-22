@@ -27,9 +27,48 @@ DEFAULT_SOURCE = ROOT / "reference" / "zerotrustassessment" / "src" / "powershel
 DEFAULT_OUTPUT = ROOT / "unimonitor" / "zerotrust" / "microsoft_tests.py"
 
 _ATTRIBUTE = re.compile(r"\[ZtTest\((.*?)\)\]", re.DOTALL)
-# Unrolled PowerShell single-quoted string: linear, unlike (?:[^']|'')*, which
-# backtracks super-linearly on long unterminated input.
-_FIELD = re.compile(r"(\w+)\s*=\s*('[^']*+(?:''[^']*+)*+'|\([^)]*\)|\d+)")
+# The value is read by _literal_at rather than by the pattern: matching a quoted
+# string with a repeated inner group backtracks super-linearly on unterminated
+# input, and no PowerShell-literal regex avoids that.
+_FIELD = re.compile(r"(\w+)\s*=\s*")
+
+
+def _literal_at(text: str, index: int) -> str:
+    """Read one PowerShell literal starting at *index*: '...', (...) or a number."""
+    while index < len(text) and text[index].isspace():
+        index += 1
+    start = index
+    if index < len(text) and text[index] == "'":
+        index += 1
+        while index < len(text):
+            if text[index] == "'":
+                # A doubled quote is an escaped apostrophe inside the string.
+                if index + 1 < len(text) and text[index + 1] == "'":
+                    index += 2
+                    continue
+                return text[start : index + 1]
+            index += 1
+        return text[start:]
+    if index < len(text) and text[index] == "(":
+        depth = 0
+        while index < len(text):
+            if text[index] == "(":
+                depth += 1
+            elif text[index] == ")":
+                depth -= 1
+                if depth == 0:
+                    return text[start : index + 1]
+            index += 1
+        return text[start:]
+    while index < len(text) and text[index] not in ",)":
+        index += 1
+    return text[start:index].strip()
+
+
+def _fields(text: str) -> list[tuple[str, str]]:
+    """(name, raw value) for every ``Name = value`` in a [ZtTest(...)] block."""
+    return [(match.group(1), _literal_at(text, match.end())) for match in _FIELD.finditer(text)]
+
 
 # Upstream pillars whose spelling differs from UniMonitor's pillar ids.
 _PILLARS = {
@@ -73,7 +112,7 @@ def _parse(path: Path) -> dict[str, str] | None:
     attributes = _ATTRIBUTE.search(path.read_text(encoding="utf-8-sig"))
     if attributes is None:
         return None
-    fields = {name: _values(raw) for name, raw in _FIELD.findall(attributes.group(1))}
+    fields = {name: _values(raw) for name, raw in _fields(attributes.group(1))}
 
     def first(name: str) -> str:
         values = fields.get(name) or []

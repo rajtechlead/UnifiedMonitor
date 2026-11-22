@@ -94,7 +94,7 @@ class AssessmentEngine:
                 nonlocal evaluated, passed
                 try:
                     async with self._semaphore:
-                        finding = await self._evaluate_control(
+                        finding = self._evaluate_control(
                             control_def=control_def,
                             collected_data=collected_data,
                             run_id=run.id,
@@ -170,7 +170,7 @@ class AssessmentEngine:
         if pruned:
             logger.info("Control snapshots pruned", extra={"rows": pruned, "retention_days": retention_days})
 
-    async def _evaluate_control(
+    def _evaluate_control(
         self,
         control_def: ControlDefinition,
         collected_data: dict[str, Any],

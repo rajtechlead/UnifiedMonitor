@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -87,7 +88,7 @@ class NotificationDispatcher:
         if not emails:
             return
         try:
-            await self._send_smtp(emails, subject, body)
+            await asyncio.to_thread(self._send_smtp, emails, subject, body)
         except Exception as exc:
             logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
@@ -109,8 +110,8 @@ class NotificationDispatcher:
         except Exception as exc:
             logger.error("Slack webhook failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
 
-    async def _send_smtp(self, to_emails: list[str], subject: str, body: str) -> None:
-        """Send via SMTP using smtplib (sync fallback)."""
+    def _send_smtp(self, to_emails: list[str], subject: str, body: str) -> None:
+        """Send via SMTP using smtplib; blocking, so callers run it in a thread."""
         import smtplib
         from email.mime.multipart import MIMEMultipart
         from email.mime.text import MIMEText

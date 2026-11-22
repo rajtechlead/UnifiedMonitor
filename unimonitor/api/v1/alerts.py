@@ -161,7 +161,11 @@ async def _tenant_for(db: AsyncSession, tenant_id: str | None) -> str:
     return first
 
 
-@router.post("/policies", status_code=status.HTTP_201_CREATED, responses={422: {"description": "Unprocessable entity"}})
+@router.post(
+    "/policies",
+    status_code=status.HTTP_201_CREATED,
+    responses={409: {"description": "No tenant is configured"}, 422: {"description": "Unprocessable entity"}},
+)
 async def create_policy(
     body: PolicyRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -200,7 +204,11 @@ async def create_policy(
     return PolicyResponse.model_validate(policy)
 
 
-@router.post("/policies/from-template", status_code=status.HTTP_201_CREATED, responses={404: {"description": "Not found"}})
+@router.post(
+    "/policies/from-template",
+    status_code=status.HTTP_201_CREATED,
+    responses={404: {"description": "Not found"}, 409: {"description": "No tenant is configured"}},
+)
 async def create_policy_from_template(
     body: TemplateRequest,
     current_user: Annotated[Any, Depends(require_role("analyst"))],
@@ -280,7 +288,7 @@ async def delete_policy(
     await db.flush()
 
 
-@router.post("/evaluate")
+@router.post("/evaluate", responses={409: {"description": "No tenant is configured"}})
 async def evaluate_now(
     current_user: Annotated[Any, Depends(require_role("analyst"))],
     db: Annotated[AsyncSession, Depends(get_db)],

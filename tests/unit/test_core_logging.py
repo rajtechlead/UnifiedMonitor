@@ -102,15 +102,12 @@ class TestGetLogger:
 
     def test_log_audit_event(self):
         """log_audit_event should not raise."""
-        _run(
-            __import__("unimonitor.core.logging", fromlist=["log_audit_event"]).log_audit_event(
-                action="user.login",
-                tenant_id="t1",
-                user_id="u1",
-                resource_type="user",
-                resource_id="u1",
-                ip_address="1.2.3.4",
-            )
+        __import__("unimonitor.core.logging", fromlist=["log_audit_event"]).log_audit_event(
+            action="user.login",
+            tenant_id="t1",
+            user_id="u1",
+            resource_type="user",
+            resource_id="u1",
         )
 
 

@@ -36,8 +36,8 @@ GWS_ADMIN = "https://admin.googleapis.com/admin"
 # ── AWS ────────────────────────────────────────────────────────────────────
 
 
-def _aws_snapshot(session: Any) -> dict[str, Any]:
-    """Blocking boto3 calls; runs in a worker thread."""
+def _aws_iam_snapshot(session: Any) -> dict[str, Any]:
+    """Account summary, password policy and user access keys."""
     data: dict[str, Any] = {}
 
     iam = session.client("iam")
@@ -71,24 +71,37 @@ def _aws_snapshot(session: Any) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.debug("AWS access keys failed", error=str(exc))
 
+    return data
+
+
+def _aws_bucket_row(s3: Any, name: str) -> dict[str, Any]:
+    """One S3 bucket with its public-access-block and encryption settings."""
+    row: dict[str, Any] = {"Name": name}
+    try:
+        row["PublicAccessBlock"] = s3.get_public_access_block(Bucket=name).get("PublicAccessBlockConfiguration", {})
+    except Exception:  # noqa: BLE001
+        row["PublicAccessBlock"] = {}
+    try:
+        row["Encryption"] = s3.get_bucket_encryption(Bucket=name).get("ServerSideEncryptionConfiguration", {})
+    except Exception:  # noqa: BLE001
+        row["Encryption"] = {}
+    return row
+
+
+def _aws_storage_snapshot(session: Any) -> dict[str, Any]:
+    """S3 buckets and their exposure/encryption configuration."""
+    data: dict[str, Any] = {}
     try:
         s3 = session.client("s3")
-        buckets = []
-        for bucket in s3.list_buckets().get("Buckets", []):
-            name = bucket.get("Name", "")
-            row: dict[str, Any] = {"Name": name}
-            try:
-                row["PublicAccessBlock"] = s3.get_public_access_block(Bucket=name).get("PublicAccessBlockConfiguration", {})
-            except Exception:  # noqa: BLE001
-                row["PublicAccessBlock"] = {}
-            try:
-                row["Encryption"] = s3.get_bucket_encryption(Bucket=name).get("ServerSideEncryptionConfiguration", {})
-            except Exception:  # noqa: BLE001
-                row["Encryption"] = {}
-            buckets.append(row)
-        data["aws_s3_buckets"] = buckets
+        data["aws_s3_buckets"] = [_aws_bucket_row(s3, bucket.get("Name", "")) for bucket in s3.list_buckets().get("Buckets", [])]
     except Exception as exc:  # noqa: BLE001
         logger.debug("AWS S3 failed", error=str(exc))
+    return data
+
+
+def _aws_audit_snapshot(session: Any) -> dict[str, Any]:
+    """CloudTrail, GuardDuty, Config and Security Hub state."""
+    data: dict[str, Any] = {}
 
     try:
         ct = session.client("cloudtrail")
@@ -123,7 +136,13 @@ def _aws_snapshot(session: Any) -> dict[str, Any]:
     except Exception:  # noqa: BLE001
         data["aws_securityhub_enabled"] = False
 
-    # ── Zero Trust architecture evidence ──────────────────────────────────
+    return data
+
+
+def _aws_network_snapshot(session: Any) -> dict[str, Any]:
+    """Security groups, flow logs and customer-managed KMS keys."""
+    data: dict[str, Any] = {}
+
     try:
         ec2 = session.client("ec2")
         data["aws_security_groups"] = [
@@ -164,6 +183,13 @@ def _aws_snapshot(session: Any) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.debug("AWS KMS failed", error=str(exc))
 
+    return data
+
+
+def _aws_governance_snapshot(session: Any) -> dict[str, Any]:
+    """Systems Manager coverage, Access Analyzer and Organizations policies."""
+    data: dict[str, Any] = {}
+
     try:
         managed = session.client("ssm").describe_instance_information().get("InstanceInformationList", [])
         data["aws_managed_instances"] = [
@@ -185,6 +211,14 @@ def _aws_snapshot(session: Any) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001
         logger.debug("AWS Organizations failed", error=str(exc))
 
+    return data
+
+
+def _aws_snapshot(session: Any) -> dict[str, Any]:
+    """Blocking boto3 calls; runs in a worker thread."""
+    data: dict[str, Any] = {}
+    for section in (_aws_iam_snapshot, _aws_storage_snapshot, _aws_audit_snapshot, _aws_network_snapshot, _aws_governance_snapshot):
+        data.update(section(session))
     return data
 
 
@@ -247,6 +281,128 @@ async def _rest(client: httpx.AsyncClient, url: str, token: str, params: dict | 
         return {}
 
 
+async def _gcp_identity(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Project IAM bindings and user-managed service-account keys."""
+    data: dict[str, Any] = {}
+
+    policy = await _rest(client, f"{GCP_BASE}/projects/{project_id}:getIamPolicy", token)
+    if policy:
+        data["gcp_project_iam_bindings"] = [
+            {"role": binding.get("role", ""), "members": binding.get("members", [])} for binding in policy.get("bindings", [])
+        ]
+
+    sa_list = await _rest(client, f"{GCP_BASE}/projects/{project_id}/serviceAccounts", token)
+    emails = [sa.get("email", "") for sa in sa_list.get("accounts", [])]
+    keys = []
+    for email in emails[:50]:
+        key_payload = await _rest(client, f"{GCP_BASE}/projects/{project_id}/serviceAccounts/{email}/keys", token)
+        for key in key_payload.get("keys", []):
+            if str(key.get("keyType", "")).upper().startswith("USER"):
+                keys.append(
+                    {
+                        "name": key.get("name", ""),
+                        "keyType": key.get("keyType", ""),
+                        "validAfterTime": key.get("validAfterTime", ""),
+                        "serviceAccount": email,
+                    }
+                )
+    if keys:
+        data["gcp_service_account_keys"] = keys
+
+    return data
+
+
+async def _gcp_network(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Firewall rules, subnetworks and backend services."""
+    data: dict[str, Any] = {}
+
+    firewalls = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/global/firewalls", token)
+    if firewalls:
+        data["gcp_firewall_rules"] = [
+            {
+                "name": fw.get("name", ""),
+                "direction": fw.get("direction", "INGRESS"),
+                "sourceRanges": fw.get("sourceRanges", []),
+                "allowed": fw.get("allowed", []),
+            }
+            for fw in firewalls.get("items", [])
+        ]
+
+    backends = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/global/backendServices", token)
+    if backends:
+        data["gcp_backend_services"] = [{"name": item.get("name", ""), "iap": item.get("iap", {})} for item in backends.get("items", [])]
+
+    subnetworks = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/aggregated/subnetworks", token)
+    if subnetworks:
+        data["gcp_subnetworks"] = list(subnetworks.get("items", {}).values())
+
+    return data
+
+
+async def _gcp_logging(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Audit-log sinks and organization policies."""
+    data: dict[str, Any] = {}
+
+    sinks = await _rest(client, f"{GCP_BASE.replace('resourcemanager', 'logging')}/projects/{project_id}/sinks", token)
+    if sinks:
+        data["gcp_audit_log_sinks"] = [
+            {"name": s.get("name", ""), "destination": s.get("destination", ""), "filter": s.get("filter", "")} for s in sinks.get("sinks", [])
+        ]
+
+    org_policies = await _rest(client, f"{GCP_BASE}/projects/{project_id}:getOrgPolicy", token)
+    if org_policies:
+        data["gcp_org_policies"] = org_policies.get("constraints", [])
+
+    return data
+
+
+async def _gcp_storage(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Storage buckets and KMS keys."""
+    data: dict[str, Any] = {}
+
+    buckets = await _rest(client, f"{GCP_STORAGE}/b/{project_id}", token)
+    if buckets:
+        data["gcp_storage_buckets"] = [
+            {
+                "name": b.get("name", ""),
+                "iamConfiguration": b.get("iamConfiguration", {}),
+                "encryption": b.get("encryption", {}),
+            }
+            for b in buckets.get("items", [])
+        ]
+
+    kms = await _rest(client, f"{GCP_KMS}/projects/{project_id}/locations/-/keyRings/-/cryptoKeys", token)
+    if kms:
+        data["gcp_kms_keys"] = [
+            {"name": k.get("name", ""), "purpose": k.get("purpose", ""), "rotationPeriod": k.get("rotationPeriod", "")}
+            for k in kms.get("cryptoKeys", [])
+        ]
+
+    return data
+
+
+async def _gcp_zero_trust(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Security Command Center sources and Access Context Manager levels."""
+    data: dict[str, Any] = {}
+
+    scc = await _rest(client, f"https://securitycenter.googleapis.com/v1/projects/{project_id}/sources", token)
+    if scc:
+        data["gcp_scc_sources"] = [{"name": item.get("name", ""), "displayName": item.get("displayName", "")} for item in scc.get("sources", [])]
+
+    access_policies = await _rest(client, "https://accesscontextmanager.googleapis.com/v1/accessPolicies", token)
+    policies = access_policies.get("accessPolicies", []) if access_policies else []
+    if policies:
+        policy_name = policies[0].get("name", "")
+        data["gcp_access_levels"] = (await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/accessLevels", token)).get(
+            "accessLevels", []
+        )
+        data["gcp_service_perimeters"] = (
+            await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/servicePerimeters", token)
+        ).get("servicePerimeters", [])
+
+    return data
+
+
 async def collect_gcp(
     project_id: str | None = None,
     token: str | None = None,
@@ -266,94 +422,8 @@ async def collect_gcp(
     client = client or httpx.AsyncClient(timeout=20)
 
     try:
-        policy = await _rest(client, f"{GCP_BASE}/projects/{project_id}:getIamPolicy", token)
-        if policy:
-            bindings = []
-            for binding in policy.get("bindings", []):
-                bindings.append({"role": binding.get("role", ""), "members": binding.get("members", [])})
-            data["gcp_project_iam_bindings"] = bindings
-
-        sa_list = await _rest(client, f"{GCP_BASE}/projects/{project_id}/serviceAccounts", token)
-        emails = [sa.get("email", "") for sa in sa_list.get("accounts", [])]
-        keys = []
-        for email in emails[:50]:
-            key_payload = await _rest(client, f"{GCP_BASE}/projects/{project_id}/serviceAccounts/{email}/keys", token)
-            for key in key_payload.get("keys", []):
-                if str(key.get("keyType", "")).upper().startswith("USER"):
-                    keys.append(
-                        {
-                            "name": key.get("name", ""),
-                            "keyType": key.get("keyType", ""),
-                            "validAfterTime": key.get("validAfterTime", ""),
-                            "serviceAccount": email,
-                        }
-                    )
-        if emissions := keys:
-            data["gcp_service_account_keys"] = emissions
-
-        firewalls = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/global/firewalls", token)
-        if firewalls:
-            data["gcp_firewall_rules"] = [
-                {
-                    "name": fw.get("name", ""),
-                    "direction": fw.get("direction", "INGRESS"),
-                    "sourceRanges": fw.get("sourceRanges", []),
-                    "allowed": fw.get("allowed", []),
-                }
-                for fw in firewalls.get("items", [])
-            ]
-
-        sinks = await _rest(client, f"{GCP_BASE.replace('resourcemanager', 'logging')}/projects/{project_id}/sinks", token)
-        if sinks:
-            data["gcp_audit_log_sinks"] = [
-                {"name": s.get("name", ""), "destination": s.get("destination", ""), "filter": s.get("filter", "")} for s in sinks.get("sinks", [])
-            ]
-
-        buckets = await _rest(client, f"{GCP_STORAGE}/b/{project_id}", token)
-        if buckets:
-            data["gcp_storage_buckets"] = [
-                {
-                    "name": b.get("name", ""),
-                    "iamConfiguration": b.get("iamConfiguration", {}),
-                    "encryption": b.get("encryption", {}),
-                }
-                for b in buckets.get("items", [])
-            ]
-
-        kms = await _rest(client, f"{GCP_KMS}/projects/{project_id}/locations/-/keyRings/-/cryptoKeys", token)
-        if kms:
-            data["gcp_kms_keys"] = [
-                {"name": k.get("name", ""), "purpose": k.get("purpose", ""), "rotationPeriod": k.get("rotationPeriod", "")}
-                for k in kms.get("cryptoKeys", [])
-            ]
-
-        org_policies = await _rest(client, f"{GCP_BASE}/projects/{project_id}:getOrgPolicy", token)
-        if org_policies:
-            data["gcp_org_policies"] = org_policies.get("constraints", [])
-
-        subnetworks = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/aggregated/subnetworks", token)
-        if subnetworks:
-            data["gcp_subnetworks"] = list(subnetworks.get("items", {}).values())
-
-        # ── Zero Trust architecture evidence ──────────────────────────────
-        backends = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/global/backendServices", token)
-        if backends:
-            data["gcp_backend_services"] = [{"name": item.get("name", ""), "iap": item.get("iap", {})} for item in backends.get("items", [])]
-
-        scc = await _rest(client, f"https://securitycenter.googleapis.com/v1/projects/{project_id}/sources", token)
-        if scc:
-            data["gcp_scc_sources"] = [{"name": item.get("name", ""), "displayName": item.get("displayName", "")} for item in scc.get("sources", [])]
-
-        access_policies = await _rest(client, "https://accesscontextmanager.googleapis.com/v1/accessPolicies", token)
-        policies = access_policies.get("accessPolicies", []) if access_policies else []
-        if policies:
-            policy_name = policies[0].get("name", "")
-            data["gcp_access_levels"] = (
-                await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/accessLevels", token)
-            ).get("accessLevels", [])
-            data["gcp_service_perimeters"] = (
-                await _rest(client, f"https://accesscontextmanager.googleapis.com/v1/{policy_name}/servicePerimeters", token)
-            ).get("servicePerimeters", [])
+        for section in (_gcp_identity, _gcp_network, _gcp_logging, _gcp_storage, _gcp_zero_trust):
+            data.update(await section(client, project_id, token))
     finally:
         if owns_client:
             await client.aclose()

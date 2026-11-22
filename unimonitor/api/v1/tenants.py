@@ -226,35 +226,14 @@ async def tenant_rollup(
     from unimonitor.db.base import async_session_factory
 
     async with async_session_factory() as session:
-        from sqlalchemy import func, select
-
         from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
-        from unimonitor.db.models.finding import Finding
         from unimonitor.db.repositories.assessment_repo import AssessmentRepository
         from unimonitor.db.repositories.tenant_repo import TenantRepository
 
         tenants, _ = await TenantRepository(session).list_paginated(page=1, page_size=200, is_active=True)
 
-        open_rows = (
-            await session.execute(
-                select(Finding.tenant_id, Finding.severity, func.count(Finding.id))
-                .where(
-                    Finding.is_suppressed.is_(False),
-                    Finding.state.in_(["not_implemented", "partially_implemented"]),
-                )
-                .group_by(Finding.tenant_id, Finding.severity)
-            )
-        ).all()
-        open_by_tenant: dict[str, dict[str, int]] = {}
-        for tenant_id, severity, count in open_rows:
-            open_by_tenant.setdefault(tenant_id, {})[severity] = count
-
-        suppressed_rows = (
-            await session.execute(
-                select(Finding.tenant_id, func.count(Finding.id)).where(Finding.is_suppressed.is_(True)).group_by(Finding.tenant_id)
-            )
-        ).all()
-        suppressed_by_tenant = dict(suppressed_rows)
+        open_by_tenant = await _open_findings_by_tenant(session)
+        suppressed_by_tenant = await _suppressed_findings_by_tenant(session)
 
         framework_names = {fw["id"]: fw["name"] for fw in SUPPORTED_FRAMEWORKS}
         assessment_repo = AssessmentRepository(session)
@@ -291,20 +270,59 @@ async def tenant_rollup(
                 )
             )
 
-    reported = [row for row in rows if row.security_score > 0 or row.open_findings]
     return TenantRollupResponse(
         tenants=sorted(rows, key=lambda row: (row.critical, row.high, row.open_findings), reverse=True),
-        totals=TenantRollupTotals(
-            tenants=len(rows),
-            mean_security_score=round(sum(row.security_score for row in rows) / len(rows), 2) if rows else 0.0,
-            mean_compliance_score=round(sum(row.compliance_score for row in rows) / len(rows), 2) if rows else 0.0,
-            open_findings=sum(row.open_findings for row in rows),
-            critical=sum(row.critical for row in rows),
-            high=sum(row.high for row in rows),
-            coverage_pct=round(sum(row.coverage_pct for row in reported) / len(reported), 2) if reported else 0.0,
-            collection_failures=sum(1 for row in rows if row.last_collection_status == "failed"),
-        ),
+        totals=_rollup_totals(rows),
         generated_at=datetime.now(UTC),
+    )
+
+
+async def _open_findings_by_tenant(session: Any) -> dict[str, dict[str, int]]:
+    """Open finding counts per tenant, keyed by severity."""
+    from sqlalchemy import func, select
+
+    from unimonitor.db.models.finding import Finding
+
+    rows = (
+        await session.execute(
+            select(Finding.tenant_id, Finding.severity, func.count(Finding.id))
+            .where(
+                Finding.is_suppressed.is_(False),
+                Finding.state.in_(["not_implemented", "partially_implemented"]),
+            )
+            .group_by(Finding.tenant_id, Finding.severity)
+        )
+    ).all()
+    open_by_tenant: dict[str, dict[str, int]] = {}
+    for tenant_id, severity, count in rows:
+        open_by_tenant.setdefault(tenant_id, {})[severity] = count
+    return open_by_tenant
+
+
+async def _suppressed_findings_by_tenant(session: Any) -> dict[str, int]:
+    """Suppressed finding counts per tenant."""
+    from sqlalchemy import func, select
+
+    from unimonitor.db.models.finding import Finding
+
+    rows = (
+        await session.execute(select(Finding.tenant_id, func.count(Finding.id)).where(Finding.is_suppressed.is_(True)).group_by(Finding.tenant_id))
+    ).all()
+    return dict(rows)
+
+
+def _rollup_totals(rows: list[TenantRollupRow]) -> TenantRollupTotals:
+    """Managed totals across every tenant row."""
+    reported = [row for row in rows if row.security_score > 0 or row.open_findings]
+    return TenantRollupTotals(
+        tenants=len(rows),
+        mean_security_score=round(sum(row.security_score for row in rows) / len(rows), 2) if rows else 0.0,
+        mean_compliance_score=round(sum(row.compliance_score for row in rows) / len(rows), 2) if rows else 0.0,
+        open_findings=sum(row.open_findings for row in rows),
+        critical=sum(row.critical for row in rows),
+        high=sum(row.high for row in rows),
+        coverage_pct=round(sum(row.coverage_pct for row in reported) / len(reported), 2) if reported else 0.0,
+        collection_failures=sum(1 for row in rows if row.last_collection_status == "failed"),
     )
 
 
@@ -590,7 +608,7 @@ async def test_connection(
 
             tenant_name = org_data.get("displayName", "Unknown") if isinstance(org_data, dict) else "Unknown"
             plans = org_data.get("assignedPlans", []) if isinstance(org_data, dict) else []
-            licensed_products = list({p.get("service", "") for p in plans if p.get("capabilityStatus") == "Enabled"})
+            licensed_products = sorted({p.get("service", "") for p in plans if p.get("capabilityStatus") == "Enabled"})
 
             # Test permission scopes via /v1.0/oauth2PermissionGrants or just probe endpoints
             permissions_granted = []
@@ -618,7 +636,7 @@ async def test_connection(
             return ConnectionTestResponse(
                 success=True,
                 tenant_name=tenant_name,
-                licensed_products=sorted(licensed_products),
+                licensed_products=licensed_products,
                 permissions_granted=permissions_granted,
                 permissions_missing=permissions_missing,
             )

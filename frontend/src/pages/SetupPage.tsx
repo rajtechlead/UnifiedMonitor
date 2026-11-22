@@ -23,6 +23,11 @@ const input: React.CSSProperties = {
   border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
   color: 'var(--color-text)', outline: 'none',
 }
+const primaryBtn: React.CSSProperties = {
+  marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8,
+  padding: '10px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
+  background: 'var(--color-brand)', color: '#fff', fontSize: 13, fontWeight: 600,
+}
 
 function AlreadyConfigured({ status, onGo }: Readonly<{ status: SetupStatus; onGo: () => void }>) {
   return (
@@ -62,6 +67,177 @@ function StepHeader({ n, title, active, done }: Readonly<{ n: number; title: str
 function errorDetail(err: unknown, fallback: string) {
   const response = (err as { response?: { data?: { detail?: string }; status?: number } })?.response
   return response?.data?.detail || (response?.status ? `${fallback} (HTTP ${response.status})` : fallback)
+}
+
+function AdminStep({
+  step, isAuthenticated, email, password, organisation, error, busy, onEmail, onPassword, onOrganisation, onCreate,
+}: Readonly<{
+  step: number
+  isAuthenticated: boolean
+  email: string
+  password: string
+  organisation: string
+  error: string
+  busy: boolean
+  onEmail: (value: string) => void
+  onPassword: (value: string) => void
+  onOrganisation: (value: string) => void
+  onCreate: () => void
+}>) {
+  return (
+    <div style={card}>
+      <StepHeader n={1} title="Administrator account" active={step === 1} done={step > 1} />
+      {step === 1 ? (
+        <div>
+          <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 14 }}>
+            <Database size={13} /> The database is created automatically. This account signs in to this install.
+          </p>
+          <label htmlFor="admin-email" style={label}>Email</label>
+          <input id="admin-email" style={input} value={email} onChange={(e) => onEmail(e.target.value)} placeholder="admin@example.com" />
+          <div style={{ height: 10 }} />
+          <label htmlFor="admin-password" style={label}>Password (at least 12 characters)</label>
+          <input id="admin-password" style={input} type="password" value={password} onChange={(e) => onPassword(e.target.value)} />
+          <div style={{ height: 10 }} />
+          <label htmlFor="admin-organisation" style={label}>Organisation (optional)</label>
+          <input id="admin-organisation" style={input} value={organisation} onChange={(e) => onOrganisation(e.target.value)} placeholder="Contoso Ltd" />
+          {error && <p style={{ color: 'var(--color-high)', fontSize: 13, marginTop: 12 }}>{error}</p>}
+          <button onClick={onCreate} disabled={busy || !email || password.length < 12} style={primaryBtn}>
+            <UserPlus size={15} /> {busy ? 'Creating…' : 'Create administrator'}
+          </button>
+        </div>
+      ) : (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+          {isAuthenticated ? 'Administrator created.' : 'Administrator already exists.'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function PlatformsStep({
+  step, platforms, selected, connections, error, onToggle, onContinue,
+}: Readonly<{
+  step: number
+  platforms: Platform[]
+  selected: string[]
+  connections: Record<string, Connection>
+  error: string
+  onToggle: (id: string) => void
+  onContinue: () => void
+}>) {
+  const selectedPlatforms = platforms.filter((p) => selected.includes(p.id))
+  return (
+    <div style={card}>
+      <StepHeader n={2} title="Platforms to monitor" active={step === 2} done={step > 2} />
+      {step === 2 ? (
+        <div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
+            {platforms.map((p) => {
+              const checked = selected.includes(p.id) || Boolean(connections[p.id])
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onToggle(p.id)}
+                  style={{
+                    textAlign: 'left', padding: 14, borderRadius: 10, cursor: 'pointer',
+                    border: `1px solid ${checked ? p.colour : 'var(--color-border)'}`,
+                    background: checked ? `${p.colour}14` : 'var(--color-surface-2)',
+                    color: 'var(--color-text)',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
+                    <input type="checkbox" checked={checked} readOnly tabIndex={-1} />
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{p.description}</div>
+                </button>
+              )
+            })}
+          </div>
+          {error && <p style={{ color: 'var(--color-high)', fontSize: 13, marginTop: 12 }}>{error}</p>}
+          <button
+            onClick={onContinue}
+            disabled={selected.length === 0}
+            style={{ ...primaryBtn, opacity: selected.length === 0 ? 0.5 : 1 }}
+          >
+            Continue <ChevronRight size={15} />
+          </button>
+          {selected.length === 0 && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
+              Select at least one platform.
+            </p>
+          )}
+        </div>
+      ) : (
+        <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
+          {selectedPlatforms.map((p) => p.name).join(', ') || 'None selected'}
+        </p>
+      )}
+    </div>
+  )
+}
+
+function ConnectStep({
+  step, status, selectedPlatforms, connections, useSharedGoogle, allSelectedConnected, onUseSeparateAccounts, onConnected, onFinish,
+}: Readonly<{
+  step: number
+  status: SetupStatus
+  selectedPlatforms: Platform[]
+  connections: Record<string, Connection>
+  useSharedGoogle: boolean
+  allSelectedConnected: boolean
+  onUseSeparateAccounts: () => void
+  onConnected: () => Promise<void>
+  onFinish: () => void
+}>) {
+  return (
+    <div style={{ ...card, opacity: step < 3 ? 0.6 : 1 }}>
+      <StepHeader n={3} title="Connect" active={step === 3} done={step > 3} />
+      {step === 3 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {useSharedGoogle && (
+            <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Plug size={15} color="#4285F4" />
+                <span style={{ fontSize: 14, fontWeight: 600 }}>Google Cloud + Google Workspace</span>
+              </div>
+              <GoogleSharedConnector onConnected={() => { void onConnected() }} />
+              <button
+                onClick={onUseSeparateAccounts}
+                style={{ marginTop: 10, background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer', padding: 0 }}
+              >
+                Use separate service accounts instead
+              </button>
+            </div>
+          )}
+          {selectedPlatforms.filter((p) => !(useSharedGoogle && (p.id === 'gcp' || p.id === 'google_workspace'))).map((p) => (
+            <div key={p.id} style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <Plug size={15} color={p.colour} />
+                <span style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</span>
+              </div>
+              <PlatformConnector platform={p} connected={connections[p.id]} onConnected={onConnected} />
+            </div>
+          ))}
+          {status.manual_follow_up && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{status.manual_follow_up}</p>
+          )}
+          <button
+            onClick={onFinish}
+            disabled={!allSelectedConnected}
+            style={{ ...primaryBtn, opacity: allSelectedConnected ? 1 : 0.5 }}
+          >
+            Finish setup <ChevronRight size={15} />
+          </button>
+          {!allSelectedConnected && (
+            <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+              Connect every selected platform to finish — or remove one from step 2.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  )
 }
 
 /**
@@ -170,137 +346,42 @@ export default function SetupPage() {
           </p>
         </div>
 
-        {/* ── Step 1 — administrator ─────────────────────────────────────── */}
-        <div style={card}>
-          <StepHeader n={1} title="Administrator account" active={step === 1} done={step > 1} />
-          {step === 1 ? (
-            <div>
-              <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 14 }}>
-                <Database size={13} /> The database is created automatically. This account signs in to this install.
-              </p>
-              <label htmlFor="admin-email" style={label}>Email</label>
-              <input id="admin-email" style={input} value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@example.com" />
-              <div style={{ height: 10 }} />
-              <label htmlFor="admin-password" style={label}>Password (at least 12 characters)</label>
-              <input id="admin-password" style={input} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
-              <div style={{ height: 10 }} />
-              <label htmlFor="admin-organisation" style={label}>Organisation (optional)</label>
-              <input id="admin-organisation" style={input} value={organisation} onChange={(e) => setOrganisation(e.target.value)} placeholder="Contoso Ltd" />
-              {error && <p style={{ color: 'var(--color-high)', fontSize: 13, marginTop: 12 }}>{error}</p>}
-              <button onClick={createAdmin} disabled={busy || !email || password.length < 12} style={primaryBtn}>
-                <UserPlus size={15} /> {busy ? 'Creating…' : 'Create administrator'}
-              </button>
-            </div>
-          ) : (
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              {isAuthenticated ? 'Administrator created.' : 'Administrator already exists.'}
-            </p>
-          )}
-        </div>
+        <AdminStep
+          step={step}
+          isAuthenticated={isAuthenticated}
+          email={email}
+          password={password}
+          organisation={organisation}
+          error={error}
+          busy={busy}
+          onEmail={setEmail}
+          onPassword={setPassword}
+          onOrganisation={setOrganisation}
+          onCreate={createAdmin}
+        />
 
-        {/* ── Step 2 — platform selection ────────────────────────────────── */}
-        <div style={card}>
-          <StepHeader n={2} title="Platforms to monitor" active={step === 2} done={step > 2} />
-          {step === 2 ? (
-            <div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 10 }}>
-                {platforms.map((p) => {
-                  const checked = selected.includes(p.id) || Boolean(connections[p.id])
-                  return (
-                    <button
-                      key={p.id}
-                      onClick={() => toggle(p.id)}
-                      style={{
-                        textAlign: 'left', padding: 14, borderRadius: 10, cursor: 'pointer',
-                        border: `1px solid ${checked ? p.colour : 'var(--color-border)'}`,
-                        background: checked ? `${p.colour}14` : 'var(--color-surface-2)',
-                        color: 'var(--color-text)',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 13, fontWeight: 600 }}>{p.name}</span>
-                        <input type="checkbox" checked={checked} readOnly tabIndex={-1} />
-                      </div>
-                      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{p.description}</div>
-                    </button>
-                  )
-                })}
-              </div>
-              {error && <p style={{ color: 'var(--color-high)', fontSize: 13, marginTop: 12 }}>{error}</p>}
-              <button
-                onClick={() => setStep(3)}
-                disabled={selected.length === 0}
-                style={{ ...primaryBtn, opacity: selected.length === 0 ? 0.5 : 1 }}
-              >
-                Continue <ChevronRight size={15} />
-              </button>
-              {selected.length === 0 && (
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 8 }}>
-                  Select at least one platform.
-                </p>
-              )}
-            </div>
-          ) : (
-            <p style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
-              {selectedPlatforms.map((p) => p.name).join(', ') || 'None selected'}
-            </p>
-          )}
-        </div>
+        <PlatformsStep
+          step={step}
+          platforms={platforms}
+          selected={selected}
+          connections={connections}
+          error={error}
+          onToggle={toggle}
+          onContinue={() => setStep(3)}
+        />
 
-        {/* ── Step 3 — connection ────────────────────────────────────────── */}
-        <div style={{ ...card, opacity: step < 3 ? 0.6 : 1 }}>
-          <StepHeader n={3} title="Connect" active={step === 3} done={step > 3} />
-          {step === 3 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              {useSharedGoogle && (
-                <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Plug size={15} color="#4285F4" />
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>Google Cloud + Google Workspace</span>
-                  </div>
-                  <GoogleSharedConnector onConnected={() => { void onConnected() }} />
-                  <button
-                    onClick={() => setSharedGoogle(false)}
-                    style={{ marginTop: 10, background: 'none', border: 'none', color: 'var(--color-text-muted)', fontSize: 12, cursor: 'pointer', padding: 0 }}
-                  >
-                    Use separate service accounts instead
-                  </button>
-                </div>
-              )}
-              {selectedPlatforms.filter((p) => !(useSharedGoogle && (p.id === 'gcp' || p.id === 'google_workspace'))).map((p) => (
-                <div key={p.id} style={{ borderTop: '1px solid var(--color-border)', paddingTop: 16 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <Plug size={15} color={p.colour} />
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</span>
-                  </div>
-                  <PlatformConnector platform={p} connected={connections[p.id]} onConnected={onConnected} />
-                </div>
-              ))}
-              {status.manual_follow_up && (
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{status.manual_follow_up}</p>
-              )}
-              <button
-                onClick={() => { setStep(4); navigate('/') }}
-                disabled={!allSelectedConnected}
-                style={{ ...primaryBtn, opacity: allSelectedConnected ? 1 : 0.5 }}
-              >
-                Finish setup <ChevronRight size={15} />
-              </button>
-              {!allSelectedConnected && (
-                <p style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-                  Connect every selected platform to finish — or remove one from step 2.
-                </p>
-              )}
-            </div>
-          )}
-        </div>
+        <ConnectStep
+          step={step}
+          status={status}
+          selectedPlatforms={selectedPlatforms}
+          connections={connections}
+          useSharedGoogle={useSharedGoogle}
+          allSelectedConnected={allSelectedConnected}
+          onUseSeparateAccounts={() => setSharedGoogle(false)}
+          onConnected={onConnected}
+          onFinish={() => { setStep(4); navigate('/') }}
+        />
       </div>
     </div>
   )
-}
-
-const primaryBtn: React.CSSProperties = {
-  marginTop: 18, display: 'inline-flex', alignItems: 'center', gap: 8,
-  padding: '10px 16px', borderRadius: 8, border: 'none', cursor: 'pointer',
-  background: 'var(--color-brand)', color: '#fff', fontSize: 13, fontWeight: 600,
 }

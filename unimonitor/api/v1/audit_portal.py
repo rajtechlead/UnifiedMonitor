@@ -133,11 +133,8 @@ async def evidence_package(
     confirm the copy they received is the copy the platform produced. Nothing in
     this response is editable, and no credential material is included.
     """
-    from sqlalchemy import select
-
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
     from unimonitor.db.base import async_session_factory
-    from unimonitor.db.models.finding import FindingEvidence
     from unimonitor.grc.control_loader import controls_for_framework
     from unimonitor.grc.frameworks import get_framework
 
@@ -150,49 +147,74 @@ async def evidence_package(
 
     async with async_session_factory() as session:
         findings = await latest_findings_by_control(session, [control.id for control in controls], tenant_id)
+        evidence = await _load_evidence(session, findings, include_evidence)
 
-        evidence: dict[str, list[dict[str, Any]]] = {}
-        if include_evidence and findings:
-            evidence_rows = (
-                await session.execute(
-                    select(FindingEvidence)
-                    .where(FindingEvidence.finding_id.in_([f.id for f in findings.values()]))
-                    .order_by(FindingEvidence.collected_at.desc())
-                )
-            ).scalars()
-            for evidence_row in evidence_rows:
-                bucket = evidence.setdefault(evidence_row.finding_id, [])
-                if len(bucket) >= 3:
-                    continue
-                bucket.append(
-                    {
-                        "type": evidence_row.evidence_type,
-                        "source": evidence_row.source,
-                        "content": (evidence_row.content or "")[:MAX_EVIDENCE_CHARS],
-                        "collected_at": evidence_row.collected_at.isoformat(),
-                    }
-                )
+    package_rows = [_package_row(control, findings.get(control.id), evidence) for control in controls]
+    payload = _package_payload(framework_id, fw_info, meta, tenant_id, current_user, package_rows)
+    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    return {**payload, "digest_sha256": digest, "digest_algorithm": "sha256"}
 
-    package_rows: list[dict[str, Any]] = []
-    for control in controls:
-        control_finding = findings.get(control.id)
-        package_rows.append(
+
+async def _load_evidence(session: Any, findings: dict[str, Any], include_evidence: bool) -> dict[str, list[dict[str, Any]]]:
+    """Up to three captured evidence entries per finding, newest first."""
+    if not include_evidence or not findings:
+        return {}
+
+    from sqlalchemy import select
+
+    from unimonitor.db.models.finding import FindingEvidence
+
+    evidence_rows = (
+        await session.execute(
+            select(FindingEvidence)
+            .where(FindingEvidence.finding_id.in_([f.id for f in findings.values()]))
+            .order_by(FindingEvidence.collected_at.desc())
+        )
+    ).scalars()
+
+    evidence: dict[str, list[dict[str, Any]]] = {}
+    for evidence_row in evidence_rows:
+        bucket = evidence.setdefault(evidence_row.finding_id, [])
+        if len(bucket) >= 3:
+            continue
+        bucket.append(
             {
-                "control_id": control.id,
-                "title": control.title,
-                "category": control.category,
-                "severity": control.severity.lower(),
-                "state": _control_state(control_finding),
-                "last_seen_at": control_finding.last_seen_at.isoformat() if control_finding and control_finding.last_seen_at else None,
-                "finding_id": control_finding.id if control_finding else None,
-                "finding_title": control_finding.title if control_finding else None,
-                "remediation": "\n".join(control.remediation_steps) or control.remediation_summary,
-                "evidence": evidence.get(control_finding.id, []) if control_finding else [],
+                "type": evidence_row.evidence_type,
+                "source": evidence_row.source,
+                "content": (evidence_row.content or "")[:MAX_EVIDENCE_CHARS],
+                "collected_at": evidence_row.collected_at.isoformat(),
             }
         )
+    return evidence
 
-    generated_at = datetime.now(UTC)
-    payload = {
+
+def _package_row(control: Any, finding: Any, evidence: dict[str, list[dict[str, Any]]]) -> dict[str, Any]:
+    """One control row: its state, the finding behind it and its evidence."""
+    return {
+        "control_id": control.id,
+        "title": control.title,
+        "category": control.category,
+        "severity": control.severity.lower(),
+        "state": _control_state(finding),
+        "last_seen_at": finding.last_seen_at.isoformat() if finding and finding.last_seen_at else None,
+        "finding_id": finding.id if finding else None,
+        "finding_title": finding.title if finding else None,
+        "remediation": "\n".join(control.remediation_steps) or control.remediation_summary,
+        "evidence": evidence.get(finding.id, []) if finding else [],
+    }
+
+
+def _package_payload(
+    framework_id: str,
+    fw_info: dict[str, Any],
+    meta: Any,
+    tenant_id: str | None,
+    current_user: Any,
+    package_rows: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """The hashed package body: framework, tenant, control rows and state counts."""
+    states = [row["state"] for row in package_rows]
+    return {
         "framework": {
             "id": framework_id,
             "name": meta.name if meta else fw_info["name"],
@@ -200,20 +222,12 @@ async def evidence_package(
             "mapping_note": meta.mapping_note if meta else "",
         },
         "tenant_id": tenant_id,
-        "generated_at": generated_at.isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "generated_by": getattr(current_user, "email", None),
         "controls_total": len(package_rows),
         "controls": package_rows,
-        "summary": {
-            "implemented": sum(1 for row in package_rows if row["state"] == "implemented"),
-            "partially_implemented": sum(1 for row in package_rows if row["state"] == "partially_implemented"),
-            "not_implemented": sum(1 for row in package_rows if row["state"] == "not_implemented"),
-            "not_applicable": sum(1 for row in package_rows if row["state"] == "not_applicable"),
-            "not_run": sum(1 for row in package_rows if row["state"] == "not_run"),
-        },
+        "summary": {state: states.count(state) for state in ("implemented", "partially_implemented", "not_implemented", "not_applicable", "not_run")},
     }
-    digest = hashlib.sha256(json.dumps(payload, sort_keys=True, default=str).encode("utf-8")).hexdigest()
-    return {**payload, "digest_sha256": digest, "digest_algorithm": "sha256"}
 
 
 def _requirement_counts(requirement: dict[str, Any], states: dict[str, str]) -> dict[str, int]:

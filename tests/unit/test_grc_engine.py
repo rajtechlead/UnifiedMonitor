@@ -84,7 +84,7 @@ class TestEvidenceCoverage:
         engine, _ = _make_engine()
         ctrl = _control_with_data(keys=("conditionalAccessPolicies",))
 
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
 
         assert finding.state == FindingState.NOT_APPLICABLE.value
         ctrl.run_evaluate.assert_not_called()
@@ -95,7 +95,7 @@ class TestEvidenceCoverage:
         engine, _ = _make_engine()
         ctrl = _control_with_data(keys=("conditionalAccessPolicies",))
 
-        finding = _run(engine._evaluate_control(ctrl, {"conditionalAccessPolicies": [{"id": "1"}]}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {"conditionalAccessPolicies": [{"id": "1"}]}, "run-001")
 
         assert finding.state == "implemented"
         coverage = next(item for item in finding.evidence if item.evidence_type == "data_coverage")
@@ -111,7 +111,7 @@ class TestEvaluateControl:
     def test_implemented_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="implemented", severity="HIGH")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.IMPLEMENTED.value
@@ -120,7 +120,7 @@ class TestEvaluateControl:
     def test_pass_maps_to_implemented(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="pass")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.IMPLEMENTED.value
@@ -128,7 +128,7 @@ class TestEvaluateControl:
     def test_not_implemented_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_implemented", severity="CRITICAL")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingSeverity, FindingState
 
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
@@ -138,7 +138,7 @@ class TestEvaluateControl:
     def test_fail_maps_to_not_implemented(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="fail")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
@@ -146,7 +146,7 @@ class TestEvaluateControl:
     def test_partially_implemented_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="partially_implemented", severity="HIGH")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.PARTIALLY_IMPLEMENTED.value
@@ -155,7 +155,7 @@ class TestEvaluateControl:
     def test_warning_maps_to_partially_implemented(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="warning")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.PARTIALLY_IMPLEMENTED.value
@@ -163,7 +163,7 @@ class TestEvaluateControl:
     def test_not_applicable_state(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_applicable")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.NOT_APPLICABLE.value
@@ -172,7 +172,7 @@ class TestEvaluateControl:
     def test_unknown_result_defaults_to_not_implemented(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="something_weird")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
@@ -181,7 +181,7 @@ class TestEvaluateControl:
         engine, _ = _make_engine()
         ctrl = _make_control_def()
         ctrl.run_evaluate.side_effect = RuntimeError("boom")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingState
 
         assert finding.state == FindingState.NOT_IMPLEMENTED.value
@@ -193,7 +193,7 @@ class TestEvaluateControl:
     def test_severity_mapping_medium(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_implemented", severity="MEDIUM")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         from unimonitor.db.models.finding import FindingSeverity
 
         assert finding.severity == FindingSeverity.MEDIUM.value
@@ -202,19 +202,19 @@ class TestEvaluateControl:
     def test_severity_mapping_low(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_implemented", severity="LOW")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         assert finding.risk_score == 3
 
     def test_severity_mapping_informational(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(result="not_implemented", severity="INFORMATIONAL")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-001"))
+        finding = engine._evaluate_control(ctrl, {}, "run-001")
         assert finding.risk_score == 1
 
     def test_finding_fields_populated(self):
         engine, _ = _make_engine()
         ctrl = _make_control_def(ctrl_id="ISO.A.9.1", service="identity", category="Access Control")
-        finding = _run(engine._evaluate_control(ctrl, {}, "run-123"))
+        finding = engine._evaluate_control(ctrl, {}, "run-123")
         assert finding.external_control_id == "ISO.A.9.1"
         assert finding.tenant_id == "tenant-001"
         assert finding.assessment_run_id == "run-123"

@@ -717,23 +717,33 @@ async def hydrate_runtime_config(session: AsyncSession) -> None:
     settings = get_settings()
     rows = [row for row in (await session.execute(select(CloudConnection))).scalars() if row.status == "connected"]
     for row in rows:
-        config = _loads(row.config)
-        if row.provider == "microsoft":
-            settings.ENTRA_TENANT_ID = row.account or settings.ENTRA_TENANT_ID
-            settings.ENTRA_CLIENT_ID = config.get("client_id") or settings.ENTRA_CLIENT_ID
-            if config.get("auth_method") == "certificate":
-                certificate_pem = await _stored_secret(session, "microsoft", "certificate_pem")
-                private_key = await _stored_secret(session, "microsoft", "private_key_pem")
-                if certificate_pem and private_key:
-                    settings.ENTRA_CLIENT_CERTIFICATE = certificate_pem
-                    settings.ENTRA_CLIENT_PRIVATE_KEY = private_key
-                    settings.ENTRA_CLIENT_SECRET = ""
-            else:
-                secret = await _stored_secret(session, "microsoft", "client_secret")
-                if secret:
-                    settings.ENTRA_CLIENT_SECRET = secret
-        elif row.provider == "gcp":
-            settings.GCP_PROJECT_ID = config.get("project_id", settings.GCP_PROJECT_ID)
-        elif row.provider == "google_workspace":
-            settings.GOOGLE_WORKSPACE_CUSTOMER_ID = config.get("customer_id", settings.GOOGLE_WORKSPACE_CUSTOMER_ID)
+        await _hydrate_connection(session, settings, row)
     logger.info("runtime configuration hydrated", connections=len(rows))
+
+
+async def _hydrate_connection(session: AsyncSession, settings: Any, row: Any) -> None:
+    """Copy one saved connection's identifiers and secrets onto the settings singleton."""
+    config = _loads(row.config)
+    if row.provider == "microsoft":
+        await _hydrate_microsoft(session, settings, row, config)
+    elif row.provider == "gcp":
+        settings.GCP_PROJECT_ID = config.get("project_id", settings.GCP_PROJECT_ID)
+    elif row.provider == "google_workspace":
+        settings.GOOGLE_WORKSPACE_CUSTOMER_ID = config.get("customer_id", settings.GOOGLE_WORKSPACE_CUSTOMER_ID)
+
+
+async def _hydrate_microsoft(session: AsyncSession, settings: Any, row: Any, config: dict[str, Any]) -> None:
+    """Microsoft credentials live on `Settings`, including the certificate pair."""
+    settings.ENTRA_TENANT_ID = row.account or settings.ENTRA_TENANT_ID
+    settings.ENTRA_CLIENT_ID = config.get("client_id") or settings.ENTRA_CLIENT_ID
+    if config.get("auth_method") == "certificate":
+        certificate_pem = await _stored_secret(session, "microsoft", "certificate_pem")
+        private_key = await _stored_secret(session, "microsoft", "private_key_pem")
+        if certificate_pem and private_key:
+            settings.ENTRA_CLIENT_CERTIFICATE = certificate_pem
+            settings.ENTRA_CLIENT_PRIVATE_KEY = private_key
+            settings.ENTRA_CLIENT_SECRET = ""
+        return
+    secret = await _stored_secret(session, "microsoft", "client_secret")
+    if secret:
+        settings.ENTRA_CLIENT_SECRET = secret
