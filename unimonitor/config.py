@@ -97,6 +97,14 @@ class Settings(BaseSettings):
     ENTRA_SIGNIN_CLIENT_ID: str = ""
     ENTRA_AUTHORITY: str = "https://login.microsoftonline.com"
     ENTRA_REDIRECT_URI: str = "http://localhost:8000/api/v1/auth/callback"
+    # Sign-in providers offered on the login page, in order. Microsoft uses the Entra
+    # app registration; Google and Okta are enabled by their client id/secret.
+    SSO_PROVIDER_ORDER: str = "microsoft,google,okta"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    OKTA_ISSUER: str = ""
+    OKTA_CLIENT_ID: str = ""
+    OKTA_CLIENT_SECRET: str = ""
     # Where the OAuth callback sends the browser after sign-in. Empty = same origin
     # as the API, which is where the bundled web UI is served.
     UNIMONITOR_FRONTEND_URL: str = ""
@@ -133,6 +141,24 @@ class Settings(BaseSettings):
 
     # ── AI Remediation ───────────────────────────────────────
     AI_ENABLED: bool = False
+    # Failover order. A free-tier provider is tried first and the next one is used
+    # automatically when it reports a quota, rate-limit or availability error.
+    AI_PROVIDER_ORDER: str = "freebuff,groq,openai,anthropic,azure_openai"
+    AI_TIMEOUT_SECONDS: float = 45.0
+    # Freebuff's OpenAI-compatible API (all its models are listed at /models).
+    FREEBUFF_BASE_URL: str = "https://freebuff.com/api/v1/paid"
+    FREEBUFF_API_KEY: str = ""
+    FREEBUFF_MODEL: str = ""
+    OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = "https://api.openai.com/v1"
+    OPENAI_MODEL: str = "gpt-4o-mini"
+    ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_BASE_URL: str = "https://api.anthropic.com/v1"
+    ANTHROPIC_MODEL: str = "claude-3-5-sonnet-latest"
+    GROQ_API_KEY: str = ""
+    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"
+    # Kept for existing deployments; used when azure_openai is in the order.
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_API_KEY: str = ""
     AZURE_OPENAI_DEPLOYMENT: str = "gpt-4o"

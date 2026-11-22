@@ -155,6 +155,33 @@ class UserRepository(BaseRepository):  # type: ignore[type-arg]
 
         super().__init__(AppUser, session)
 
+    async def resolve_sso_tenant(self, user_info: dict) -> str:
+        """The tenant a newly signed-in account belongs to.
+
+        The ``tid`` claim identifies the Entra tenant, which maps to a monitored
+        tenant when the organisation was onboarded. A single-tenant install falls
+        back to its only active tenant. Anything else is refused rather than guessed:
+        ``AppUser.tenant_id`` is NOT NULL, and this used to raise an integrity error
+        on every first-time SSO sign-in.
+        """
+        from sqlalchemy import select
+
+        from unimonitor.db.models.tenant import Tenant
+        from unimonitor.exceptions import AuthenticationError
+
+        claim = (user_info.get("tenant_id") or "").strip()
+        if claim:
+            matched = (await self.session.execute(select(Tenant.id).where(Tenant.entra_tenant_id == claim))).scalars().first()
+            if matched:
+                return str(matched)
+
+        candidates = (await self.session.execute(select(Tenant.id).where(Tenant.is_active.is_(True)).limit(2))).scalars().all()
+        if len(candidates) == 1:
+            return str(candidates[0])
+        raise AuthenticationError(
+            "Your sign-in worked, but this account is not attached to a tenant yet. Ask an administrator to invite you before signing in."
+        )
+
     async def upsert_from_entra(self, user_info: dict):
         """Create or update an AppUser from Entra ID user info dict."""
         from sqlalchemy import select
@@ -182,7 +209,9 @@ class UserRepository(BaseRepository):  # type: ignore[type-arg]
             return db_user
 
         # Create new user
+        tenant_id = await self.resolve_sso_tenant(user_info)
         db_user = AppUser(
+            tenant_id=tenant_id,
             email=email,
             full_name=user_info.get("display_name", ""),
             entra_oid=entra_oid,

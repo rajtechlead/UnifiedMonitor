@@ -63,7 +63,7 @@ class AIRemediationEngine:
                     control_id=control_id,
                 )
                 if result is not None:
-                    return self._normalise(result, source="azure_openai")
+                    return self._normalise(result, source=str(result.pop("_provider", "azure_openai")))
             except Exception as exc:
                 logger.warning("ai_remediation_failed_fallback", error=str(exc))
 
@@ -85,24 +85,39 @@ class AIRemediationEngine:
         state: str,
         control_id: str,
     ) -> dict[str, Any] | None:
-        """Call Azure OpenAI to generate structured remediation.
+        """Ask the configured providers for remediation of an anonymised finding.
 
-        Separated as a named method so tests can patch it cleanly via
-        ``patch('unimonitor.grc.ai_remediation.AIRemediationEngine._call_openai')``.
-
-        Returns ``None`` when OpenAI is not configured (triggers rule-based fallback).
+        Returns ``None`` when AI is disabled, no provider is configured, or every
+        provider refused — which sends the caller to the rule-based fallback.
         """
         settings = get_settings()
-        if not settings.AI_ENABLED or not getattr(settings, "AZURE_OPENAI_ENDPOINT", None):
+        if not settings.AI_ENABLED:
             return None
-        return await _openai_remediation(
-            finding_title=finding_title,
-            finding_description=finding_description,
-            severity=severity,
-            category=category,
-            state=state,
-            control_id=control_id,
+
+        from unimonitor.ai import AIUnavailableError, anonymise, complete
+
+        payload = anonymise(
+            {
+                "control_id": control_id,
+                "category": category,
+                "severity": severity,
+                "state": state,
+                "title": finding_title,
+                "description": finding_description,
+            }
         )
+        try:
+            response = await complete(SYSTEM_PROMPT, build_user_prompt(payload))
+        except AIUnavailableError as exc:
+            logger.warning("ai_remediation_unavailable", error=str(exc)[:300])
+            return None
+
+        parsed = _parse_json(response.text)
+        if parsed is None:
+            logger.warning("ai_remediation_unparseable", provider=response.provider)
+            return None
+        parsed["_provider"] = response.provider
+        return parsed
 
     @staticmethod
     def _normalise(raw: dict, source: str) -> dict[str, Any]:
@@ -199,55 +214,70 @@ async def _openai_remediation(
     state: str,
     control_id: str,
 ) -> dict[str, Any]:
-    """Call Azure OpenAI to generate structured remediation."""
-    settings = get_settings()
+    """Prompt the provider chain directly (module-level entry point)."""
+    from unimonitor.ai import AIUnavailableError, anonymise, complete
 
-    system_prompt = """You are a Microsoft 365 security expert and GRC consultant.
-Generate structured remediation guidance for a security finding.
+    payload = anonymise(
+        {
+            "control_id": control_id,
+            "category": category,
+            "severity": severity,
+            "state": state,
+            "title": finding_title,
+            "description": finding_description,
+        }
+    )
+    response = await complete(SYSTEM_PROMPT, build_user_prompt(payload))
+    parsed = _parse_json(response.text)
+    if parsed is None:
+        raise AIUnavailableError(f"{response.provider} returned a response that was not JSON")
+    return parsed
+
+
+SYSTEM_PROMPT = """You are a multi-cloud and Microsoft 365 security architect writing remediation guidance for a GRC finding.
+The finding you receive has been anonymised: it contains only a control id, framework, category, severity, state and the control's
+catalogue title and description. You are NOT being given, and must not ask for, tenant names, user identities, addresses or policy ids.
 Respond ONLY with valid JSON matching this schema exactly:
 {
   "executive_summary": "1-2 sentence non-technical summary for executives",
   "technical_summary": "2-3 sentence technical description of the issue",
   "root_cause_analysis": "explanation of why this control is failing",
-  "remediation_plan": ["step 1", "step 2", ...],
-  "validation_steps": ["how to verify step 1", ...],
+  "remediation_plan": ["step 1", "step 2"],
+  "validation_steps": ["how to verify step 1"],
   "microsoft_references": [{"title": "...", "url": "https://..."}],
   "risk_reduction_estimate": "description of risk reduced when remediated",
   "estimated_effort_hours": 2.0,
   "complexity": "low|medium|high"
 }"""
 
-    user_prompt = f"""Finding: {finding_title}
-Control ID: {control_id}
-Severity: {severity}
-Category: {category}
-Current State: {state}
-Description: {finding_description}
 
-Generate remediation guidance for this Microsoft 365 security finding."""
+def build_user_prompt(payload: dict[str, str]) -> str:
+    """The full prompt sent to a provider. Only anonymised fields appear here."""
+    return (
+        f"Control: {payload['control_id']}\n"
+        f"Framework: {payload['framework'] or 'unspecified'}\n"
+        f"Category: {payload['category'] or 'unspecified'}\n"
+        f"Severity: {payload['severity']}\n"
+        f"Current state: {payload['state']}\n"
+        f"Title: {payload['title']}\n"
+        f"Description: {payload['description']}\n\n"
+        "Write remediation guidance for this control. Cover each severity level the finding reports "
+        "(critical, high, medium, low) with a step proportional to it, so one response serves the "
+        "whole finding set."
+    )
 
-    import httpx
 
-    url = f"{settings.AZURE_OPENAI_ENDPOINT}/openai/deployments/{settings.AZURE_OPENAI_DEPLOYMENT}/chat/completions?api-version=2024-02-01"
-    headers = {
-        "api-key": settings.AZURE_OPENAI_API_KEY,
-        "Content-Type": "application/json",
-    }
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.2,
-        "max_tokens": 1500,
-        "response_format": {"type": "json_object"},
-    }
-
-    async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        resp.raise_for_status()
-        content = resp.json()["choices"][0]["message"]["content"]
-        return json.loads(content)
+def _parse_json(text: str) -> dict[str, Any] | None:
+    """Parse a model's JSON answer, tolerating a fenced code block."""
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("\n", 1)[-1]
+        cleaned = cleaned.rsplit("```", 1)[0]
+    try:
+        value = json.loads(cleaned)
+    except ValueError:
+        return None
+    return value if isinstance(value, dict) else None
 
 
 def _rule_based_remediation(

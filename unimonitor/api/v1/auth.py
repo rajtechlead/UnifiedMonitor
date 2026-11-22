@@ -182,7 +182,6 @@ async def oauth_callback(
             detail="Invalid or expired OAuth state parameter",
         )
 
-    settings = get_settings()
     try:
         token_data = await exchange_code_for_token(code=code)
     except Exception as exc:
@@ -202,15 +201,33 @@ async def oauth_callback(
             detail="Failed to retrieve user information",
         ) from exc
 
-    # Upsert user in DB
+    return await complete_sign_in(user_info, state_data.get("redirect", "/"))
+
+
+async def complete_sign_in(user_info: dict, redirect_after: str) -> RedirectResponse:
+    """Create or update the local account and hand the browser its tokens.
+
+    Shared by the Microsoft MSAL callback and the generic OIDC callback so both
+    providers provision users identically.
+    """
+    settings = get_settings()
+
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.repositories.tenant_repo import UserRepository
 
-    async with async_session_factory() as session:
-        user_repo = UserRepository(session)
-        db_user = await user_repo.upsert_from_entra(user_info)
+    try:
+        async with async_session_factory() as session:
+            user_repo = UserRepository(session)
+            db_user = await user_repo.upsert_from_entra(user_info)
+            await session.commit()
+    except Exception as exc:
+        from unimonitor.exceptions import AuthenticationError
 
-    # Issue our own JWTs
+        if isinstance(exc, AuthenticationError):
+            logger.warning("sso_sign_in_rejected", error=str(exc))
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+        raise
+
     access_token = create_access_token(
         subject=db_user.id,
         tenant_id=getattr(db_user, "tenant_id", ""),
@@ -221,15 +238,9 @@ async def oauth_callback(
         subject=db_user.id,
         tenant_id=getattr(db_user, "tenant_id", ""),
     )
-
     logger.info("user_authenticated", user_id=db_user.id, email=db_user.email)
 
-    # Send the browser back to the web UI with the tokens in the fragment. The
-    # fragment never reaches a server and the SPA consumes it on load, which is
-    # why the old JSON-only response left users on the login page.
-    redirect_to = state_data.get("redirect", "/")
-    if not (redirect_to.startswith("/") and not redirect_to.startswith("//")):
-        redirect_to = "/"
+    redirect_to = redirect_after if (redirect_after or "").startswith("/") and not redirect_after.startswith("//") else "/"
     frontend_url = settings.UNIMONITOR_FRONTEND_URL.rstrip("/")
     return RedirectResponse(
         url=f"{frontend_url}{redirect_to}#access_token={access_token}&refresh_token={refresh_token}",
@@ -319,3 +330,77 @@ async def get_me(
         tenant_id=current_user.tenant_id,
         is_active=current_user.is_active,
     )
+
+
+@router.get("/sso/providers")
+async def sso_providers() -> list[dict[str, str]]:
+    """Every configured sign-in provider, for the login page.
+
+    Microsoft is included when the setup wizard's Entra app is present; Google and
+    Okta appear once their client id and secret are configured.
+    """
+    from unimonitor.auth.oidc import public_providers
+
+    return public_providers()
+
+
+@router.get("/oidc/{provider}/login")
+async def oidc_login(
+    provider: str,
+    redirect_after: Annotated[str, Query(alias="redirect")] = "/",
+) -> RedirectResponse:
+    """Start a generic OIDC sign-in (Microsoft, Google Workspace or Okta)."""
+    from unimonitor.auth.oidc import authorize_url, providers
+
+    catalogue = providers()
+    selected = catalogue.get(provider.lower())
+    if selected is None:
+        return RedirectResponse(url="/login?error=sso_unavailable", status_code=status.HTTP_303_SEE_OTHER)
+
+    state = secrets.token_urlsafe(32)
+    await cache_set(f"oauth_state:{state}", {"redirect": redirect_after, "provider": selected.name}, ttl=300)
+    logger.info("oidc_login_initiated", provider=selected.name)
+    return RedirectResponse(url=authorize_url(selected, state), status_code=status.HTTP_302_FOUND)
+
+
+@router.get("/oidc/{provider}/callback")
+async def oidc_callback(
+    provider: str,
+    code: Annotated[str, Query(...)],
+    state: Annotated[str, Query(...)],
+    error: Annotated[str | None, Query()] = None,
+    error_description: Annotated[str | None, Query()] = None,
+) -> Response:
+    """Finish a generic OIDC sign-in and issue this application's tokens."""
+    if error:
+        logger.warning("oidc_callback_error", provider=provider, error=error)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"OAuth error: {error_description or error}",
+        )
+
+    state_data = await cache_get(f"oauth_state:{state}")
+    if not state_data:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired OAuth state parameter")
+    if state_data.get("provider") not in (None, provider.lower()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="OAuth state does not match the provider")
+
+    from unimonitor.auth.oidc import exchange_code, fetch_profile, providers
+
+    selected = providers().get(provider.lower())
+    if selected is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Sign-in provider is not configured")
+
+    try:
+        tokens = await exchange_code(selected, code)
+        user_info = await fetch_profile(selected, tokens)
+    except Exception as exc:
+        from unimonitor.exceptions import AuthenticationError
+
+        if isinstance(exc, AuthenticationError):
+            logger.error("oidc_failed", provider=selected.name, error=str(exc))
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+        logger.error("oidc_failed", provider=selected.name, error=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Failed to complete sign-in") from exc
+
+    return await complete_sign_in(user_info, state_data.get("redirect", "/"))

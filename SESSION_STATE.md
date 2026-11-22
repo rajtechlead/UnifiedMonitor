@@ -8,6 +8,15 @@ Last Updated: 2026-11-22 UTC
 
 - `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
 
+### Session 2026-11-22 (fourth) — AI remediation, SSO providers, audit
+
+- AI remediation was dead code; now a working multi-provider chain with anonymised
+  prompts and automatic failover (Freebuff/Groq/OpenAI/Anthropic/Azure OpenAI).
+- Generic OIDC sign-in for Microsoft, Google Workspace and Okta; first-time SSO
+  accounts now get a tenant (the NOT NULL column was never set).
+- `docs/MONKEY365_COMPARISON.md`: analysis and a sequenced multi-cloud plan — the
+  AWS/GCP/Google Workspace collectors are NOT implemented.
+
 ### Session 2026-11-22 (third) — notifications, manual runs, contract tests
 
 - `unimonitor/notifications/preferences.py` is the single notification document: JSON

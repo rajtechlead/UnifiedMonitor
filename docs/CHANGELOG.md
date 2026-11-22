@@ -18,6 +18,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- AI remediation now works: it was dead code (the endpoint imported a task that did
+  not exist). Guidance is generated with an anonymised prompt through an ordered
+  provider chain — Freebuff (all its models, discovered live), Groq, OpenAI, Anthropic
+  (Claude) and Azure OpenAI — failing over automatically when a provider is out of
+  quota or unavailable. `GET /ai/status` and `GET /ai/models` expose the provider and
+  model lists without keys.
+- Sign-in with Google Workspace and Okta, alongside Microsoft, through one OIDC
+  provider list (`/auth/sso/providers`, `/auth/oidc/{provider}/login|callback`).
+- `docs/AI_REMEDIATION_AND_SSO.md` and `docs/MONKEY365_COMPARISON.md`.
+
 - Both notification APIs write one document (`unimonitor/notifications/preferences.py`).
   The SMTP password and the Teams, Slack and generic webhook credentials are stored in
   the secret provider and masked on read; the nested API previously wrote an attribute
@@ -29,6 +39,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Assessment runs display their `error_message` when a run fails.
 
 ### Fixed
+
+- First-time SSO sign-in failed: `upsert_from_entra` created users without the
+  NOT NULL `tenant_id`. New accounts are now attached by Entra `tid`, or to the only
+  active tenant, and refused rather than guessed when ambiguous.
+- The AI remediation endpoint now checks the caller may see the finding's tenant.
 
 - Manual assessment runs: `run_assessment_task` is exported from `unimonitor.worker.tasks`
   again (its absence made every manual run fail), and a dispatch failure now returns the

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from unimonitor.api.v1.ai import router as ai_router
 from unimonitor.api.v1.alerts import router as alerts_router
 from unimonitor.api.v1.assessments import router as assessments_router
 from unimonitor.api.v1.audit_portal import router as audit_portal_router
@@ -27,6 +28,7 @@ from unimonitor.api.v1.zerotrust import router as zerotrust_router
 api_v1_router = APIRouter()
 
 api_v1_router.include_router(auth_router, prefix="/auth", tags=["Authentication"])
+api_v1_router.include_router(ai_router, prefix="/ai", tags=["AI"])
 api_v1_router.include_router(alerts_router, prefix="/alerts", tags=["Alerts"])
 api_v1_router.include_router(tenants_router, prefix="/tenants", tags=["Tenants"])
 api_v1_router.include_router(users_router, prefix="/users", tags=["Users"])

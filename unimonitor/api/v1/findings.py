@@ -614,6 +614,13 @@ async def trigger_ai_remediation(
     if not finding:
         raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
 
+    # A finding id alone must not let a caller read or spend AI credit on another
+    # tenant's finding.
+    from unimonitor.auth.tenant_scope import has_tenant_access
+
+    if not await has_tenant_access(db, current_user, finding.tenant_id):
+        raise HTTPException(status_code=404, detail=NOT_FOUND_DETAIL)
+
     if finding.ai_remediation and not body.force_refresh:
         import json
 
@@ -623,14 +630,16 @@ async def trigger_ai_remediation(
             pass
 
     try:
+        from unimonitor.worker.inline import dispatch
         from unimonitor.worker.tasks import generate_ai_remediation_task
+        from unimonitor.worker.tasks.remediation import generate_ai_remediation_now
 
-        task = generate_ai_remediation_task.delay(finding_id=finding_id)
+        task_id = dispatch(generate_ai_remediation_task, generate_ai_remediation_now, finding_id=finding_id)
         return {
             "finding_id": finding_id,
-            "task_id": task.id,
+            "task_id": task_id,
             "status": "queued",
-            "message": "AI remediation generation started",
+            "message": "AI remediation generation started; refresh the finding to read it",
         }
     except Exception as exc:
         logger.error("ai_remediation_dispatch_failed", finding_id=finding_id, error=str(exc))

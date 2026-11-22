@@ -1,3 +1,14 @@
+## 2026-11-22 (fourth) — AI remediation + SSO
+
+- ✅ AI remediation rebuilt: anonymised prompt, provider chain with failover on quota,
+  live model list, worker task, tenant-checked trigger.
+- ✅ Google Workspace and Okta sign-in through generic OIDC; fixed the NOT NULL
+  `tenant_id` bug that broke every first-time Microsoft sign-in.
+- ⬜ Multi-cloud collectors (AWS/GCP/Google Workspace) — plan only, see
+  `docs/MONKEY365_COMPARISON.md`.
+- ⬜ Frontend controls for choosing a provider/model and a "Generate AI guidance"
+  button; the API exists but the UI only renders guidance once present.
+
 ## 2026-11-22 (third) — notification vault, manual-run fix, contract tests
 
 - ✅ One notification store for both APIs; SMTP + four webhook credentials in the vault.
