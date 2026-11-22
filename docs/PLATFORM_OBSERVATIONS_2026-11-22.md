@@ -254,7 +254,7 @@ Covered by `tests/integration/test_tenant_scope.py`.
 | Rank | Item | Why it is queued |
 |---|---|---|
 | 2 | Unify the two notification stores | ✅ done in the second round |
-| 4 | Evaluated / stale / never-run evidence model | Architectural: every check row needs status + `evaluated_at` + `source_run_id` before scores can be derived |
+| 4 | Evaluated / stale / never-run evidence model | ✅ `unimonitor/grc/evidence_status.py`: per-control `evaluated` / `stale` / `never_evaluated` with `evaluated_at`, age and source run; `GET /grc/frameworks/{id}/evidence-coverage` reports coverage |
 | 5 | Automatic posture inventory | Collector-to-engine bridge; needs an inventory assembly step on each collection run |
 | 6 | Vault key rotation and provider migration | MultiFernet re-encryption plus a copy-into-provider path |
 | 8 | Per-provider framework coverage | The provider detail API already maps per-provider controls; needs a check of the aggregate page against real data |

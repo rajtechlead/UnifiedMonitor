@@ -1,3 +1,14 @@
+## 2026-11-22 (fifth) — evidence status model
+
+- ✅ Controls now report `evidence_status` (evaluated / stale / never evaluated),
+  `evaluated_at`, `evidence_age_days` and `source_run_id` from their latest snapshot.
+- ✅ `GET /api/v1/grc/frameworks/{id}/evidence-coverage` reports counts and coverage,
+  so a clean score cannot hide an unmeasured framework. Staleness is configurable via
+  `EVIDENCE_STALE_DAYS` (default 7).
+- ✅ Sonar: split one composite assertion, extracted a nested conditional, annotated a
+  false-positive credential rule.
+- Next most valuable: automatic posture inventory (#5).
+
 ## 2026-11-22 (fourth) — AI remediation + SSO
 
 - ✅ AI remediation rebuilt: anonymised prompt, provider chain with failover on quota,

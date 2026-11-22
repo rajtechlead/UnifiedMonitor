@@ -180,7 +180,8 @@ class TestTestDeliveryUsesTheVault:
         )
         assert r.status_code == 200, r.text
         assert r.json()["success"] is True
-        assert calls and calls[0][0] == SECRETS["slack_webhook_url"]
+        assert calls
+        assert calls[0][0] == SECRETS["slack_webhook_url"]
 
     async def test_a_channel_with_no_stored_credential_reports_it(self, client: AsyncClient, auth_headers: dict, tenant, vault):
         r = await client.post(

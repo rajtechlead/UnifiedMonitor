@@ -25,7 +25,8 @@ VAULT_KEY_TEMPLATE = "unimonitor-tenant-{tenant_id}-{suffix}"
 
 # Model field -> vault entry suffix. Every entry written through this map.
 SECRET_FIELDS: dict[str, str] = {
-    "smtp_password": "smtp-credential",
+    # Field name in the preferences document, not a credential (S2068).
+    "smtp_password": "smtp-credential",  # NOSONAR
     "teams_webhook_url": "teams-webhook",
     "slack_webhook_url": "slack-webhook",
     "generic_webhook_url": "generic-webhook-url",
@@ -116,7 +117,10 @@ async def load(tenant: Any, *, reveal: bool = False) -> NotificationPreferences:
 
     for field in SECRET_FIELDS:
         value = await _read_secret(tenant, field)
-        setattr(prefs, field, value if reveal else (MASK if value else ""))
+        presented = value if reveal else ""
+        if not reveal and value:
+            presented = MASK
+        setattr(prefs, field, presented)
     return prefs
 
 

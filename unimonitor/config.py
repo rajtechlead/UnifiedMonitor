@@ -133,6 +133,9 @@ class Settings(BaseSettings):
     # Automatic collection: a Celery beat task runs every tenant's active
     # assessment at this interval. Manual runs remain available in the UI.
     AUTO_COLLECTION_ENABLED: bool = True
+    # Evidence older than this no longer supports a current compliance claim;
+    # it is reported as stale rather than silently counted as evaluated.
+    EVIDENCE_STALE_DAYS: int = 7
     COLLECTION_INTERVAL_MINUTES: int = 15
     # Control-level trend rows are pruned on every run so the table stays bounded.
     # 0 keeps the full history (the table then grows with every collection).

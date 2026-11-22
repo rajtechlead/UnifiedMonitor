@@ -18,6 +18,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Evidence status per control: `evaluated`, `stale` (older than `EVIDENCE_STALE_DAYS`,
+  default 7) or `never_evaluated`, with the evaluation time and source run, plus
+  `GET /grc/frameworks/{id}/evidence-coverage` for framework coverage.
+
 - AI remediation now works: it was dead code (the endpoint imported a task that did
   not exist). Guidance is generated with an anonymised prompt through an ordered
   provider chain — Freebuff (all its models, discovered live), Groq, OpenAI, Anthropic

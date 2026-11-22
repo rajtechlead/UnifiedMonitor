@@ -15,6 +15,7 @@ from unimonitor.api.v1.lookups import evidence_by_finding, latest_findings_by_co
 from unimonitor.auth.dependencies import get_current_user, require_role
 from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.db.session import get_db
+from unimonitor.grc.evidence_status import EvidenceStatus, classify, summarise
 
 logger = structlog.get_logger(__name__)
 router = APIRouter()
@@ -161,6 +162,47 @@ async def framework_coverage(
     )
 
 
+async def _evidence_statuses(session, controls: list, tenant_id: str | None) -> dict[str, EvidenceStatus]:
+    """Evidence status per control, from the latest snapshot of each.
+
+    A control with no snapshot has never been evaluated. The snapshot also supplies the
+    run that produced the evidence, so a status can be traced back to its assessment.
+    """
+    from sqlalchemy import select
+
+    from unimonitor.config import get_settings
+    from unimonitor.db.models.control_snapshot import ControlSnapshot
+
+    stale_days = get_settings().EVIDENCE_STALE_DAYS
+    if not tenant_id:
+        return {control.id: classify(None) for control in controls}
+
+    rows = (
+        await session.execute(
+            select(
+                ControlSnapshot.control_id,
+                ControlSnapshot.assessment_run_id,
+                ControlSnapshot.checked_at,
+            )
+            .where(
+                ControlSnapshot.tenant_id == tenant_id,
+                ControlSnapshot.control_id.in_([control.id for control in controls]),
+            )
+            .order_by(ControlSnapshot.checked_at.desc())
+        )
+    ).all()
+
+    latest: dict[str, tuple[str | None, object]] = {}
+    for control_id, run_id, checked_at in rows:
+        latest.setdefault(control_id, (run_id, checked_at))
+
+    statuses: dict[str, EvidenceStatus] = {}
+    for control in controls:
+        run_id, checked_at = latest.get(control.id, (None, None))
+        statuses[control.id] = classify(checked_at, source_run_id=run_id, stale_after_days=stale_days)
+    return statuses
+
+
 @router.get("/frameworks/{framework_id}/controls", responses={404: {"description": "Not found"}})
 async def framework_controls(
     framework_id: str,
@@ -183,9 +225,11 @@ async def framework_controls(
     async with async_session_factory() as session:
         findings = await latest_findings_by_control(session, [c.id for c in controls], tenant_id)
         evidence = await evidence_by_finding(session, [f.id for f in findings.values()])
+        statuses = await _evidence_statuses(session, controls, tenant_id)
 
         for control in controls:
             finding = findings.get(control.id)
+            status = statuses[control.id]
             result.append(
                 {
                     "control_id": control.id,
@@ -194,6 +238,10 @@ async def framework_controls(
                     "category": control.category,
                     "severity": control.severity.lower(),
                     "state": finding.state if finding else "not_run",
+                    "evidence_status": status.status,
+                    "evaluated_at": status.evaluated_at.isoformat() if status.evaluated_at else None,
+                    "evidence_age_days": status.age_days,
+                    "source_run_id": status.source_run_id,
                     "last_seen": finding.last_seen_at.isoformat() if finding else None,
                     "finding_id": finding.id if finding else None,
                     "remediation": "\n".join(control.remediation_steps) or control.remediation_summary,
@@ -451,3 +499,34 @@ async def list_evidence(
         evidence_list = await repo.list_evidence(finding_id)
 
     return [EvidenceResponse.model_validate(e) for e in evidence_list]
+
+
+@router.get("/frameworks/{framework_id}/evidence-coverage", responses={404: {"description": "Not found"}})
+async def framework_evidence_coverage(
+    framework_id: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
+) -> dict:
+    """How much of a framework's state rests on current evidence.
+
+    ``coverage_pct`` counts controls evaluated within ``EVIDENCE_STALE_DAYS``; stale and
+    never-evaluated controls are reported separately so a clean score cannot hide an
+    unmeasured framework.
+    """
+    fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
+    if not fw_info:
+        raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
+
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.grc.control_loader import controls_for_framework
+
+    controls = controls_for_framework(framework_id)
+    async with async_session_factory() as session:
+        statuses = await _evidence_statuses(session, controls, tenant_id)
+
+    summary = summarise(statuses.values())
+    summary["framework_id"] = framework_id
+    from unimonitor.config import get_settings
+
+    summary["stale_after_days"] = get_settings().EVIDENCE_STALE_DAYS
+    return summary
