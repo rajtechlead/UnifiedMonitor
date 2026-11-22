@@ -262,19 +262,38 @@ try {
     # -- 9. Smoke test + portable zip ------------------------------------------
     if (-not $SkipSmokeTest) {
         Step "Smoke-testing the packaged executable"
-        $stdout = Join-Path $BuildDir "exe-stdout.txt"
-        $stderr = Join-Path $BuildDir "exe-stderr.txt"
-        $process = Start-Process -FilePath $exe -ArgumentList "--help" -NoNewWindow -PassThru `
-            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
-        if (-not $process.WaitForExit(90000)) {
-            $process.Kill()
+        # Not Start-Process: on PowerShell 7 a -PassThru process started with
+        # -NoNewWindow and redirection reports a $null ExitCode (PowerShell issue
+        # #20400), and $null -ne 0 is true -- so a healthy exe was reported as
+        # "exited with" no code and no output. A plain .NET process reads the real
+        # exit code, and both streams are printed when it does fail.
+        $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $startInfo.FileName = $exe
+        $startInfo.Arguments = "--help"
+        $startInfo.WorkingDirectory = Split-Path -Parent $exe
+        $startInfo.UseShellExecute = $false
+        $startInfo.RedirectStandardOutput = $true
+        $startInfo.RedirectStandardError = $true
+        $smoke = [System.Diagnostics.Process]::Start($startInfo)
+        # Read both streams while the exe runs, so a full pipe buffer cannot block it.
+        $smokeOut = $smoke.StandardOutput.ReadToEndAsync()
+        $smokeErr = $smoke.StandardError.ReadToEndAsync()
+        if (-not $smoke.WaitForExit(90000)) {
+            $smoke.Kill()
             Fail "UniMonitor.exe --help did not exit within 90 seconds"
         }
-        if ($process.ExitCode -ne 0) {
-            Get-Content $stderr -ErrorAction SilentlyContinue | Select-Object -First 25
-            Fail "UniMonitor.exe --help exited with $($process.ExitCode)"
+        $stdoutText = $smokeOut.GetAwaiter().GetResult()
+        $stderrText = $smokeErr.GetAwaiter().GetResult()
+        Set-Content -Path (Join-Path $BuildDir "exe-stdout.txt") -Value $stdoutText
+        Set-Content -Path (Join-Path $BuildDir "exe-stderr.txt") -Value $stderrText
+        if ($smoke.ExitCode -ne 0) {
+            Write-Host "--- UniMonitor.exe --help stdout ---"
+            Write-Host $stdoutText
+            Write-Host "--- UniMonitor.exe --help stderr ---"
+            Write-Host $stderrText
+            Fail "UniMonitor.exe --help exited with $($smoke.ExitCode)"
         }
-        if (-not (Select-String -Path $stdout -Pattern "Usage" -Quiet)) {
+        if ($stdoutText -notmatch "Usage") {
             Fail "UniMonitor.exe --help produced no usage text"
         }
     }

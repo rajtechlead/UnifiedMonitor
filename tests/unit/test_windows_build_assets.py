@@ -205,6 +205,29 @@ def test_build_script_does_not_depend_on_optional_cmdlets():
     assert "[System.IO.Compression.ZipFile]::CreateFromDirectory" in script
 
 
+def test_smoke_test_reads_the_real_exit_code():
+    """Start-Process -PassThru can report a null ExitCode on PowerShell 7.
+
+    With -NoNewWindow and redirection (PowerShell issue #20400) the property comes
+    back $null, and `$null -ne 0` is true: the build then failed at
+    "UniMonitor.exe --help exited with" and printed no code and no output for a
+    healthy exe. The smoke test starts the exe through System.Diagnostics.Process
+    instead, which reports the real exit code and both streams.
+    """
+    start_process = re.compile(r"(?m)^\s*(?:\$\w+\s*=\s*)?Start-Process\b")
+
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    assert not start_process.search(script), "the smoke test must not read ExitCode from Start-Process -PassThru"
+    assert "[System.Diagnostics.Process]::Start($startInfo)" in script
+    assert "$smoke.ExitCode -ne 0" in script
+
+    for workflow in (INSTALLER_WORKFLOW, RELEASE):
+        text = workflow.read_text()
+        assert not start_process.search(text), f"{workflow.name} still reads ExitCode from Start-Process -PassThru"
+        assert "[System.Diagnostics.Process]::Start($info)" in text
+        assert "$p.ExitCode -ne 0" in text
+
+
 def test_dependency_install_goes_through_pip():
     script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
     assert '"-m", "pip", "install"' in script, "dependencies must be installed with python -m pip"

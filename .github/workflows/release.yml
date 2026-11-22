@@ -139,22 +139,34 @@ jobs:
       - name: Smoke-test packaged executable
         shell: pwsh
         run: |
-          $out = "exe-stdout.txt"
-          $err = "exe-stderr.txt"
-          $p = Start-Process -FilePath "dist/UniMonitor/UniMonitor.exe" `
-            -ArgumentList "--help" -NoNewWindow -PassThru `
-            -RedirectStandardOutput $out -RedirectStandardError $err
+          # Not Start-Process: on PowerShell 7 a -PassThru process started with
+          # -NoNewWindow and redirection reports a $null ExitCode (PowerShell issue
+          # #20400), so a healthy exe failed this step with no code and no output.
+          $info = [System.Diagnostics.ProcessStartInfo]::new()
+          $info.FileName = "dist/UniMonitor/UniMonitor.exe"
+          $info.Arguments = "--help"
+          $info.UseShellExecute = $false
+          $info.RedirectStandardOutput = $true
+          $info.RedirectStandardError = $true
+          $p = [System.Diagnostics.Process]::Start($info)
+          $outTask = $p.StandardOutput.ReadToEndAsync()
+          $errTask = $p.StandardError.ReadToEndAsync()
           if (-not $p.WaitForExit(90000)) {
             $p.Kill()
             Write-Error "UniMonitor.exe --help did not exit within 90s"
             exit 1
           }
-          Get-Content $out, $err -ErrorAction SilentlyContinue | Select-Object -First 25
+          $out = $outTask.GetAwaiter().GetResult()
+          $err = $errTask.GetAwaiter().GetResult()
+          Set-Content -Path "exe-stdout.txt" -Value $out
+          Set-Content -Path "exe-stderr.txt" -Value $err
+          Write-Host $out
+          Write-Host $err
           if ($p.ExitCode -ne 0) {
             Write-Error "UniMonitor.exe --help exited with $($p.ExitCode)"
             exit 1
           }
-          if (-not (Select-String -Path $out -Pattern "Usage" -Quiet)) {
+          if ($out -notmatch "Usage") {
             Write-Error "UniMonitor.exe --help produced no usage text"
             exit 1
           }
