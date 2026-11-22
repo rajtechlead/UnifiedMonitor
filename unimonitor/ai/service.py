@@ -56,21 +56,6 @@ def _openai_request(provider: Provider, system_prompt: str, user_prompt: str, ma
     return url, headers, payload
 
 
-def _azure_request(provider: Provider, system_prompt: str, user_prompt: str, max_tokens: int) -> tuple[str, dict, dict]:
-    url = f"{provider.base_url.rstrip('/')}/openai/deployments/{provider.model}/chat/completions?api-version=2024-02-01"
-    headers = {"api-key": provider.api_key, "Content-Type": "application/json"}
-    payload = {
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "temperature": 0.2,
-        "max_tokens": max_tokens,
-        "response_format": {"type": "json_object"},
-    }
-    return url, headers, payload
-
-
 def _anthropic_request(provider: Provider, system_prompt: str, user_prompt: str, max_tokens: int) -> tuple[str, dict, dict]:
     url = f"{provider.base_url.rstrip('/')}/messages"
     headers = {
@@ -114,7 +99,7 @@ async def complete(
     http = client or httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS)
     try:
         for provider in chain:
-            build = {"openai": _openai_request, "azure": _azure_request, "anthropic": _anthropic_request}[provider.kind]
+            build = {"openai": _openai_request, "anthropic": _anthropic_request}[provider.kind]
             url, headers, payload = build(provider, system_prompt, user_prompt, max_tokens)
             try:
                 response = await http.post(url, json=payload, headers=headers)

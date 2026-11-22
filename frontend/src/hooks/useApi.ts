@@ -97,10 +97,37 @@ export const findingsApi = {
     api.post(`/findings/${id}/triage`, data).then((r) => r.data),
   history: (id: string) => api.get(`/findings/${id}/history`).then((r) => r.data),
   timeline: (id: string) => api.get(`/findings/${id}/timeline`).then((r) => r.data),
+  aiRemediate: (id: string, forceRefresh = false) =>
+    api
+      .post(`/findings/${id}/remediate`, { force_refresh: forceRefresh })
+      .then((r) => r.data as { finding_id: string; status: string; message?: string }),
   summary: (tenantId?: string) =>
     api.get('/findings/summary', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
   priority: (tenantId?: string) =>
     api.get('/findings/priority', { params: tenantId ? { tenant_id: tenantId } : {} }).then((r) => r.data),
+}
+
+export type AiProviderStatus = {
+  name: string
+  configured: boolean
+  free_tier: boolean
+  models: string[]
+}
+
+export type CustomAiProvider = {
+  name: string
+  base_url: string
+  model: string
+  enabled: boolean
+  has_key: boolean
+  api_key: string
+}
+
+export const aiApi = {
+  status: () =>
+    api.get('/ai/status').then((r) => r.data as { enabled: boolean; providers: AiProviderStatus[]; custom: CustomAiProvider[] }),
+  saveCustom: (providers: { name: string; base_url: string; model: string; api_key: string; enabled: boolean }[]) =>
+    api.put('/ai/providers/custom', { providers }).then((r) => r.data as CustomAiProvider[]),
 }
 
 export const assessmentsApi = {

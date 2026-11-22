@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { useQuery, useMutation } from '@tanstack/react-query'
-import { api } from '../hooks/useApi'
-import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook } from 'lucide-react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { aiApi, api } from '../hooks/useApi'
+import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook, Sparkles } from 'lucide-react'
 import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
 import BrandingPanel from '../components/BrandingPanel'
 import DelegatedAccessPanel from '../components/DelegatedAccessPanel'
@@ -466,6 +466,104 @@ function IntegrationsPanel() {
   )
 }
 
+
+function AiProvidersPanel() {
+  const MASK = '******'
+  const qc = useQueryClient()
+  const { data } = useQuery({ queryKey: ['ai-status'], queryFn: aiApi.status })
+  const [draft, setDraft] = useState({ name: '', base_url: '', model: '', api_key: '' })
+
+  const save = useMutation({
+    mutationFn: (providers: { name: string; base_url: string; model: string; api_key: string; enabled: boolean }[]) =>
+      aiApi.saveCustom(providers),
+    onSuccess: () => {
+      setDraft({ name: '', base_url: '', model: '', api_key: '' })
+      void qc.invalidateQueries({ queryKey: ['ai-status'] })
+    },
+  })
+
+  const existing = (data?.custom || []).map(c => ({
+    name: c.name, base_url: c.base_url, model: c.model, api_key: c.api_key || MASK, enabled: c.enabled,
+  }))
+
+  const add = () => {
+    if (!draft.name || !draft.base_url || !draft.model) return
+    save.mutate([...existing, { ...draft, enabled: true }])
+  }
+
+  return (
+    <Section icon={Sparkles} title="AI remediation providers">
+      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        Guidance is generated from an anonymised prompt (control id, framework, category, severity, state,
+        title and description only). Built-in providers are tried in order and the next one is used
+        automatically when one is out of quota.
+      </div>
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
+        {(data?.providers || []).map(provider => (
+          <span key={provider.name} style={{
+            fontSize: 11, padding: '2px 8px', borderRadius: 4,
+            background: provider.configured ? 'rgba(16,185,129,0.1)' : 'var(--color-surface-2)',
+            color: provider.configured ? '#10B981' : 'var(--color-text-muted)',
+          }}>
+            {provider.name}{provider.free_tier ? ' (free tier)' : ''}{provider.configured ? '' : ' — not configured'}
+          </span>
+        ))}
+        {data && data.providers.length === 0 && (
+          <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No built-in provider has a key yet.</span>
+        )}
+      </div>
+
+      {existing.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 12 }}>
+          {existing.map(provider => (
+            <div key={provider.name} style={{
+              display: 'flex', alignItems: 'center', gap: 10, fontSize: 12,
+              padding: '6px 10px', background: 'var(--color-surface-2)', borderRadius: 6,
+            }}>
+              <strong style={{ minWidth: 110 }}>{provider.name}</strong>
+              <span style={{ flex: 1, color: 'var(--color-text-muted)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {provider.base_url} · {provider.model}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${provider.name}`}
+                onClick={() => save.mutate(existing.filter(item => item.name !== provider.name))}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: 0 }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr) auto', gap: 8, alignItems: 'end' }}>
+        <FormField label="Name" value={draft.name} onChange={value => setDraft({ ...draft, name: value })} placeholder="internal-gw" />
+        <FormField label="Base URL" value={draft.base_url} onChange={value => setDraft({ ...draft, base_url: value })} placeholder="https://llm.example.com/v1" />
+        <FormField label="Model" value={draft.model} onChange={value => setDraft({ ...draft, model: value })} placeholder="model-name" />
+        <FormField label="API key" type="password" value={draft.api_key} onChange={value => setDraft({ ...draft, api_key: value })} placeholder="sk-…" />
+        <button
+          type="button"
+          onClick={add}
+          disabled={save.isPending}
+          style={{
+            padding: '8px 14px', fontSize: 12, background: 'var(--color-brand)', color: 'white',
+            border: 'none', borderRadius: 6, cursor: save.isPending ? 'not-allowed' : 'pointer', height: 36,
+          }}
+        >
+          Add
+        </button>
+      </div>
+      {save.isError && (
+        <div style={{ fontSize: 11, color: '#EF4444', marginTop: 6 }}>
+          Could not save: use lowercase letters, digits or dashes for the name, and an http(s) base URL.
+        </div>
+      )}
+    </Section>
+  )
+}
+
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false)
 
@@ -530,6 +628,8 @@ export default function SettingsPage() {
       <PostureSnapshotEditor />
 
       <IntegrationsPanel />
+
+      <AiProvidersPanel />
 
       <BrandingPanel />
 

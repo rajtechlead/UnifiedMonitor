@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from unimonitor.ai.providers import configured_providers
 from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 
@@ -31,12 +32,12 @@ class AIRemediationEngine:
     def __init__(self, use_fallback: bool = False) -> None:
         self.use_fallback = use_fallback
 
-    async def generate_remediation(self, finding: dict) -> dict[str, Any]:
+    async def generate_remediation(self, finding: dict, tenant: Any = None) -> dict[str, Any]:
         """Generate remediation for *finding* (a plain dict or ORM-like object).
 
         Returns a normalised 9-field dict with key ``source`` set to
-        ``"rule_based"`` when the fallback path is used or ``"azure_openai"``
-        when the AI path succeeds.
+        ``"rule_based"`` when the fallback path is used, otherwise the name of the
+        provider that answered.
         """
 
         # Extract fields from the finding (supports dicts and ORM objects)
@@ -55,6 +56,7 @@ class AIRemediationEngine:
         if not self.use_fallback:
             try:
                 result = await self._call_openai(
+                    tenant=tenant,
                     finding_title=title,
                     finding_description=description,
                     severity=severity,
@@ -63,7 +65,7 @@ class AIRemediationEngine:
                     control_id=control_id,
                 )
                 if result is not None:
-                    return self._normalise(result, source=str(result.pop("_provider", "azure_openai")))
+                    return self._normalise(result, source=str(result.pop("_provider", "ai")))
             except Exception as exc:
                 logger.warning("ai_remediation_failed_fallback", error=str(exc))
 
@@ -84,6 +86,7 @@ class AIRemediationEngine:
         category: str,
         state: str,
         control_id: str,
+        tenant: Any = None,
     ) -> dict[str, Any] | None:
         """Ask the configured providers for remediation of an anonymised finding.
 
@@ -95,7 +98,9 @@ class AIRemediationEngine:
             return None
 
         from unimonitor.ai import AIUnavailableError, anonymise, complete
+        from unimonitor.ai.custom import providers_for
 
+        chain = [*await providers_for(tenant), *configured_providers()]
         payload = anonymise(
             {
                 "control_id": control_id,
@@ -107,7 +112,7 @@ class AIRemediationEngine:
             }
         )
         try:
-            response = await complete(SYSTEM_PROMPT, build_user_prompt(payload))
+            response = await complete(SYSTEM_PROMPT, build_user_prompt(payload), providers=chain)
         except AIUnavailableError as exc:
             logger.warning("ai_remediation_unavailable", error=str(exc)[:300])
             return None

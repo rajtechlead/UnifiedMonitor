@@ -18,7 +18,7 @@ class Provider:
     """One configured endpoint. ``kind`` selects the request/response shape."""
 
     name: str
-    kind: str  # openai | anthropic | azure
+    kind: str  # openai | anthropic
     base_url: str
     model: str
     api_key: str
@@ -43,7 +43,6 @@ KNOWN_MODELS: dict[str, tuple[str, ...]] = {
     "openai": ("gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "o4-mini"),
     "anthropic": ("claude-3-5-sonnet-latest", "claude-3-5-haiku-latest", "claude-sonnet-4-5"),
     "groq": ("llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"),
-    "azure_openai": ("gpt-4o", "gpt-4o-mini"),
 }
 
 
@@ -84,14 +83,6 @@ def configured_providers() -> list[Provider]:
             api_key=settings.GROQ_API_KEY,
             free_tier=True,
             models=KNOWN_MODELS["groq"],
-        ),
-        "azure_openai": Provider(
-            name="azure_openai",
-            kind="azure",
-            base_url=settings.AZURE_OPENAI_ENDPOINT,
-            model=settings.AZURE_OPENAI_DEPLOYMENT,
-            api_key=settings.AZURE_OPENAI_API_KEY,
-            models=KNOWN_MODELS["azure_openai"],
         ),
     }
 

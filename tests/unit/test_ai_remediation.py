@@ -133,7 +133,7 @@ class TestAIRemediationEngineOpenAI:
         }
         with patch.object(engine, "_call_openai", new=AsyncMock(return_value=ai_result)):
             result = _run(engine.generate_remediation(FINDING_DICT))
-        assert result["source"] == "azure_openai"
+        assert result["source"] == "ai"
         assert result["summary"] == "AI summary"
         assert result["steps"] == ["Step 1", "Step 2"]
 

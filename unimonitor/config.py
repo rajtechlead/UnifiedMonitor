@@ -146,7 +146,7 @@ class Settings(BaseSettings):
     AI_ENABLED: bool = False
     # Failover order. A free-tier provider is tried first and the next one is used
     # automatically when it reports a quota, rate-limit or availability error.
-    AI_PROVIDER_ORDER: str = "freebuff,groq,openai,anthropic,azure_openai"
+    AI_PROVIDER_ORDER: str = "freebuff,groq,openai,anthropic"
     AI_TIMEOUT_SECONDS: float = 45.0
     # Freebuff's OpenAI-compatible API (all its models are listed at /models).
     FREEBUFF_BASE_URL: str = "https://freebuff.com/api/v1/paid"
@@ -161,10 +161,6 @@ class Settings(BaseSettings):
     GROQ_API_KEY: str = ""
     GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
-    # Kept for existing deployments; used when azure_openai is in the order.
-    AZURE_OPENAI_ENDPOINT: str = ""
-    AZURE_OPENAI_API_KEY: str = ""
-    AZURE_OPENAI_DEPLOYMENT: str = "gpt-4o"
 
     # ── Secret Management ────────────────────────────────────
     # Provider: azure_key_vault | aws_secrets_manager | local_vault

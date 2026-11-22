@@ -18,6 +18,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Custom AI providers: a tenant can register an OpenAI-compatible endpoint (Settings →
+  AI remediation providers), tried before the built-in chain, with the key in the secret
+  provider. Azure OpenAI was removed from the provider list.
+- Findings gained a "Generate AI guidance" button and provider attribution; the
+  settings page shows built-in provider state and manages custom endpoints.
+
 - Evidence status per control: `evaluated`, `stale` (older than `EVIDENCE_STALE_DAYS`,
   default 7) or `never_evaluated`, with the evaluation time and source run, plus
   `GET /grc/frameworks/{id}/evidence-coverage` for framework coverage.

@@ -31,10 +31,9 @@ finding row ──► anonymise() ──► provider chain ──► JSON guidan
   | `groq` | `GROQ_API_KEY`, `GROQ_MODEL` | yes |
   | `openai` | `OPENAI_API_KEY`, `OPENAI_MODEL` | no |
   | `anthropic` | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` | no |
-  | `azure_openai` | existing `AZURE_OPENAI_*` settings | no |
 
 * `unimonitor/ai/service.py` tries them in the order set by `AI_PROVIDER_ORDER`
-  (default `freebuff,groq,openai,anthropic,azure_openai`). A quota, rate-limit, auth or
+  (default `freebuff,groq,openai,anthropic`). A quota, rate-limit, auth or
   availability failure (402/403/404/408/409/425/429/5xx or a transport error) moves to
   the next provider; only an unparseable answer from every provider ends in the
   rule-based fallback. The provider that answered is recorded as the guidance source.
@@ -91,3 +90,24 @@ No live Entra, Google Workspace or Okta tenant was available in this environment
 request construction, code exchange, profile normalisation, tenant assignment, state
 validation and error paths are covered by tests with mocked HTTP transports; a real
 sign-in still needs one run against each provider's app registration.
+
+## Custom providers
+
+Azure OpenAI is no longer offered. A tenant that wants a different vendor can add its
+own OpenAI-compatible endpoint in **Settings → AI remediation providers** (or
+`PUT /api/v1/ai/providers/custom`): name, base URL, model and key. Custom providers are
+tried **before** the built-in chain, and the key is written to the secret provider
+(`unimonitor-tenant-<tenant>-ai-<name>`), never to the tenant row. Sending the mask
+(`******`) keeps the stored key; removing a provider deletes its key.
+
+In the UI, a finding's expanded panel now has **Generate AI guidance**, shows which
+provider produced the guidance, and the settings page lists the built-in providers,
+their configured state, and the tenant's custom endpoints.
+
+## Permission review (this change)
+
+The new features add no Microsoft Graph permission: AI remediation reads the finding
+row and calls the model, and SSO asks only `openid profile email`. The complete Graph
+application-permission list remains centralised in
+`unimonitor/onboarding/permissions.py`, which the onboarding flow requests and reports
+granted scopes from — no duplicate list was introduced.

@@ -31,6 +31,7 @@ async def generate_ai_remediation_now(finding_id: str) -> dict:
 
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.models.finding import Finding
+    from unimonitor.db.models.tenant import Tenant
     from unimonitor.grc.ai_remediation import AIRemediationEngine
 
     async with async_session_factory() as db:
@@ -38,7 +39,8 @@ async def generate_ai_remediation_now(finding_id: str) -> dict:
         if finding is None:
             raise ValueError(f"Finding {finding_id} not found")
 
-        result = await AIRemediationEngine().generate_remediation(finding)
+        tenant = await db.get(Tenant, finding.tenant_id)
+        result = await AIRemediationEngine().generate_remediation(finding, tenant=tenant)
         finding.ai_remediation = json.dumps(result)
         await db.commit()
 
