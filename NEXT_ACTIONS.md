@@ -1,3 +1,37 @@
+## 2026-11-22 — owner observations, atomic vault writes, case-insensitive severity
+
+Full register: [`docs/PLATFORM_OBSERVATIONS_2026-11-22.md`](docs/PLATFORM_OBSERVATIONS_2026-11-22.md).
+
+- ✅ Local vault writes are atomic: the ciphertext, the metadata and a new master
+  key are staged in a sibling file, flushed, then renamed over the destination, so
+  a crash mid-write leaves the previous vault readable and no partial file behind.
+  Tests prove both failure points (`fsync`, `os.replace`) leave the old vault intact.
+- ✅ `GET /dashboard/ciso` returns `strongest_frameworks` next to the weakest; the
+  CISO footer counts link into the findings list (OBS-02).
+- ✅ Risk dashboard hides findings from providers that are not connected, and
+  rebuilds the heatmap from the same filtered ids (OBS-06).
+- ✅ Findings severity filtering is case-insensitive, so SOC tiles open the rows
+  they count; the SIEM export severity filter no longer uppercases (OBS-07).
+- ✅ New assessments list every registry framework instead of ten hard-coded ids
+  (OBS-10); users can be created with a local password (OBS-16).
+- ✅ The Settings notification section talks to a real endpoint: flat preferences
+  in `Tenant.settings_json`, SMTP password stored, masked on read, preserved when
+  the mask is echoed, and the form seeds from the server (OBS-18 first half).
+- ✅ Delegated tenant access populates: `/tenants` is capped at `page_size=100` and
+  `/users` returns a bare array, both now normalised (OBS-19).
+- ✅ Sonar `typescript:S6582` in `ZeroTrustPlatformPage.tsx` fixed with an optional
+  chain.
+- Checks: `pytest -q` 725 passed (was 714), `ruff check`/`ruff format --check`,
+  `mypy unimonitor/`, `eslint --max-warnings 0`, `tsc --noEmit`, `npm run build`.
+
+Still open from the register: OBS-03 (per-platform framework coverage), OBS-04
+(automatic posture inventory), OBS-05 (Zero Trust run/score disagreement), OBS-08
+(per-provider audit), OBS-11 (manual assessment failure — needs the failed run's
+`error_message`), OBS-12 (requirement catalogue and level selection for every
+framework), OBS-13 (tenant add/suspend/delete UI), OBS-14/15 (Graph 502 handling),
+OBS-17 (connector credentials in the vault) and OBS-18 second half (send mail with
+the registered Entra app).
+
 ## 2026-11-21 — posture engines, control trends, scorecard, branding
 
 - ✅ Posture analysis is now a real package (`unimonitor/posture/`): CIS packs for

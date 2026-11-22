@@ -19,13 +19,15 @@ export default function DelegatedAccessPanel() {
   const [role, setRole] = useState('viewer')
   const [message, setMessage] = useState('')
 
+  // The tenants endpoint is paginated (page_size caps at 100) and /users returns
+  // a plain array, so both are normalised to the shape this panel reads.
   const { data: tenants } = useQuery<{ items: Tenant[] }>({
     queryKey: ['tenants', 'delegation'],
-    queryFn: () => api.get('/tenants', { params: { page_size: 200 } }).then((response) => response.data),
+    queryFn: () => api.get('/tenants', { params: { page_size: 100 } }).then((response) => response.data),
   })
   const { data: users } = useQuery<{ items: User[] }>({
     queryKey: ['users', 'delegation'],
-    queryFn: () => api.get('/users').then((response) => response.data),
+    queryFn: () => api.get('/users').then((response) => ({ items: response.data as User[] })),
   })
   const { data: grants } = useQuery<Grant[]>({
     queryKey: ['tenant-access', tenantId],

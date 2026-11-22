@@ -63,6 +63,7 @@ type CisoResponse = {
   clouds: CloudRiskRow[]
   top_risks: CisoRiskItem[]
   weakest_frameworks: FrameworkRow[]
+  strongest_frameworks: FrameworkRow[]
   coverage_trend: TrendPoint[]
 }
 
@@ -77,6 +78,30 @@ const cardStyle = {
   border: '1px solid var(--color-border)',
   borderRadius: 12,
   padding: 20,
+}
+
+function FrameworkCoverageList({ rows, empty }: Readonly<{ rows: FrameworkRow[]; empty: string }>) {
+  if (rows.length === 0) {
+    return <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>{empty}</div>
+  }
+  return rows.map((fw) => (
+    <div key={fw.framework_id} style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+        <Link to={`/frameworks/${fw.framework_id}`} style={{ fontSize: 13, fontWeight: 500, color: 'inherit' }}>
+          {fw.framework_name}
+        </Link>
+        <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(fw.coverage_pct) }}>
+          {Math.round(fw.coverage_pct)}%
+        </span>
+      </div>
+      <div style={{ height: 8, background: 'var(--color-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
+        <div style={{ width: `${Math.min(100, fw.coverage_pct)}%`, height: '100%', background: scoreColor(fw.coverage_pct) }} />
+      </div>
+      <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>
+        {fw.controls_passed}/{fw.controls_total} controls passing
+      </div>
+    </div>
+  ))
 }
 
 export default function CisoDashboard() {
@@ -107,7 +132,10 @@ export default function CisoDashboard() {
     )
   }
 
-  const { scores, severity_totals, state_totals, clouds, top_risks, weakest_frameworks, coverage_trend } = data
+  const {
+    scores, severity_totals, state_totals, clouds, top_risks,
+    weakest_frameworks, strongest_frameworks, coverage_trend,
+  } = data
   const reporting = clouds.filter((c) => c.connected)
 
   return (
@@ -249,29 +277,15 @@ export default function CisoDashboard() {
           )}
         </div>
 
-        {/* Weakest frameworks */}
+        {/* Weakest and strongest frameworks, so a board sees what holds up */}
         <div style={cardStyle}>
           <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Weakest Frameworks</div>
-          {weakest_frameworks.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>No framework coverage yet.</div>
-          ) : (
-            weakest_frameworks.map((fw) => (
-              <div key={fw.framework_id} style={{ marginBottom: 14 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{fw.framework_name}</span>
-                  <span style={{ fontSize: 13, fontWeight: 700, color: scoreColor(fw.coverage_pct) }}>
-                    {Math.round(fw.coverage_pct)}%
-                  </span>
-                </div>
-                <div style={{ height: 8, background: 'var(--color-surface-2)', borderRadius: 4, overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.min(100, fw.coverage_pct)}%`, height: '100%', background: scoreColor(fw.coverage_pct) }} />
-                </div>
-                <div style={{ marginTop: 4, fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  {fw.controls_passed}/{fw.controls_total} controls passing
-                </div>
-              </div>
-            ))
-          )}
+          <FrameworkCoverageList rows={weakest_frameworks} empty="No framework coverage yet." />
+        </div>
+
+        <div style={cardStyle}>
+          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Strongest Frameworks</div>
+          <FrameworkCoverageList rows={strongest_frameworks} empty="No framework coverage yet." />
         </div>
       </div>
 
@@ -298,18 +312,18 @@ export default function CisoDashboard() {
         )}
       </div>
 
-      {/* Control state footer */}
+      {/* Control state footer — each count opens the findings it stands for */}
       <div style={{ ...cardStyle, display: 'flex', gap: 24, flexWrap: 'wrap', fontSize: 13 }}>
         {[
-          { label: 'Implemented', value: state_totals.implemented, color: '#10B981' },
-          { label: 'Partially implemented', value: state_totals.partially_implemented, color: '#F59E0B' },
-          { label: 'Not implemented', value: state_totals.not_implemented, color: '#EF4444' },
-          { label: 'Not applicable', value: state_totals.not_applicable, color: 'var(--color-info)' },
+          { label: 'Implemented', value: state_totals.implemented, color: '#10B981', state: 'implemented' },
+          { label: 'Partially implemented', value: state_totals.partially_implemented, color: '#F59E0B', state: 'partially_implemented' },
+          { label: 'Not implemented', value: state_totals.not_implemented, color: '#EF4444', state: 'not_implemented' },
+          { label: 'Not applicable', value: state_totals.not_applicable, color: 'var(--color-info)', state: 'not_applicable' },
         ].map((s) => (
-          <div key={s.label}>
+          <Link key={s.label} to={`/findings?state=${s.state}`} style={{ color: 'inherit', textDecoration: 'none' }}>
             <span style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</span>
             <span style={{ marginLeft: 6, color: 'var(--color-text-muted)' }}>{s.label}</span>
-          </div>
+          </Link>
         ))}
       </div>
     </div>

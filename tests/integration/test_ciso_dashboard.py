@@ -87,6 +87,19 @@ class TestCisoDashboard:
         assert coverage == sorted(coverage)
         assert len(coverage) <= 5
 
+    async def test_strongest_frameworks_sorted(self, client: AsyncClient, auth_headers: dict):
+        r = await client.get("/api/v1/dashboard/ciso", headers=auth_headers)
+        strongest = [fw["coverage_pct"] for fw in r.json()["strongest_frameworks"]]
+        assert strongest == sorted(strongest, reverse=True)
+        assert len(strongest) <= 5
+
+    async def test_strongest_frameworks_mirror_weakest(self, client: AsyncClient, auth_headers: dict):
+        r = await client.get("/api/v1/dashboard/ciso", headers=auth_headers)
+        data = r.json()
+        weakest = data["weakest_frameworks"]
+        strongest = data["strongest_frameworks"]
+        assert strongest[0]["coverage_pct"] >= weakest[0]["coverage_pct"]
+
     async def test_weakest_frameworks_use_display_names(self, client: AsyncClient, auth_headers: dict):
         from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
 

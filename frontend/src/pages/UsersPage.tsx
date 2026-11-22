@@ -31,6 +31,7 @@ export default function UsersPage() {
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
   const [role, setRole] = useState('viewer')
+  const [password, setPassword] = useState('')
   const [search, setSearch] = useState('')
   const [roleFilter, setRoleFilter] = useState('')
   const [error, setError] = useState('')
@@ -43,9 +44,15 @@ export default function UsersPage() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['users'] })
 
   const create = useMutation({
-    mutationFn: () => usersApi.create({ email: email.trim(), full_name: fullName.trim(), role }),
+    mutationFn: () => usersApi.create({
+      email: email.trim(),
+      full_name: fullName.trim(),
+      role,
+      // An empty password keeps the account Microsoft-sign-in only.
+      password: password || undefined,
+    }),
     onSuccess: () => {
-      setEmail(''); setFullName(''); setRole('viewer'); setShowAdd(false); setError('')
+      setEmail(''); setFullName(''); setRole('viewer'); setPassword(''); setShowAdd(false); setError('')
       void refresh()
     },
     onError: (err: unknown) => {
@@ -128,6 +135,15 @@ export default function UsersPage() {
           <select style={inputStyle} aria-label="Role" value={role} onChange={e => setRole(e.target.value)}>
             {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
+          <input
+            style={{ ...inputStyle, flex: 1, minWidth: 200, opacity: password.length > 0 && password.length < 12 ? 0.8 : 1 }}
+            type="password"
+            autoComplete="new-password"
+            placeholder="Password (optional, 12+ chars)"
+            aria-label="Password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+          />
           <button
             onClick={() => create.mutate()}
             disabled={create.isPending || !email.includes('@')}
@@ -139,7 +155,7 @@ export default function UsersPage() {
             {create.isPending ? 'Adding…' : 'Add'}
           </button>
           <div style={{ flexBasis: '100%', fontSize: 11, color: 'var(--color-text-muted)' }}>
-            Users sign in with Microsoft. A local password is not required.
+            Leave the password empty for Microsoft sign-in only. A local password must be at least 12 characters.
           </div>
         </div>
       )}

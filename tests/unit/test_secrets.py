@@ -107,6 +107,46 @@ class TestLocalVault:
         for i, name in enumerate(names):
             assert await vault.get_secret(name) == f"value-{i}"
 
+    @pytest.mark.asyncio
+    async def test_failed_write_keeps_the_previous_vault_intact(self, vault, monkeypatch):
+        """A crash mid-write must not truncate the vault that was already there.
+
+        The bytes are staged in a temporary file and renamed into place, so a
+        failure before the rename leaves the old ciphertext exactly as it was
+        and no partial file behind.
+        """
+        await vault.set_secret("stable/key", "stable-value")
+
+        def _crash(fd):
+            raise OSError("simulated disk failure mid-write")
+
+        monkeypatch.setattr("unimonitor.secrets.local_vault.os.fsync", _crash)
+
+        with pytest.raises(OSError, match="simulated disk failure"):
+            await vault.set_secret("lost/key", "lost-value")
+
+        assert await vault.get_secret("stable/key") == "stable-value"
+        assert list(vault.vault_dir.glob(".*.tmp")) == []
+        with pytest.raises(KeyError):
+            await vault.get_secret("lost/key")
+
+    @pytest.mark.asyncio
+    async def test_failed_rename_keeps_the_previous_vault_intact(self, vault, monkeypatch):
+        """If the rename itself fails the destination is never touched."""
+        await vault.set_secret("stable/key", "stable-value")
+        before = vault._enc_path.read_bytes()
+
+        def _fail_replace(source, destination):
+            raise OSError("simulated rename failure")
+
+        monkeypatch.setattr("unimonitor.secrets.local_vault.os.replace", _fail_replace)
+
+        with pytest.raises(OSError, match="simulated rename failure"):
+            await vault.set_secret("lost/key", "lost-value")
+
+        assert vault._enc_path.read_bytes() == before
+        assert list(vault.vault_dir.glob(".*.tmp")) == []
+
 
 # ---------------------------------------------------------------------------
 # SecretCache tests

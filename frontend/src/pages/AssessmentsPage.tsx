@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { assessmentsApi } from '../hooks/useApi'
+import { assessmentsApi, grcApi } from '../hooks/useApi'
 import { Play, Plus, ChevronDown, ChevronUp, Clock, CheckCircle, XCircle, Loader } from 'lucide-react'
 
 type Assessment = {
@@ -25,11 +25,10 @@ type AssessmentRun = {
   triggered_by: string
 }
 
-const FRAMEWORK_OPTIONS = [
-  'iso_27001_2022', 'nist_csf_2', 'cis_controls_v8', 'cis_m365',
-  'zero_trust', 'soc2', 'pci_dss_4', 'hipaa', 'gdpr', 'cmmc_2',
-]
+type FrameworkOption = { framework_id: string; framework_name: string }
 
+// Display names for the legacy ids an assessment may already reference; ids that
+// are not listed here fall back to the registry's own name.
 const FRAMEWORK_LABELS: Record<string, string> = {
   iso_27001_2022: 'ISO 27001:2022', nist_csf_2: 'NIST CSF 2.0',
   cis_controls_v8: 'CIS Controls v8', cis_m365: 'CIS M365',
@@ -44,7 +43,7 @@ function RunStatusIcon({ status }: Readonly<{ status: string }>) {
   return <Clock size={14} color="#F59E0B" />
 }
 
-function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
+function AssessmentCard({ a, labels }: Readonly<{ a: Assessment; labels: Record<string, string> }>) {
   const [expanded, setExpanded] = useState(false)
   const qc = useQueryClient()
 
@@ -98,7 +97,7 @@ function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
                 fontSize: 10, padding: '1px 6px', borderRadius: 3,
                 background: 'rgba(23,118,210,0.1)', color: 'var(--color-brand)',
               }}>
-                {FRAMEWORK_LABELS[fw] || fw}
+                {labels[fw] || FRAMEWORK_LABELS[fw] || fw}
               </span>
             ))}
           </div>
@@ -183,13 +182,22 @@ function AssessmentCard({ a }: Readonly<{ a: Assessment }>) {
 export default function AssessmentsPage() {
   const [showNew, setShowNew] = useState(false)
   const [newName, setNewName] = useState('')
-  const [newFrameworks, setNewFrameworks] = useState<string[]>(['iso_27001_2022', 'cis_m365'])
+  const [newFrameworks, setNewFrameworks] = useState<string[]>([])
   const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['assessments'],
     queryFn: assessmentsApi.list,
   })
+
+  // Every framework the registry knows about, not a hard-coded shortlist, so a
+  // new assessment can cover any of them.
+  const { data: frameworks } = useQuery<FrameworkOption[]>({
+    queryKey: ['grc', 'frameworks'],
+    queryFn: grcApi.frameworks,
+  })
+  const frameworkOptions = frameworks ?? []
+  const frameworkNames = Object.fromEntries(frameworkOptions.map((fw) => [fw.framework_id, fw.framework_name]))
 
   const createMutation = useMutation({
     mutationFn: () => assessmentsApi.create({
@@ -253,23 +261,23 @@ export default function AssessmentsPage() {
           <div style={{ marginBottom: 16 }}>
             <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 8 }}>Frameworks</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {FRAMEWORK_OPTIONS.map(fw => (
-                <label key={fw} style={{
+              {frameworkOptions.map(fw => (
+                <label key={fw.framework_id} style={{
                   display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer',
                   padding: '4px 10px', borderRadius: 6, fontSize: 12,
-                  border: `1px solid ${newFrameworks.includes(fw) ? 'var(--color-brand)' : 'var(--color-border)'}`,
-                  background: newFrameworks.includes(fw) ? 'rgba(23,118,210,0.1)' : 'var(--color-surface-2)',
-                  color: newFrameworks.includes(fw) ? 'var(--color-brand)' : 'var(--color-text-muted)',
+                  border: `1px solid ${newFrameworks.includes(fw.framework_id) ? 'var(--color-brand)' : 'var(--color-border)'}`,
+                  background: newFrameworks.includes(fw.framework_id) ? 'rgba(23,118,210,0.1)' : 'var(--color-surface-2)',
+                  color: newFrameworks.includes(fw.framework_id) ? 'var(--color-brand)' : 'var(--color-text-muted)',
                 }}>
                   <input
                     type="checkbox"
-                    checked={newFrameworks.includes(fw)}
+                    checked={newFrameworks.includes(fw.framework_id)}
                     onChange={e => setNewFrameworks(prev =>
-                      e.target.checked ? [...prev, fw] : prev.filter(f => f !== fw)
+                      e.target.checked ? [...prev, fw.framework_id] : prev.filter(f => f !== fw.framework_id)
                     )}
                     style={{ display: 'none' }}
                   />
-                  {FRAMEWORK_LABELS[fw] || fw}
+                  {fw.framework_name}
                 </label>
               ))}
             </div>
@@ -316,7 +324,7 @@ export default function AssessmentsPage() {
       )}
       {!isLoading && assessments.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {assessments.map(a => <AssessmentCard key={a.id} a={a} />)}
+          {assessments.map(a => <AssessmentCard key={a.id} a={a} labels={frameworkNames} />)}
         </div>
       )}
     </div>

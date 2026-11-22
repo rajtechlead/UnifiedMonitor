@@ -129,7 +129,7 @@ export default function ZeroTrustPlatformPage() {
         <Stat label="Failing / investigate" value={String(failing.length)} />
       </div>
 
-      {platform && platform.pillars.some((pillar) => pillar.total > 0) && (
+      {platform?.pillars.some((pillar) => pillar.total > 0) && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: 10 }}>
           {platform.pillars
             .filter((pillar) => pillar.total > 0)

@@ -245,7 +245,7 @@ async def export_siem(
     if severity:
         if severity.lower() not in VALID_SEVERITIES:
             raise HTTPException(status_code=400, detail=f"Invalid severity '{severity}'")
-        stmt = stmt.where(Finding.severity == severity.upper())
+        stmt = stmt.where(Finding.severity == severity.lower())
     stmt = stmt.order_by(Finding.risk_score.desc(), Finding.last_seen_at.desc()).limit(limit)
     rows = (await db.execute(stmt)).scalars().all()
 
@@ -286,14 +286,16 @@ async def list_findings(
 
     await _release_expired_suppressions(db)
 
-    if filters.severity and filters.severity.lower() not in VALID_SEVERITIES:
+    # Severity is stored lowercase, and dashboard links send it uppercased.
+    severity = filters.severity.lower() if filters.severity else None
+    if severity and severity not in VALID_SEVERITIES:
         raise HTTPException(status_code=422, detail=f"Invalid severity: {filters.severity}")
     # State filter: accept known states and pass-through unknown values (returns empty results)
 
     repo = FindingRepository(db)
     findings, total = await repo.list_paginated(
         tenant_id=filters.tenant_id,
-        severity=filters.severity,
+        severity=severity,
         state=filters.state,
         triage_status=filters.triage_status,
         category=filters.category,

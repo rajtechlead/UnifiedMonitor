@@ -124,6 +124,98 @@ async def put_branding(
     return body
 
 
+NOTIFICATIONS_KEY = "notifications"
+MASK = "******"
+
+
+class NotificationPreferences(BaseModel):
+    """The flat notification shape the Settings page edits.
+
+    Stored in ``Tenant.settings_json`` so no schema change is needed; the SMTP
+    password is write-only from the client's point of view and is masked on read.
+    """
+
+    smtp_enabled: bool = False
+    smtp_host: str = ""
+    smtp_port: int = Field(default=587, ge=1, le=65535)
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_to_emails: list[str] = Field(default_factory=list)
+    teams_webhook_url: str = ""
+    slack_webhook_url: str = ""
+    immediate_alerts: bool = True
+    daily_digest: bool = False
+    weekly_digest: bool = True
+    alert_severity_threshold: str = "HIGH"
+
+
+def _mask(secret: str) -> str:
+    return MASK if secret else ""
+
+
+def _notification_preferences(tenant: Tenant | None) -> NotificationPreferences:
+    if tenant is None:
+        return NotificationPreferences()
+    raw = _tenant_settings(tenant).get(NOTIFICATIONS_KEY)
+    if not isinstance(raw, dict):
+        return NotificationPreferences()
+    try:
+        prefs = NotificationPreferences(**raw)
+    except ValidationError:
+        logger.warning("notification_settings_invalid", tenant_id=tenant.id)
+        return NotificationPreferences()
+    prefs.smtp_password = _mask(prefs.smtp_password)
+    return prefs
+
+
+@router.get("/notifications", responses={401: {"description": "Not authenticated"}})
+async def get_notification_preferences(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NotificationPreferences:
+    """Notification channels for the caller's tenant (secrets masked)."""
+    tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
+    return _notification_preferences(tenant)
+
+
+@router.put(
+    "/notifications",
+    responses={
+        400: {"description": "The user has no tenant to configure"},
+        401: {"description": "Not authenticated"},
+        404: {"description": "Tenant not found"},
+        422: {"description": "Invalid notification value"},
+    },
+)
+async def put_notification_preferences(
+    body: NotificationPreferences,
+    current_user: Annotated[Any, Depends(require_role("analyst"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> NotificationPreferences:
+    """Persist SMTP, webhook and digest preferences for the tenant."""
+    if not current_user.tenant_id:
+        raise HTTPException(status_code=400, detail="This account is not attached to a tenant")
+    tenant = await db.get(Tenant, current_user.tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=404, detail="Tenant not found")
+
+    settings = _tenant_settings(tenant)
+    previous = settings.get(NOTIFICATIONS_KEY)
+    stored_password = previous.get("smtp_password", "") if isinstance(previous, dict) else ""
+    payload = body.model_dump()
+    # The client round-trips the mask; keep the secret it stands for.
+    if payload["smtp_password"] == MASK:
+        payload["smtp_password"] = stored_password
+
+    settings[NOTIFICATIONS_KEY] = payload
+    tenant.settings_json = json.dumps(settings, sort_keys=True)
+    await db.flush()
+    logger.info("notification_settings_updated", tenant_id=tenant.id, by=current_user.id)
+
+    body.smtp_password = _mask(payload["smtp_password"])
+    return body
+
+
 def _snapshot_path() -> Path | None:
     configured = str(getattr(get_settings(), "UNIMONITOR_POSTURE_SNAPSHOT", "") or "")
     return Path(configured) if configured else None

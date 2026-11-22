@@ -2,7 +2,7 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-17 UTC
+Last Updated: 2026-11-22 UTC
 
 ## Critical — Active
 
@@ -11,6 +11,33 @@ None
 ## High — Active
 
 None
+
+## Platform observations — 2026-11-22
+
+Owner review of the running platform. Full register with root causes and plans:
+[`docs/PLATFORM_OBSERVATIONS_2026-11-22.md`](docs/PLATFORM_OBSERVATIONS_2026-11-22.md).
+
+| ID | Description | Status |
+|---|---|---|
+| OBS-01 | Executive dashboard framework coverage could not be filtered | ✅ chip selector added |
+| OBS-02 | CISO dashboard lacked strongest frameworks and clickable state counts | ✅ both added, with tests |
+| OBS-03 | Cloud platform dashboard lists every framework, not the provider's | ⬜ per-provider coverage needed |
+| OBS-04 | Cloud posture requires a manually uploaded snapshot | ⬜ collector-to-engine bridge needed |
+| OBS-05 | Zero Trust run reports 0% while tests report "not run" | ⬜ needs a reproduction run |
+| OBS-06 | Risk page counted open risks for an unconnected AWS account | ✅ filtered by connected providers, with test |
+| OBS-07 | SOC severity links opened an empty findings page | ✅ severity filter normalised to lowercase, with test |
+| OBS-08 | Audit page shows only the platform's own audit chain | ⬜ provider audit ingestion or relabel decision |
+| OBS-09 | Direct findings navigation shows all data | ℹ️ correct behaviour (control case for OBS-07) |
+| OBS-10 | New assessment offered ten hard-coded frameworks | ✅ reads the framework registry |
+| OBS-11 | Manual assessment of a framework fails | ⬜ needs the failed run's `error_message` |
+| OBS-12 | Auditor portal: requirement tables and level selection only for CPCSC/Level 1 | ⬜ catalogue generalisation planned |
+| OBS-13 | Managed tenants cannot be added, suspended or deleted from the UI | ⬜ API exists; UI missing |
+| OBS-14 | Licences page returns Graph 502 | ⬜ live tenant required |
+| OBS-15 | Service health returns Graph 502 | ⬜ live tenant required |
+| OBS-16 | User management could not set a password | ✅ optional password field wired to the existing API |
+| OBS-17 | SIEM/ticket connectors cannot be configured in the UI | 🟡 readiness panel exists; credential entry needs vault-backed form |
+| OBS-18 | SMTP had no password field; Entra app mail not offered | 🟡 password stored/masked via `/settings/notifications`; Graph `sendMail` pending |
+| OBS-19 | Delegated tenant access dropdowns were blank | ✅ pagination cap and `/users` shape fixed |
 
 ## Medium — Active
 

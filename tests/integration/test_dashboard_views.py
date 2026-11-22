@@ -43,3 +43,55 @@ class TestDashboardViews:
     async def test_audit_view_requires_auth(self, client: AsyncClient):
         r = await client.get("/api/v1/dashboard/audit")
         assert r.status_code == 401
+
+    async def test_risk_view_hides_an_unconnected_provider(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        """A finding left over from a cloud that is not connected is not open risk."""
+        from unimonitor.db.models.finding import Finding
+
+        db_session.add(
+            Finding(
+                tenant_id=tenant.id,
+                external_control_id="CTRL-AWS-001",
+                title="Root Account MFA Enabled",
+                description="root mfa",
+                severity="critical",
+                state="not_implemented",
+                category="cloud_security",
+                service="aws",
+                risk_score=10,
+            )
+        )
+        await db_session.flush()
+
+        r = await client.get("/api/v1/dashboard/risk", headers=auth_headers)
+        data = r.json()
+
+        assert data["risks"] == []
+        assert data["critical_risks"] == []
+        assert data["heatmap"] == []
+
+    async def test_findings_severity_filter_is_case_insensitive(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        """SOC tiles link with uppercase severity; findings are stored lowercase."""
+        from unimonitor.db.models.finding import Finding
+
+        db_session.add(
+            Finding(
+                tenant_id=tenant.id,
+                external_control_id="CTRL-ENT-001",
+                title="MFA Enforced",
+                description="mfa",
+                severity="critical",
+                state="not_implemented",
+                category="identity",
+                service="entra_id",
+                risk_score=10,
+            )
+        )
+        await db_session.flush()
+
+        r = await client.get("/api/v1/findings", params={"severity": "CRITICAL"}, headers=auth_headers)
+        assert r.status_code == 200
+        assert r.json()["total"] == 1
+
+        r = await client.get("/api/v1/findings", params={"severity": "critical"}, headers=auth_headers)
+        assert r.json()["total"] == 1

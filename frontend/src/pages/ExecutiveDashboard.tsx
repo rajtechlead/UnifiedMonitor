@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import {
   RadialBarChart, RadialBar, ResponsiveContainer,
@@ -97,6 +98,13 @@ const tooltipStyle = {
 }
 
 export default function ExecutiveDashboard() {
+  // An empty selection means "every framework", so the widget opens complete and
+  // the reader can narrow it to the frameworks they are accountable for.
+  const [visibleFrameworks, setVisibleFrameworks] = useState<string[]>([])
+  const toggleFramework = (id: string) => {
+    setVisibleFrameworks(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
+  }
+
   const { data: exec, isLoading } = useQuery({
     queryKey: ['dashboard', 'executive'],
     queryFn: dashboardApi.getExecutive,
@@ -114,6 +122,9 @@ export default function ExecutiveDashboard() {
   const scores = exec?.scores ?? { security_score: 0, compliance_score: 0, risk_score: 0 }
   const trends: TrendPoint[] = exec?.score_trends ?? []
   const frameworks: FrameworkCoverage[] = exec?.framework_coverage ?? []
+  const chartFrameworks = visibleFrameworks.length
+    ? frameworks.filter(fw => visibleFrameworks.includes(fw.framework_id))
+    : frameworks
   const topRisks: TopRisk[] = exec?.top_risks ?? []
   const ztPlatforms = (exec?.zero_trust ?? []) as ZeroTrustScore[]
 
@@ -184,20 +195,52 @@ export default function ExecutiveDashboard() {
           background: 'var(--color-surface)', border: '1px solid var(--color-border)',
           borderRadius: 12, padding: 20,
         }}>
-          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 16 }}>Framework Coverage</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Framework Coverage</div>
+            {visibleFrameworks.length > 0 && (
+              <button
+                onClick={() => setVisibleFrameworks([])}
+                style={{ background: 'none', border: 'none', color: 'var(--color-brand)', fontSize: 12, cursor: 'pointer' }}
+              >
+                Show all
+              </button>
+            )}
+          </div>
           {frameworks.length === 0 ? (
             <div style={{ textAlign: 'center', padding: 60, color: 'var(--color-text-muted)', fontSize: 13 }}>
               No framework data yet. Run an assessment.
             </div>
           ) : (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={frameworks.slice(0, 8)} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
-                <XAxis dataKey="framework_id" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
-                <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="coverage_pct" name="Coverage %" shape={FrameworkBar} />
-              </BarChart>
-            </ResponsiveContainer>
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {frameworks.map(fw => {
+                  const selected = visibleFrameworks.includes(fw.framework_id)
+                  return (
+                    <button
+                      key={fw.framework_id}
+                      onClick={() => toggleFramework(fw.framework_id)}
+                      aria-pressed={selected}
+                      style={{
+                        fontSize: 10, padding: '2px 7px', borderRadius: 4, cursor: 'pointer',
+                        border: `1px solid ${selected ? 'var(--color-brand)' : 'var(--color-border)'}`,
+                        background: selected ? 'rgba(23,118,210,0.12)' : 'var(--color-surface-2)',
+                        color: selected ? 'var(--color-brand)' : 'var(--color-text-muted)',
+                      }}
+                    >
+                      {fw.framework_name}
+                    </button>
+                  )
+                })}
+              </div>
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={chartFrameworks.slice(0, 12)} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <XAxis dataKey="framework_id" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
+                  <Tooltip contentStyle={tooltipStyle} />
+                  <Bar dataKey="coverage_pct" name="Coverage %" shape={FrameworkBar} />
+                </BarChart>
+              </ResponsiveContainer>
+            </>
           )}
         </div>
 

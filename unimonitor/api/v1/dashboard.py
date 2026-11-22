@@ -539,6 +539,8 @@ async def dashboard_risk(
 
     from unimonitor.db.models.finding import Finding
     from unimonitor.db.repositories.finding_repo import FindingRepository
+    from unimonitor.grc.providers import provider_for_service
+    from unimonitor.onboarding.service import connected_providers
 
     _, _, risk = await _get_scores_for_tenant(db, tenant_id)
     repo = FindingRepository(db)
@@ -552,6 +554,11 @@ async def dashboard_risk(
         stmt = stmt.where(Finding.tenant_id == tenant_id)
     stmt = stmt.order_by(Finding.risk_score.desc()).limit(200)
     open_rows = (await db.execute(stmt)).scalars().all()
+    # A cloud that was never connected contributes only noise from an earlier
+    # install, so it must not appear as an open risk here.
+    connected = await connected_providers(db, tenant_id)
+    visible = [f for f in open_rows if getattr(provider_for_service(f.service), "id", None) in connected]
+    visible_ids = {f.id for f in visible}
     open_risks = [
         TopFinding(
             id=f.id,
@@ -561,20 +568,25 @@ async def dashboard_risk(
             service=f.service,
             first_detected_at=f.first_detected_at,
         )
-        for f in open_rows
+        for f in visible
     ]
+
+    heatmap = []
+    for cell in heatmap_data:
+        finding_ids = [finding_id for finding_id in cell.get("finding_ids", []) if finding_id in visible_ids]
+        if finding_ids:
+            heatmap.append(
+                RiskCell(
+                    likelihood=cell.get("likelihood", 1),
+                    impact=cell.get("impact", 1),
+                    count=len(finding_ids),
+                    findings=finding_ids,
+                )
+            )
 
     return RiskViewResponse(
         overall_risk_score=risk,
-        heatmap=[
-            RiskCell(
-                likelihood=cell.get("likelihood", 1),
-                impact=cell.get("impact", 1),
-                count=cell.get("count", 0),
-                findings=cell.get("finding_ids", []),
-            )
-            for cell in heatmap_data
-        ],
+        heatmap=heatmap,
         critical_risks=[f for f in open_risks if f.severity == "critical"],
         risks=open_risks,
         generated_at=datetime.now(UTC),
@@ -1158,6 +1170,7 @@ class CisoDashboardResponse(BaseModel):
     clouds: list[CloudRiskRow]
     top_risks: list[CisoRiskItem]
     weakest_frameworks: list[FrameworkCoverage]
+    strongest_frameworks: list[FrameworkCoverage]
     coverage_trend: list[TrendPoint]
     generated_at: datetime
 
@@ -1252,6 +1265,7 @@ async def dashboard_ciso(
         if cov.get("controls_total")
     ]
     framework_gaps.sort(key=lambda fw: fw.coverage_pct)
+    framework_strengths = sorted(framework_gaps, key=lambda fw: fw.coverage_pct, reverse=True)
 
     from unimonitor.db.repositories.assessment_repo import AssessmentRepository
 
@@ -1271,6 +1285,7 @@ async def dashboard_ciso(
         clouds=clouds,
         top_risks=risks[:risk_limit],
         weakest_frameworks=framework_gaps[:5],
+        strongest_frameworks=framework_strengths[:5],
         coverage_trend=[
             TrendPoint(
                 date=p.get("date", ""),

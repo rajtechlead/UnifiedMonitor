@@ -43,6 +43,26 @@ _VAULT_META_FILE = "vault.meta"
 _VAULT_KEY_FILE = "vault.key"
 
 
+def _atomic_write(path: Path, data: bytes) -> None:
+    """Replace ``path`` with ``data`` without ever exposing a partial file.
+
+    A crash between opening the destination and finishing the write used to
+    leave a truncated vault that no key could decrypt. The bytes now land in a
+    sibling temporary file that is flushed to disk, then renamed over the
+    destination, so a reader always sees either the old blob or the new one.
+    """
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with open(temporary, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    except BaseException:
+        temporary.unlink(missing_ok=True)
+        raise
+
+
 class LocalVaultProvider:
     """Fernet-encrypted local secret vault."""
 
@@ -98,7 +118,7 @@ class LocalVaultProvider:
         # Generate new key
         self._ensure_vault_dir()
         key = Fernet.generate_key()
-        self._key_path.write_bytes(key)
+        _atomic_write(self._key_path, key)
         try:
             os.chmod(self._key_path, stat.S_IRUSR | stat.S_IWUSR)
         except Exception:  # noqa: S110
@@ -137,7 +157,7 @@ class LocalVaultProvider:
             self._ensure_vault_dir()
             plaintext = json.dumps(data, ensure_ascii=False).encode("utf-8")
             ciphertext = self._get_fernet().encrypt(plaintext)
-            self._enc_path.write_bytes(ciphertext)
+            _atomic_write(self._enc_path, ciphertext)
             try:
                 os.chmod(self._enc_path, stat.S_IRUSR | stat.S_IWUSR)
             except Exception:  # noqa: S110
@@ -156,7 +176,8 @@ class LocalVaultProvider:
     def _write_meta(self, meta: dict[str, dict]) -> None:
         with self._io_lock:
             self._ensure_vault_dir()
-            self._meta_path.write_text(json.dumps(meta, default=str, indent=2), encoding="utf-8")
+            payload = json.dumps(meta, default=str, indent=2).encode("utf-8")
+            _atomic_write(self._meta_path, payload)
 
     # ------------------------------------------------------------------
     # Provider interface

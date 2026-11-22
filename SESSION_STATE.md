@@ -2,11 +2,33 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-20 UTC
+Last Updated: 2026-11-22 UTC
 
 ## Current Session Commits (2026-11-18)
 
 - `fix(onboarding): sign in with a client Entra preauthorizes for app registration`
+
+### Session 2026-11-22 — atomic vault writes and owner observation fixes
+
+- Local vault: `_atomic_write` stages every blob (vault, metadata, a new master key)
+  in a sibling temp file, fsyncs it and renames it into place. A crash at either the
+  flush or the rename leaves the previous vault readable and no `.tmp` behind; two
+  tests cover both failure points. `_probe_health` stays inside `_io_lock`.
+- `GET /dashboard/ciso` gains `strongest_frameworks`; the CISO footer counts are links
+  into the findings list. `GET /dashboard/risk` filters findings to connected
+  providers and rebuilds the heatmap from the surviving ids.
+- Findings `severity` filtering is case-insensitive (SOC tiles send uppercase, rows
+  are stored lowercase); the SIEM export filter no longer uppercases.
+- Assessments read `/grc/frameworks` instead of a ten-id constant; users can be
+  created with a local password; delegated tenant access fixes its page-size cap
+  (100) and the `/users` array shape.
+- New flat `/settings/notifications` GET/PUT persists SMTP, webhook and digest
+  preferences in `Tenant.settings_json`; the SMTP password is masked on read and
+  preserved when the mask is echoed. The Settings page seeds from the response.
+- Sonar `typescript:S6582` optional chain in `ZeroTrustPlatformPage`.
+- Register and plans: `docs/PLATFORM_OBSERVATIONS_2026-11-22.md`. Open items are
+  OBS-03, 04, 05, 08, 11, 12, 13, 14, 15, 17 and the Graph-mail half of OBS-18.
+- Checks: 725 pytest passed, ruff check/format, mypy, eslint, tsc, vite build.
 
 ### Session 2026-11-20 — native multi-cloud Zero Trust catalogues and evidence coverage
 

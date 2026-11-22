@@ -13,6 +13,7 @@ type NotificationSettings = {
   smtp_host?: string
   smtp_port?: number
   smtp_username?: string
+  smtp_password?: string
   smtp_to_emails?: string[]
   teams_webhook_url?: string
   slack_webhook_url?: string
@@ -478,6 +479,7 @@ export default function SettingsPage() {
     smtp_host: '',
     smtp_port: 587,
     smtp_username: '',
+    smtp_password: '',
     smtp_to_emails: [],
     teams_webhook_url: '',
     slack_webhook_url: '',
@@ -490,6 +492,12 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<NotificationSettings>(
     notifData || defaultSettings
   )
+
+  // The query resolves after the first render, so seed the form when it lands
+  // instead of leaving the saved values invisible.
+  useEffect(() => {
+    if (notifData) setSettings(prev => ({ ...prev, ...notifData }))
+  }, [notifData])
 
   const updateSettings = (patch: Partial<NotificationSettings>) => {
     setSettings(prev => ({ ...prev, ...patch }))
@@ -627,6 +635,16 @@ export default function SettingsPage() {
               onChange={v => updateSettings({ smtp_username: v })}
               placeholder="alerts@contoso.com"
             />
+            <FormField
+              label="SMTP Password"
+              type="password"
+              value={settings.smtp_password || ''}
+              onChange={v => updateSettings({ smtp_password: v })}
+              placeholder="••••••••"
+            />
+            <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: -6, marginBottom: 12 }}>
+              Stored with the tenant settings and masked when read back. Leave the mask in place to keep it.
+            </div>
             <FormField
               label="To Emails (comma-separated)"
               value={(settings.smtp_to_emails || []).join(', ')}

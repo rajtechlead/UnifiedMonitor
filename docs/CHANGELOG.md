@@ -6,6 +6,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-11-22
+
+### Fixed
+
+- Local vault writes are atomic (temp file + `fsync` + `os.replace`) for the ciphertext,
+  the metadata and a newly generated master key, so a crash mid-write cannot truncate
+  the vault. Two regression tests fail the write at `fsync` and at the rename.
+- Findings accepted `severity` only in the exact stored case; the SOC dashboard links
+  sent uppercase and returned no rows. Filtering (list and SIEM export) is now
+  case-insensitive.
+- Risk dashboard counted open findings belonging to providers that are not connected.
+- Delegated tenant access requested `page_size=200` (the API caps at 100) and read a
+  bare `/users` array as `{items}`, leaving both dropdowns empty.
+- Settings posted to a non-existent `/settings/notifications`; notification preferences
+  now persist in `Tenant.settings_json` and the SMTP password is stored and masked.
+
+### Added
+
+- `GET /dashboard/ciso` returns `strongest_frameworks`; the control-state footer counts
+  link into the filtered findings list.
+- Executive dashboard framework-coverage widget has a per-framework selector.
+- New assessments list every registered framework rather than ten hard-coded ids.
+- Optional local password when creating a user.
+
+### Documentation
+
+- `docs/PLATFORM_OBSERVATIONS_2026-11-22.md` — the 19-item owner review with root
+  causes, what changed, and what remains open.
+
+---
+
 ## [Unreleased] — Session 5 (2026-11-06)
 
 ### Added
