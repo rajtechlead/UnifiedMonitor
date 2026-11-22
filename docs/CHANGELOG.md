@@ -20,7 +20,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Delegated tenant access requested `page_size=200` (the API caps at 100) and read a
   bare `/users` array as `{items}`, leaving both dropdowns empty.
 - Settings posted to a non-existent `/settings/notifications`; notification preferences
-  now persist in `Tenant.settings_json` and the SMTP password is stored and masked.
+  now persist in `Tenant.settings_json`, while the SMTP password is written to the
+  configured secret provider (encrypted local vault by default) and only masked out of
+  the API. A password left in the settings row by the earlier build migrates on save.
 
 ### Added
 

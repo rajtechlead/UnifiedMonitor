@@ -126,6 +126,7 @@ async def put_branding(
 
 NOTIFICATIONS_KEY = "notifications"
 MASK = "******"
+SMTP_VAULT_KEY_TEMPLATE = "unimonitor-tenant-{tenant_id}-smtp-credential"
 
 
 class NotificationPreferences(BaseModel):
@@ -153,18 +154,55 @@ def _mask(secret: str) -> str:
     return MASK if secret else ""
 
 
-def _notification_preferences(tenant: Tenant | None) -> NotificationPreferences:
+def _smtp_secret_name(tenant_id: str) -> str:
+    """Vault entry holding one tenant's SMTP password."""
+    return SMTP_VAULT_KEY_TEMPLATE.format(tenant_id=tenant_id)
+
+
+async def _read_smtp_password(tenant: Tenant | None) -> str:
+    """The stored SMTP password from the secret provider; empty when unset."""
+    if tenant is None:
+        return ""
+    from unimonitor.secrets import get_secret_resolver
+
+    resolver = await get_secret_resolver()
+    try:
+        return await resolver.get(_smtp_secret_name(tenant.id))
+    except KeyError:
+        # One release wrote this password into the settings row; treat it as set
+        # until the next save moves it into the provider.
+        legacy = _tenant_settings(tenant).get(NOTIFICATIONS_KEY)
+        if isinstance(legacy, dict) and legacy.get("smtp_password"):
+            return str(legacy["smtp_password"])
+        return ""
+
+
+async def _store_smtp_password(tenant_id: str, value: str) -> None:
+    """Write or clear the SMTP password in the secret provider."""
+    from unimonitor.secrets import get_secret_resolver
+
+    resolver = await get_secret_resolver()
+    if value:
+        await resolver.set(_smtp_secret_name(tenant_id), value, tags={"purpose": "smtp"})
+        return
+    try:
+        await resolver.delete(_smtp_secret_name(tenant_id))
+    except KeyError:
+        pass
+
+
+def _notification_preferences(tenant: Tenant | None, password: str) -> NotificationPreferences:
     if tenant is None:
         return NotificationPreferences()
     raw = _tenant_settings(tenant).get(NOTIFICATIONS_KEY)
     if not isinstance(raw, dict):
-        return NotificationPreferences()
+        raw = {}
     try:
         prefs = NotificationPreferences(**raw)
     except ValidationError:
         logger.warning("notification_settings_invalid", tenant_id=tenant.id)
-        return NotificationPreferences()
-    prefs.smtp_password = _mask(prefs.smtp_password)
+        prefs = NotificationPreferences()
+    prefs.smtp_password = _mask(password)
     return prefs
 
 
@@ -175,7 +213,7 @@ async def get_notification_preferences(
 ) -> NotificationPreferences:
     """Notification channels for the caller's tenant (secrets masked)."""
     tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
-    return _notification_preferences(tenant)
+    return _notification_preferences(tenant, await _read_smtp_password(tenant))
 
 
 @router.put(
@@ -199,20 +237,24 @@ async def put_notification_preferences(
     if tenant is None:
         raise HTTPException(status_code=404, detail="Tenant not found")
 
-    settings = _tenant_settings(tenant)
-    previous = settings.get(NOTIFICATIONS_KEY)
-    stored_password = previous.get("smtp_password", "") if isinstance(previous, dict) else ""
     payload = body.model_dump()
-    # The client round-trips the mask; keep the secret it stands for.
-    if payload["smtp_password"] == MASK:
-        payload["smtp_password"] = stored_password
+    incoming = payload.pop("smtp_password")
+    stored_password = await _read_smtp_password(tenant)
+    # The client round-trips the mask; keep the secret it stands for. An empty
+    # value clears the stored password, and the settings row never holds it.
+    if incoming == MASK:
+        password = stored_password
+    else:
+        password = incoming
+    await _store_smtp_password(tenant.id, password)
 
+    settings = _tenant_settings(tenant)
     settings[NOTIFICATIONS_KEY] = payload
     tenant.settings_json = json.dumps(settings, sort_keys=True)
     await db.flush()
     logger.info("notification_settings_updated", tenant_id=tenant.id, by=current_user.id)
 
-    body.smtp_password = _mask(payload["smtp_password"])
+    body.smtp_password = _mask(password)
     return body
 
 

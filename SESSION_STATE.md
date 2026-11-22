@@ -23,8 +23,10 @@ Last Updated: 2026-11-22 UTC
   created with a local password; delegated tenant access fixes its page-size cap
   (100) and the `/users` array shape.
 - New flat `/settings/notifications` GET/PUT persists SMTP, webhook and digest
-  preferences in `Tenant.settings_json`; the SMTP password is masked on read and
-  preserved when the mask is echoed. The Settings page seeds from the response.
+  preferences in `Tenant.settings_json`; the SMTP password goes to the configured
+  secret provider (encrypted local vault by default), is masked on read, preserved
+  when the mask is echoed and deleted when cleared. The Settings page seeds from the
+  response.
 - Sonar `typescript:S6582` optional chain in `ZeroTrustPlatformPage`.
 - Register and plans: `docs/PLATFORM_OBSERVATIONS_2026-11-22.md`. Open items are
   OBS-03, 04, 05, 08, 11, 12, 13, 14, 15, 17 and the Graph-mail half of OBS-18.

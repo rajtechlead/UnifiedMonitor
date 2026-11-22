@@ -108,12 +108,15 @@ now lives in `unimonitor/api/v1/settings.py` and stores the document in
 - The page gained the SMTP password field and now seeds its form from the server
   response instead of ignoring it.
 
-Covered by `tests/integration/test_settings_notifications.py` (store + mask, mask
-round-trip, replacement, auth, port validation).
+The SMTP password lives in the configured secret provider under
+`unimonitor-tenant-<tenant id>-smtp-credential` — the encrypted local vault by default —
+and never in the tenant settings row. Only the non-secret channel fields are written to
+`Tenant.settings_json`. Clearing the field deletes the provider entry, and a password
+left in the settings row by the earlier build is read as "set" and moved into the
+provider on the next save.
 
-The password is stored in the tenant settings document, masked at the API boundary.
-It should move into the secrets vault with the connector credentials in OBS-17 rather
-than stay in a settings row; that is a migration, not a UI change.
+Covered by `tests/integration/test_settings_notifications.py` (vault storage and masked
+read, mask round-trip, replacement, clear, legacy migration, auth, port validation).
 
 ### OBS-19 — Delegated tenant access dropdowns were empty
 

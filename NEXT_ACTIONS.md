@@ -15,8 +15,9 @@ Full register: [`docs/PLATFORM_OBSERVATIONS_2026-11-22.md`](docs/PLATFORM_OBSERV
 - ✅ New assessments list every registry framework instead of ten hard-coded ids
   (OBS-10); users can be created with a local password (OBS-16).
 - ✅ The Settings notification section talks to a real endpoint: flat preferences
-  in `Tenant.settings_json`, SMTP password stored, masked on read, preserved when
-  the mask is echoed, and the form seeds from the server (OBS-18 first half).
+  in `Tenant.settings_json`, the SMTP password in the secret provider (encrypted
+  vault by default), masked on read, preserved when the mask is echoed, cleared by
+  an empty value, and the form seeds from the server (OBS-18 first half).
 - ✅ Delegated tenant access populates: `/tenants` is capped at `page_size=100` and
   `/users` returns a bare array, both now normalised (OBS-19).
 - ✅ Sonar `typescript:S6582` in `ZeroTrustPlatformPage.tsx` fixed with an optional
