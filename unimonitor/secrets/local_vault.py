@@ -240,11 +240,14 @@ class LocalVaultProvider:
     def _probe_health(self) -> HealthStatus:
         start = time.monotonic()
         try:
-            self._ensure_vault_dir()
-            # Round-trip encrypt/decrypt a test value
-            fernet = self._get_fernet()
-            test = fernet.encrypt(b"health_check")
-            fernet.decrypt(test)
+            # Key creation is lazy, so a probe racing a write would otherwise read
+            # a half-written key file and report the vault unhealthy.
+            with self._io_lock:
+                self._ensure_vault_dir()
+                # Round-trip encrypt/decrypt a test value
+                fernet = self._get_fernet()
+                test = fernet.encrypt(b"health_check")
+                fernet.decrypt(test)
             latency_ms = (time.monotonic() - start) * 1000
             return HealthStatus(
                 provider=self.provider_type,

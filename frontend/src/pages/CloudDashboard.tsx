@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Rectangle,
+  type BarShapeProps,
 } from 'recharts'
 import { dashboardApi } from '../hooks/useApi'
 
@@ -57,6 +58,12 @@ const scoreColor = (pct: number) => {
   if (pct >= 80) return '#10B981'
   if (pct >= 60) return '#F59E0B'
   return '#EF4444'
+}
+
+// Recharts deprecates Cell in favour of the Bar `shape` prop, so each bar
+// carries its own fill derived from the value it is drawn from.
+function CoverageBar(props: BarShapeProps) {
+  return <Rectangle {...props} radius={[4, 4, 0, 0]} fill={scoreColor(Number(props.payload?.coverage ?? 0))} />
 }
 
 const cardStyle = {
@@ -130,11 +137,7 @@ export default function CloudDashboard() {
               formatter={(value) => [`${value ?? 0}%`, 'Coverage']}
               contentStyle={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', fontSize: 12 }}
             />
-            <Bar dataKey="coverage" radius={[4, 4, 0, 0]}>
-              {chartData.map((entry) => (
-                <Cell key={entry.name} fill={scoreColor(entry.coverage)} />
-              ))}
-            </Bar>
+            <Bar dataKey="coverage" shape={CoverageBar} />
           </BarChart>
         </ResponsiveContainer>
       </div>

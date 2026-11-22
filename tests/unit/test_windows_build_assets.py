@@ -240,6 +240,31 @@ def test_install_guide_points_at_the_one_command_build():
     assert "build-windows-installer.ps1" in install
 
 
+NSSM_SHA256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
+
+
+def test_build_script_retries_and_pins_the_nssm_download():
+    """nssm.cc answers 503 from its own front end; one request is not a build step.
+
+    The Windows build stopped at "Fetching NSSM" with a 503 page from nginx. The
+    download now retries, falls back to the archive mirror of the same release,
+    and only accepts bytes matching the pinned hash.
+    """
+    script = BUILD_SCRIPT.read_text(encoding="utf-8-sig")
+    assert "https://nssm.cc/release/nssm-2.24.zip" in script
+    assert "web.archive.org" in script, "needs a mirror for when nssm.cc is down"
+    assert NSSM_SHA256 in script, "the NSSM download must stay hash-pinned"
+    assert "Start-Sleep" in script, "a failed download needs a retry with backoff"
+
+
+@pytest.mark.parametrize("workflow", [INSTALLER_WORKFLOW, RELEASE])
+def test_workflows_retry_and_pin_the_nssm_download(workflow: Path):
+    text = workflow.read_text()
+    assert "web.archive.org" in text
+    assert NSSM_SHA256 in text
+    assert "Start-Sleep" in text
+
+
 def test_standalone_installer_workflow_is_dispatchable():
     workflow = yaml.safe_load(INSTALLER_WORKFLOW.read_text())
     triggers = workflow.get("on", workflow.get(True))

@@ -32,9 +32,8 @@
     Skip running the packaged UniMonitor.exe --help.
 
 .PARAMETER NssmSha256
-    Optional expected SHA-256 for the NSSM zip. A published NSSM release is not
-    code-signed, so pass a hash you trust to pin the download; without it the
-    script prints the hash it downloaded so you can verify it once.
+    Expected SHA-256 for the NSSM zip. Defaults to the pinned hash of the
+    2.24 release; override only for a different, equally trusted build.
 
 .EXAMPLE
     .\scripts\build-windows-installer.ps1 -Version 1.2.0
@@ -52,7 +51,12 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 $Root = Split-Path -Parent $PSScriptRoot
+# nssm.cc sits behind an nginx that answers 503 often enough that a single
+# request is not a reliable build step, and the 503 body still gets written to
+# the target file. Retry, then read the same release from the archive mirror.
 $NssmUrl = "https://nssm.cc/release/nssm-2.24.zip"
+$NssmMirrorUrl = "https://web.archive.org/web/2024id_/https://nssm.cc/release/nssm-2.24.zip"
+$NssmPinnedSha256 = "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743"
 $BuildDir = Join-Path $Root ".build"
 $VenvPython = Join-Path $Root ".build-venv\Scripts\python.exe"
 
@@ -107,6 +111,34 @@ function Compress-Zip([string]$Source, [string]$Destination) {
     Import-ZipAssembly
     if (Test-Path $Destination) { Remove-Item -Force $Destination }
     [System.IO.Compression.ZipFile]::CreateFromDirectory($Source, $Destination)
+}
+
+function Save-NssmArchive([string]$Path, [string]$ExpectedSha256) {
+    # A cached archive that still matches the pin is reused, so a rebuild does
+    # not depend on the network. A failed download is discarded rather than
+    # left behind as a corrupt zip for Expand-Zip to choke on.
+    if (Test-Path $Path) {
+        if ((Get-Sha256 $Path) -eq $ExpectedSha256) { return }
+        Remove-Item -Force $Path
+    }
+    foreach ($source in @($NssmUrl, $NssmMirrorUrl)) {
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            try {
+                Invoke-WebRequest -Uri $source -OutFile $Path -UseBasicParsing
+                if ((Get-Sha256 $Path) -eq $ExpectedSha256) {
+                    Write-Host "  downloaded from $source"
+                    return
+                }
+                Write-Host "  $source served an unexpected file" -ForegroundColor Yellow
+            } catch {
+                Write-Host "  $source attempt $attempt failed: $($_.Exception.Message)" -ForegroundColor Yellow
+            }
+            if (Test-Path $Path) { Remove-Item -Force $Path }
+            if ($attempt -lt 3) { Start-Sleep -Seconds (5 * $attempt) }
+        }
+    }
+    Fail ("NSSM 2.24 could not be downloaded from {0} or its archive mirror. " +
+          "Download nssm-2.24.zip by hand, then re-run." -f $NssmUrl)
 }
 
 Push-Location $Root
@@ -202,15 +234,9 @@ try {
     Step "Fetching NSSM"
     New-Item -ItemType Directory -Force -Path $BuildDir | Out-Null
     $zip = Join-Path $BuildDir "nssm.zip"
-    Invoke-WebRequest -Uri $NssmUrl -OutFile $zip -UseBasicParsing
-    $hash = Get-Sha256 $zip
-    if ($NssmSha256) {
-        if ($hash -ne $NssmSha256.ToLowerInvariant()) {
-            Fail "NSSM checksum mismatch: expected $NssmSha256, downloaded $hash"
-        }
-    } else {
-        Write-Host "NSSM SHA256 $hash (pass -NssmSha256 $hash to pin it next time)"
-    }
+    $expectedNssmHash = if ($NssmSha256) { $NssmSha256.ToLowerInvariant() } else { $NssmPinnedSha256 }
+    Save-NssmArchive $zip $expectedNssmHash
+    Write-Host "NSSM SHA256 $(Get-Sha256 $zip)"
     $nssmTmp = Join-Path $BuildDir "nssm"
     Expand-Zip -Path $zip -Destination $nssmTmp
     $nssmExe = Get-ChildItem -Path $nssmTmp -Filter "nssm.exe" -Recurse |

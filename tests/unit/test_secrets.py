@@ -7,6 +7,8 @@ mocking only.
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,24 @@ class TestLocalVault:
         vault2 = LocalVaultProvider(vault_dir=tmp_path / "vault")
         value = await vault2.get_secret("persistent/key")
         assert value == "persistent-value"
+
+    @pytest.mark.asyncio
+    async def test_concurrent_writes_do_not_lose_secrets(self, vault):
+        """Vault I/O runs on worker threads, so a write is a read-modify-write race.
+
+        Every set_secret decrypts the current vault, adds one name and writes the
+        whole file back. Without the provider's write lock the concurrent writers
+        all read the same snapshot and the last write wins, silently discarding
+        every secret written by the others; 40 writers against a handful of
+        worker threads makes that interleaving effectively certain.
+        """
+        names = [f"concurrent/key-{i}" for i in range(40)]
+        await asyncio.gather(*(vault.set_secret(name, f"value-{i}") for i, name in enumerate(names)))
+
+        stored = {secret.name for secret in await vault.list_secrets(prefix="concurrent/")}
+        assert stored == set(names)
+        for i, name in enumerate(names):
+            assert await vault.get_secret(name) == f"value-{i}"
 
 
 # ---------------------------------------------------------------------------

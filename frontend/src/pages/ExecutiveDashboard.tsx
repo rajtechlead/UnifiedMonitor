@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import {
   RadialBarChart, RadialBar, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip, Cell, LineChart, Line, CartesianGrid,
+  BarChart, Bar, XAxis, YAxis, Tooltip, Rectangle, LineChart, Line, CartesianGrid,
+  type BarShapeProps,
 } from 'recharts'
 import { dashboardApi } from '../hooks/useApi'
 import { TrendingUp, Shield, CheckCircle, AlertTriangle } from 'lucide-react'
@@ -24,6 +25,12 @@ function scoreColour(score: number) {
   if (score >= 80) return '#10B981'
   if (score >= 50) return '#F59E0B'
   return '#EF4444'
+}
+
+// Recharts deprecates Cell in favour of the Bar `shape` prop, so each bar
+// carries its own fill derived from the value it is drawn from.
+function FrameworkBar(props: BarShapeProps) {
+  return <Rectangle {...props} radius={[4, 4, 0, 0]} fill={scoreColour(Number(props.payload?.coverage_pct ?? 0))} />
 }
 
 function zeroTrustCaption(p: ZeroTrustScore): string {
@@ -188,11 +195,7 @@ export default function ExecutiveDashboard() {
                 <XAxis dataKey="framework_id" tick={{ fontSize: 10 }} interval={0} angle={-30} textAnchor="end" height={60} />
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="coverage_pct" name="Coverage %" radius={[4, 4, 0, 0]}>
-                  {frameworks.slice(0, 8).map((fw) => (
-                    <Cell key={fw.framework_id} fill={scoreColour(fw.coverage_pct)} />
-                  ))}
-                </Bar>
+                <Bar dataKey="coverage_pct" name="Coverage %" shape={FrameworkBar} />
               </BarChart>
             </ResponsiveContainer>
           )}

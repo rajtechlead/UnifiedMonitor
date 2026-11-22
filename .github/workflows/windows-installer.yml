@@ -137,7 +137,28 @@ jobs:
       - name: Download NSSM (Windows Service helper)
         shell: pwsh
         run: |
-          Invoke-WebRequest -Uri "https://nssm.cc/release/nssm-2.24.zip" -OutFile nssm.zip
+          # nssm.cc regularly answers 503 from its own front end; retry, then
+          # fall back to the archive mirror, and verify the pinned SHA-256.
+          $urls = @(
+            "https://nssm.cc/release/nssm-2.24.zip",
+            "https://web.archive.org/web/2024id_/https://nssm.cc/release/nssm-2.24.zip"
+          )
+          foreach ($url in $urls) {
+            for ($attempt = 1; $attempt -le 3; $attempt++) {
+              try { Invoke-WebRequest -Uri $url -OutFile nssm.zip; break }
+              catch {
+                Write-Host "$url attempt $attempt failed: $($_.Exception.Message)"
+                Remove-Item nssm.zip -ErrorAction SilentlyContinue
+                if ($attempt -lt 3) { Start-Sleep -Seconds (5 * $attempt) }
+              }
+            }
+            if (Test-Path nssm.zip) { break }
+          }
+          if (-not (Test-Path nssm.zip)) { throw "NSSM 2.24 could not be downloaded" }
+          $hash = (Get-FileHash nssm.zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne "727d1e42275c605e0f04aba98095c38a8e1e46def453cdffce42869428aa6743") {
+            throw "NSSM checksum mismatch: downloaded $hash"
+          }
           Expand-Archive nssm.zip -DestinationPath nssm_tmp
           Copy-Item nssm_tmp/nssm-2.24/win64/nssm.exe dist/UniMonitor/nssm.exe
           Remove-Item -Recurse nssm.zip, nssm_tmp
