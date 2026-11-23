@@ -29,19 +29,19 @@ class AzureSecurityCollector:
         data = AzureSecurityData()
         try:
             resp = await self.client.get("/security/secureScores")
-            if resp.success:
+            if resp.usable:
                 data.secure_scores = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["secure_scores"] = str(e)
         try:
             resp = await self.client.get("/security/secureScoreControlProfiles")
-            if resp.success:
+            if resp.usable:
                 data.secure_score_controls = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["secure_score_controls"] = str(e)
         try:
             resp = await self.client.get("/security/alerts_v2", params={"$top": "100"})
-            if resp.success:
+            if resp.usable:
                 data.alerts = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["alerts"] = str(e)

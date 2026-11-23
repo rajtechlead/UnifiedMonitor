@@ -73,7 +73,7 @@ class IntuneCollector:
                 "/deviceManagement/windowsAutopilotDeviceIdentities",
                 params={"$top": "500"},
             )
-            if ap_resp.success:
+            if ap_resp.usable:
                 data.autopilot_devices = ap_resp.data if isinstance(ap_resp.data, list) else []
         except Exception as e:
             data.errors["autopilot_devices"] = str(e)
@@ -112,7 +112,7 @@ class IntuneCollector:
                 "/deviceManagement/templates",
                 params={"$filter": "templateType eq 'securityBaseline'", "$top": "50"},
             )
-            if templates_resp.success:
+            if templates_resp.usable:
                 data.endpoint_security_templates = templates_resp.data if isinstance(templates_resp.data, list) else []
         except Exception as e:
             data.errors["endpoint_security_templates"] = str(e)

@@ -28,7 +28,7 @@ class ExchangeCollector:
         data = ExchangeData()
         try:
             resp = await self.client.get("/admin/exchangeSettings")
-            if resp.success:
+            if resp.usable:
                 data.transport_rules = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["transport_rules"] = str(e)

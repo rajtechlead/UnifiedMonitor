@@ -6,6 +6,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-11-23
+
+### Security
+
+- Posture analysis is tenant-scoped. `/posture/analysis` reads only the inventory the
+  caller's own tenant produced; it no longer falls back to the deployment-wide
+  `latest.json`, which mixed every tenant's resources. Automatic inventories are written
+  per tenant only, and nothing is written when no tenant is supplied.
+
+### Fixed
+
+- Graph collectors keep a response answered from last-good cache during an outage.
+  `GraphResponse.usable` is true for a fresh or a stale body, and every collector now
+  checks it, so a transient Graph failure no longer empties the evidence a control
+  evaluates. A 401/403 still raises instead of being masked by stale data.
+- Cleared the open Sonar findings from the 2026-11-23 scan: the nested ternaries in
+  `AuditorPage` and `FrameworkPage` (S3358), the cognitive-complexity overruns in
+  `custom._validate_target`, `cloud_providers.collect_google_workspace`,
+  `requirements._derived_rows` and `posture.assemble._aws_resources` (S3776), and the
+  intentionally blocked metadata addresses marked `NOSONAR` (S1313).
+
+---
+
 ## [Unreleased] — 2026-11-22
 
 ### Security

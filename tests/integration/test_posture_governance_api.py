@@ -17,6 +17,51 @@ async def test_posture_analysis_without_snapshot_is_404(client: AsyncClient, aut
     assert "UNIMONITOR_POSTURE_SNAPSHOT" in response.json()["detail"]
 
 
+async def test_posture_analysis_reads_only_the_callers_inventory(client: AsyncClient, tenant, auth_headers: dict, monkeypatch, tmp_path) -> None:
+    from unimonitor.config import get_settings
+    from unimonitor.posture.assemble import write_inventory
+
+    monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", str(tmp_path))
+    monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
+    monkeypatch.setattr("unimonitor.api.v1.posture.load_snapshot", lambda: {})
+    write_inventory({"resources": [{"type": "storage", "provider": "aws", "id": "own-1"}], "edges": []}, tenant.id)
+    write_inventory(
+        {
+            "resources": [
+                {"type": "storage", "provider": "aws", "id": "other-1"},
+                {"type": "storage", "provider": "aws", "id": "other-2"},
+            ],
+            "edges": [],
+        },
+        "other-tenant-id-000000000002",
+    )
+
+    response = await client.get("/api/v1/posture/analysis", headers=auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["source"] == "collected"
+    assert body["resources"] == 1, "another tenant's inventory must not be analysed"
+
+
+async def test_posture_analysis_does_not_fall_back_to_another_tenants_inventory(
+    client: AsyncClient, auth_headers: dict, monkeypatch, tmp_path
+) -> None:
+    from unimonitor.config import get_settings
+    from unimonitor.posture.assemble import write_inventory
+
+    monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", str(tmp_path))
+    monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
+    monkeypatch.setattr("unimonitor.api.v1.posture.load_snapshot", lambda: {})
+    write_inventory(
+        {"resources": [{"type": "storage", "provider": "aws", "id": "other-1"}], "edges": []},
+        "other-tenant-id-000000000002",
+    )
+
+    response = await client.get("/api/v1/posture/analysis", headers=auth_headers)
+    assert response.status_code == 404
+    assert "this tenant" in response.json()["detail"]
+
+
 async def test_posture_analyze_accepts_a_posted_inventory(client: AsyncClient, auth_headers: dict) -> None:
     response = await client.post(
         "/api/v1/posture/analyze",

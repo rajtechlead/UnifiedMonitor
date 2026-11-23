@@ -110,7 +110,7 @@ async def _safe_get(gc: GraphClient, endpoint: str, key: str) -> dict[str, Any]:
     """Get a Graph endpoint, return empty on failure."""
     try:
         resp = await gc.get(endpoint)
-        return {key: resp.data} if resp.success else {}
+        return {key: resp.data} if resp.usable else {}
     except Exception as exc:
         logger.debug("Graph endpoint skipped", endpoint=endpoint, error=str(exc))
         return {}

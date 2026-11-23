@@ -28,7 +28,7 @@ async def _get_list(gc: GraphClient, endpoint: str, params: dict | None = None) 
     """Return the ``value`` array of a Graph collection, or [] on any failure."""
     try:
         resp = await gc.get(endpoint, params=params) if params else await gc.get(endpoint)
-        if not resp.success:
+        if not resp.usable:
             return []
         if isinstance(resp.data, list):
             return resp.data
@@ -41,7 +41,7 @@ async def _get_list(gc: GraphClient, endpoint: str, params: dict | None = None) 
 async def _get_obj(gc: GraphClient, endpoint: str) -> dict:
     try:
         resp = await gc.get(endpoint)
-        return resp.data if resp.success and isinstance(resp.data, dict) else {}
+        return resp.data if resp.usable and isinstance(resp.data, dict) else {}
     except Exception as exc:  # noqa: BLE001
         logger.debug("Graph object skipped", endpoint=endpoint, error=str(exc))
         return {}

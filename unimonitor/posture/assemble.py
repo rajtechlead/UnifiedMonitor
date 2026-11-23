@@ -25,6 +25,8 @@ from unimonitor.core.logging import get_logger
 logger = get_logger(__name__)
 
 INVENTORY_FILENAME = "latest.json"
+# ``latest.json`` is a legacy deployment-wide file; it is no longer written or
+# read because it mixed every tenant's resources in one place.
 
 
 def _rows(value: Any) -> list[dict[str, Any]]:
@@ -43,40 +45,56 @@ def _resource(resource_type: str, provider: str, identifier: Any, **fields: Any)
     return {"type": resource_type, "provider": provider, "id": str(identifier or ""), **fields}
 
 
+def _s3_resource(bucket: dict[str, Any]) -> dict[str, Any]:
+    raw_block = bucket.get("PublicAccessBlock")
+    block: dict[str, Any] = raw_block if isinstance(raw_block, dict) else {}
+    return _resource(
+        "storage",
+        "aws",
+        bucket.get("Name"),
+        name=bucket.get("Name", ""),
+        public=not bool(block.get("BlockPublicAcls") and block.get("BlockPublicPolicy")),
+        external_sharing=not bool(block.get("RestrictPublicBuckets", True)),
+        encrypted=bool(bucket.get("Encryption")),
+    )
+
+
+def _open_tcp_ports(permissions: list[dict[str, Any]]) -> list[str]:
+    return [str(rule.get("FromPort", "")) for rule in permissions if rule.get("IpProtocol") == "tcp" and _addresses_are_open(rule.get("Cidrs"))]
+
+
+def _security_group_resource(group: dict[str, Any]) -> dict[str, Any]:
+    permissions = _rows(group.get("IpPermissions"))
+    open_ports = _open_tcp_ports(permissions)
+    return _resource(
+        "security_group",
+        "aws",
+        group.get("GroupId"),
+        name=group.get("GroupName", ""),
+        open_ingress=any(_addresses_are_open(rule.get("Cidrs")) for rule in permissions),
+        open_admin_ports=any(port in ("22", "3389") for port in open_ports),
+        internet_ports=open_ports,
+    )
+
+
+def _aws_account_resource(collected: dict[str, Any]) -> dict[str, Any]:
+    raw_policy = collected.get("aws_iam_password_policy")
+    policy: dict[str, Any] = raw_policy if isinstance(raw_policy, dict) else {}
+    return _resource(
+        "tenant_settings",
+        "aws",
+        "aws-account",
+        name="AWS account settings",
+        mfa_enforced=bool(collected.get("aws_root_mfa_enabled")),
+        minimum_password_length=policy.get("MinimumPasswordLength", 0),
+        password_reuse_prevention=policy.get("PasswordReusePrevention", 0),
+        logging_enabled=bool(_rows(collected.get("aws_cloudtrail_trails"))),
+    )
+
+
 def _aws_resources(collected: dict[str, Any]) -> list[dict[str, Any]]:
-    resources: list[dict[str, Any]] = []
-
-    for bucket in _rows(collected.get("aws_s3_buckets")):
-        raw_block = bucket.get("PublicAccessBlock")
-        block: dict[str, Any] = raw_block if isinstance(raw_block, dict) else {}
-        resources.append(
-            _resource(
-                "storage",
-                "aws",
-                bucket.get("Name"),
-                name=bucket.get("Name", ""),
-                public=not bool(block.get("BlockPublicAcls") and block.get("BlockPublicPolicy")),
-                external_sharing=not bool(block.get("RestrictPublicBuckets", True)),
-                encrypted=bool(bucket.get("Encryption")),
-            )
-        )
-
-    for group in _rows(collected.get("aws_security_groups")):
-        permissions = _rows(group.get("IpPermissions"))
-        open_ports = [
-            str(rule.get("FromPort", "")) for rule in permissions if rule.get("IpProtocol") == "tcp" and _addresses_are_open(rule.get("Cidrs"))
-        ]
-        resources.append(
-            _resource(
-                "security_group",
-                "aws",
-                group.get("GroupId"),
-                name=group.get("GroupName", ""),
-                open_ingress=any(_addresses_are_open(rule.get("Cidrs")) for rule in permissions),
-                open_admin_ports=any(port in ("22", "3389") for port in open_ports),
-                internet_ports=open_ports,
-            )
-        )
+    resources: list[dict[str, Any]] = [_s3_resource(bucket) for bucket in _rows(collected.get("aws_s3_buckets"))]
+    resources.extend(_security_group_resource(group) for group in _rows(collected.get("aws_security_groups")))
 
     for key in _rows(collected.get("aws_kms_keys")):
         resources.append(
@@ -155,20 +173,7 @@ def _aws_resources(collected: dict[str, Any]) -> list[dict[str, Any]]:
         )
 
     if "aws_root_mfa_enabled" in collected or "aws_iam_password_policy" in collected:
-        raw_policy = collected.get("aws_iam_password_policy")
-        policy: dict[str, Any] = raw_policy if isinstance(raw_policy, dict) else {}
-        resources.append(
-            _resource(
-                "tenant_settings",
-                "aws",
-                "aws-account",
-                name="AWS account settings",
-                mfa_enforced=bool(collected.get("aws_root_mfa_enabled")),
-                minimum_password_length=policy.get("MinimumPasswordLength", 0),
-                password_reuse_prevention=policy.get("PasswordReusePrevention", 0),
-                logging_enabled=bool(_rows(collected.get("aws_cloudtrail_trails"))),
-            )
-        )
+        resources.append(_aws_account_resource(collected))
 
     return resources
 
@@ -435,8 +440,9 @@ def assemble(collected: dict[str, Any]) -> dict[str, Any]:
 def inventory_path(tenant_id: str = "") -> Path:
     """Where the automatic inventory is written.
 
-    ``POSTURE_AUTO_INVENTORY_PATH`` is a directory for per-tenant inventories, with
-    ``latest.json`` holding the most recent run so the posture page has a default.
+    ``POSTURE_AUTO_INVENTORY_PATH`` is a directory of per-tenant inventories. An
+    empty ``tenant_id`` still resolves the legacy ``latest.json`` name for callers
+    that only want a path, but it is never written automatically.
     """
     configured = str(getattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", "") or "")
     base = Path(configured) if configured else Path(get_settings().REPORT_STORAGE_PATH) / "posture"
@@ -444,18 +450,23 @@ def inventory_path(tenant_id: str = "") -> Path:
 
 
 def write_inventory(inventory: dict[str, Any], tenant_id: str = "") -> Path | None:
-    """Write the assembled inventory atomically. Never raises: collection wins."""
+    """Write one tenant's assembled inventory atomically. Never raises.
+
+    Only the tenant's own file is written: a shared ``latest.json`` would let the
+    posture page show one tenant's resources to another.
+    """
     if not getattr(get_settings(), "POSTURE_AUTO_INVENTORY", True):
         return None
+    if not tenant_id:
+        logger.warning("Posture inventory not written without a tenant")
+        return None
     target = inventory_path(tenant_id)
-    latest = inventory_path()
     encoded = json.dumps(inventory, indent=2, sort_keys=True, default=str)
     try:
-        for path in dict.fromkeys((target, latest)):
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_suffix(path.suffix + ".tmp")
-            temporary.write_text(encoded, encoding="utf-8")
-            os.replace(temporary, path)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = target.with_suffix(target.suffix + ".tmp")
+        temporary.write_text(encoded, encoding="utf-8")
+        os.replace(temporary, target)
     except OSError as exc:
         logger.warning("Posture inventory write failed", path=str(target), error=str(exc))
         return None

@@ -67,14 +67,14 @@ class EntraIdCollector:
     async def _collect_conditional_access(self, data: EntraIdData) -> None:
         try:
             resp = await self.client.get("/identity/conditionalAccess/policies")
-            if resp.success:
+            if resp.usable:
                 data.conditional_access_policies = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["conditional_access_policies"] = str(e)
 
         try:
             resp = await self.client.get("/identity/conditionalAccess/namedLocations")
-            if resp.success:
+            if resp.usable:
                 data.named_locations = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["named_locations"] = str(e)
@@ -82,7 +82,7 @@ class EntraIdCollector:
     async def _collect_auth_methods(self, data: EntraIdData) -> None:
         try:
             resp = await self.client.get("/policies/authenticationMethodsPolicy")
-            if resp.success:
+            if resp.usable:
                 data.auth_methods_policy = resp.data if isinstance(resp.data, dict) else {}
         except Exception as e:
             data.errors["auth_methods_policy"] = str(e)
@@ -92,7 +92,7 @@ class EntraIdCollector:
                 "/reports/authenticationMethods/userRegistrationDetails",
                 params={"$top": "999"},
             )
-            if resp.success:
+            if resp.usable:
                 data.auth_method_registrations = {"users": resp.data if isinstance(resp.data, list) else []}
         except Exception as e:
             data.errors["auth_method_registrations"] = str(e)
@@ -103,7 +103,7 @@ class EntraIdCollector:
                 "/identityProtection/riskyUsers",
                 params={_FILTER: "riskLevel ne 'none'", "$top": "250"},
             )
-            if resp.success:
+            if resp.usable:
                 data.risky_users = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["risky_users"] = str(e)
@@ -113,14 +113,14 @@ class EntraIdCollector:
                 "/identityProtection/riskDetections",
                 params={_FILTER: "riskState eq 'atRisk'", "$top": "100"},
             )
-            if resp.success:
+            if resp.usable:
                 data.risky_sign_ins = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["risky_sign_ins"] = str(e)
 
         try:
             resp = await self.client.get("/policies/identitySecurityDefaultsEnforcementPolicy")
-            if resp.success:
+            if resp.usable:
                 data.security_defaults = resp.data if isinstance(resp.data, dict) else {}
         except Exception as e:
             data.errors["security_defaults"] = str(e)
@@ -132,7 +132,7 @@ class EntraIdCollector:
                 "/roleManagement/directory/roleAssignments",
                 params={_EXPAND: "principal,roleDefinition", "$top": "500"},
             )
-            if resp.success:
+            if resp.usable:
                 data.pim_role_assignments = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["pim_role_assignments"] = str(e)
@@ -142,7 +142,7 @@ class EntraIdCollector:
                 "/roleManagement/directory/roleEligibilitySchedules",
                 params={_EXPAND: "principal,roleDefinition", "$top": "500"},
             )
-            if resp.success:
+            if resp.usable:
                 data.pim_eligible_assignments = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["pim_eligible_assignments"] = str(e)
@@ -175,7 +175,7 @@ class EntraIdCollector:
                     "$top": "500",
                 },
             )
-            if resp.success:
+            if resp.usable:
                 data.privileged_users = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["privileged_users"] = str(e)
@@ -204,14 +204,14 @@ class EntraIdCollector:
     async def _collect_policies(self, data: EntraIdData) -> None:
         try:
             resp = await self.client.get("/policies/authorizationPolicy")
-            if resp.success:
+            if resp.usable:
                 data.authorization_policy = resp.data if isinstance(resp.data, dict) else {}
         except Exception as e:
             data.errors["authorization_policy"] = str(e)
 
         try:
             resp = await self.client.get("/directoryRoles", params={_EXPAND: "members($select=id,displayName,userPrincipalName)"})
-            if resp.success:
+            if resp.usable:
                 data.directory_roles = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["directory_roles"] = str(e)

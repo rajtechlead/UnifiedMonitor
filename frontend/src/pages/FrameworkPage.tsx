@@ -31,6 +31,12 @@ type ProviderCoverage = {
   missing_providers: string[]
 }
 
+function coverageColour(coveragePct: number): string {
+  if (coveragePct >= 80) return '#10B981'
+  if (coveragePct >= 50) return '#F59E0B'
+  return '#EF4444'
+}
+
 const STATE_LABELS: Record<string, string> = {
   implemented: 'Met',
   partially_implemented: 'Partially met',
@@ -141,7 +147,7 @@ export default function FrameworkPage() {
               <div key={provider.provider_id} style={{ fontSize: 12 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
                   <span>{provider.provider_name}</span>
-                  <span style={{ fontWeight: 600, color: provider.coverage_pct >= 80 ? '#10B981' : provider.coverage_pct >= 50 ? '#F59E0B' : '#EF4444' }}>
+                  <span style={{ fontWeight: 600, color: coverageColour(provider.coverage_pct) }}>
                     {Math.round(provider.coverage_pct)}%
                   </span>
                 </div>

@@ -27,7 +27,7 @@ class CopilotCollector:
         data = CopilotData()
         try:
             resp = await self.client.get("/reports/getCopilotUsageSummary")
-            if resp.success:
+            if resp.usable:
                 data.usage_reports = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["usage_reports"] = str(e)

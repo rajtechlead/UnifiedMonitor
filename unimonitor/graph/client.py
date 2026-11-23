@@ -52,6 +52,15 @@ class GraphResponse:
     # could not be reached now. Never a fresh result.
     stale: bool = False
 
+    @property
+    def usable(self) -> bool:
+        """True when the response carries data the caller may evaluate.
+
+        A stale response is not a fresh answer, but dropping it would turn a
+        Graph outage into missing evidence for every control that reads it.
+        """
+        return self.success or self.stale
+
 
 def classify_error(exc: Exception) -> str:
     """``consent`` or ``outage`` for a Graph failure.

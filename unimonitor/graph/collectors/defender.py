@@ -29,13 +29,13 @@ class DefenderCollector:
         data = DefenderData()
         try:
             resp = await self.client.get("/security/alerts_v2", params={"$filter": "serviceSource eq 'microsoftDefenderForEndpoint'", "$top": "100"})
-            if resp.success:
+            if resp.usable:
                 data.alerts = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["alerts"] = str(e)
         try:
             resp = await self.client.get("/security/incidents", params={"$top": "100"})
-            if resp.success:
+            if resp.usable:
                 data.incidents = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["incidents"] = str(e)

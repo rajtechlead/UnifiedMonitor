@@ -293,6 +293,14 @@ class TestGraphClientGet:
 
         _run(_test())
 
+    def test_a_stale_response_is_usable_but_not_fresh(self):
+        from unimonitor.graph.client import GraphResponse
+
+        stale = GraphResponse(data=[{"id": "cached"}], success=False, stale=True)
+        failed = GraphResponse(data=None, success=False)
+        assert stale.usable is True
+        assert failed.usable is False
+
     def test_an_outage_is_answered_from_the_last_good_response(self):
         async def _test():
             gc = self._make_client_with_mocked_http(status_code=503)

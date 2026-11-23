@@ -527,6 +527,70 @@ async def collect_gcp(
 # ── Google Workspace ───────────────────────────────────────────────────────
 
 
+def _workspace_user_posture(user_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """2SV enforcement, super admins and the users who are not enrolled."""
+    if not user_rows:
+        return {}
+    enrolled = [u for u in user_rows if u.get("isEnrolledIn2Sv") is True]
+    return {
+        "gws_two_step_enforcement": {
+            "enforced": all(u.get("isEnforcedIn2Sv") is True for u in user_rows),
+            "enrollmentPct": round(len(enrolled) / len(user_rows) * 100, 1),
+        },
+        "gws_super_admins": [
+            {"email": u.get("primaryEmail", "")} for u in user_rows if u.get("isAdmin") is True and u.get("isDelegatedAdmin") is False
+        ],
+        # Monkey365's per-user 2SV check: who is not enrolled, not just the
+        # tenant-wide percentage.
+        "gws_users_without_2sv": [
+            {"email": u.get("primaryEmail", ""), "isAdmin": bool(u.get("isAdmin"))}
+            for u in user_rows
+            if u.get("isEnrolledIn2Sv") is not True and u.get("suspended") is not True
+        ],
+    }
+
+
+async def _workspace_directory(client: httpx.AsyncClient, token: str, customer: str) -> dict[str, Any]:
+    """Users, admin roles, OAuth grants and groups."""
+    data: dict[str, Any] = {}
+
+    users = await _rest(client, f"{GWS_ADMIN}/directory/v1/users", token, {"customer": customer, "maxResults": 200})
+    data.update(_workspace_user_posture(users.get("users", [])))
+
+    roles = await _rest(client, f"{GWS_ADMIN}/directory/v1/customer/{customer}/roles", token)
+    if roles:
+        data["gws_admin_roles"] = [
+            {"roleName": r.get("roleName", ""), "assignedCount": r.get("rolePrivileges") and len(r.get("rolePrivileges")) or 0}
+            for r in roles.get("items", [])
+        ]
+
+    tokens = await _rest(client, f"{GWS_ADMIN}/directory/v1/users/all/tokens", token, {"customer": customer})
+    if tokens.get("items") is not None:
+        data["gws_oauth_tokens"] = [
+            {
+                "clientId": t.get("clientId", ""),
+                "displayText": t.get("displayText", ""),
+                "scopes": t.get("scopes", []),
+                "userKey": t.get("userKey", ""),
+            }
+            for t in tokens.get("items", [])
+        ]
+
+    groups = await _rest(client, f"{GWS_ADMIN}/directory/v1/groups", token, {"customer": customer, "maxResults": 200})
+    if groups.get("groups") is not None:
+        data["gws_groups"] = [
+            {
+                "email": group.get("email", ""),
+                "name": group.get("name", ""),
+                "directMembersCount": group.get("directMembersCount", "0"),
+                "allowExternalMembers": str(group.get("allowExternalMembers", "false")).lower() == "true",
+            }
+            for group in groups.get("groups", [])
+        ]
+
+    return data
+
+
 async def collect_google_workspace(
     token: str | None = None,
     customer: str | None = None,
@@ -546,43 +610,7 @@ async def collect_google_workspace(
     client = client or httpx.AsyncClient(timeout=20)
 
     try:
-        users = await _rest(client, f"{GWS_ADMIN}/directory/v1/users", token, {"customer": customer, "maxResults": 200})
-        user_rows = users.get("users", [])
-        if user_rows:
-            enrolled = [u for u in user_rows if u.get("isEnrolledIn2Sv") is True]
-            data["gws_two_step_enforcement"] = {
-                "enforced": bool(user_rows) and all(u.get("isEnforcedIn2Sv") is True for u in user_rows),
-                "enrollmentPct": round(len(enrolled) / len(user_rows) * 100, 1),
-            }
-            data["gws_super_admins"] = [
-                {"email": u.get("primaryEmail", "")} for u in user_rows if u.get("isAdmin") is True and u.get("isDelegatedAdmin") is False
-            ]
-            # Monkey365's per-user 2SV check: who is not enrolled, not just the
-            # tenant-wide percentage.
-            data["gws_users_without_2sv"] = [
-                {"email": u.get("primaryEmail", ""), "isAdmin": bool(u.get("isAdmin"))}
-                for u in user_rows
-                if u.get("isEnrolledIn2Sv") is not True and u.get("suspended") is not True
-            ]
-
-        roles = await _rest(client, f"{GWS_ADMIN}/directory/v1/customer/{customer}/roles", token)
-        if roles:
-            data["gws_admin_roles"] = [
-                {"roleName": r.get("roleName", ""), "assignedCount": r.get("rolePrivileges") and len(r.get("rolePrivileges")) or 0}
-                for r in roles.get("items", [])
-            ]
-
-        tokens = await _rest(client, f"{GWS_ADMIN}/directory/v1/users/all/tokens", token, {"customer": customer})
-        if tokens.get("items") is not None:
-            data["gws_oauth_tokens"] = [
-                {
-                    "clientId": t.get("clientId", ""),
-                    "displayText": t.get("displayText", ""),
-                    "scopes": t.get("scopes", []),
-                    "userKey": t.get("userKey", ""),
-                }
-                for t in tokens.get("items", [])
-            ]
+        data.update(await _workspace_directory(client, token, customer))
 
         drive_settings = await _rest(client, f"{GWS_ADMIN}/drive/v2/customer/{customer}/settings", token)
         if drive_settings:
@@ -590,18 +618,6 @@ async def collect_google_workspace(
                 "allowExternalSharing": drive_settings.get("externalSharingAllowed", False),
                 "allowAnyone": drive_settings.get("allowAnyOneAccess", False),
             }
-
-        groups = await _rest(client, f"{GWS_ADMIN}/directory/v1/groups", token, {"customer": customer, "maxResults": 200})
-        if groups.get("groups") is not None:
-            data["gws_groups"] = [
-                {
-                    "email": group.get("email", ""),
-                    "name": group.get("name", ""),
-                    "directMembersCount": group.get("directMembersCount", "0"),
-                    "allowExternalMembers": str(group.get("allowExternalMembers", "false")).lower() == "true",
-                }
-                for group in groups.get("groups", [])
-            ]
 
         gmail = await _rest(client, f"{GWS_ADMIN}/directory/v1/customer/{customer}/devices/mobile", token)
         if gmail:

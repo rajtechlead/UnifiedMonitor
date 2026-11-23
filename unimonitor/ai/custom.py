@@ -41,11 +41,11 @@ _BLOCKED_HOSTNAMES = frozenset(
 _BLOCKED_ADDRESSES = frozenset(
     ipaddress.ip_address(address)
     for address in (
-        "169.254.169.254",  # AWS, Azure, GCP, OpenStack
-        "169.254.170.2",  # ECS task credentials
-        "100.100.100.200",  # Alibaba Cloud
-        "192.0.0.192",  # Oracle Cloud
-        "fd00:ec2::254",  # AWS IPv6
+        "169.254.169.254",  # NOSONAR — deliberately blocked: AWS, Azure, GCP, OpenStack metadata
+        "169.254.170.2",  # NOSONAR — deliberately blocked: ECS task credentials
+        "100.100.100.200",  # NOSONAR — deliberately blocked: Alibaba Cloud metadata
+        "192.0.0.192",  # NOSONAR — deliberately blocked: Oracle Cloud metadata
+        "fd00:ec2::254",  # NOSONAR — deliberately blocked: AWS IPv6 metadata
     )
 )
 _LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
@@ -61,8 +61,8 @@ def _is_loopback(host: str) -> bool:
         return False
 
 
-def _validate_target(value: str) -> str:
-    """Reject schemes, credentials and addresses a provider must never reach."""
+def _scheme_and_host(value: str) -> tuple[str, str]:
+    """Split a target and reject schemes, credentials and metadata hostnames."""
     parts = urlsplit(value)
     if parts.scheme not in ("http", "https"):
         raise ValueError("base_url must start with https:// (or http:// for a local gateway)")
@@ -73,23 +73,40 @@ def _validate_target(value: str) -> str:
         raise ValueError("base_url must include a host")
     if host in _BLOCKED_HOSTNAMES:
         raise ValueError("base_url must not point at a cloud metadata service")
+    return parts.scheme, host
 
+
+def _literal_address(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address | None:
+    """The host as an IP address, or None when it is a name.
+
+    A single all-numeric label (for example ``2130706433``) is an alternative
+    encoding of an IPv4 literal and is rejected rather than treated as a name.
+    """
     try:
-        address = ipaddress.ip_address(host)
+        return ipaddress.ip_address(host)
     except ValueError:
-        address = None
-        # A single all-numeric label is an alternative encoding of an IPv4 literal.
         if host.replace(".", "").isdigit():
             raise ValueError("base_url must use a hostname or canonical IP address") from None
+        return None
 
-    if address is not None:
-        candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
-        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
-            candidates.append(address.ipv4_mapped)
-        if any(candidate.is_link_local or candidate in _BLOCKED_ADDRESSES or candidate.is_unspecified for candidate in candidates):
-            raise ValueError("base_url must not point at a link-local or cloud metadata address")
 
-    if parts.scheme == "http" and not _is_loopback(host):
+def _address_is_blocked(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """True for link-local, unspecified or published metadata addresses."""
+    candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
+    if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+        candidates.append(address.ipv4_mapped)
+    return any(candidate.is_link_local or candidate in _BLOCKED_ADDRESSES or candidate.is_unspecified for candidate in candidates)
+
+
+def _validate_target(value: str) -> str:
+    """Reject schemes, credentials and addresses a provider must never reach."""
+    scheme, host = _scheme_and_host(value)
+
+    address = _literal_address(host)
+    if address is not None and _address_is_blocked(address):
+        raise ValueError("base_url must not point at a link-local or cloud metadata address")
+
+    if scheme == "http" and not _is_loopback(host):
         raise ValueError("base_url must use https://; http:// is only allowed for a loopback gateway")
     return value.rstrip("/")
 

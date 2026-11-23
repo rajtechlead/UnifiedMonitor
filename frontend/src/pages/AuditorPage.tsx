@@ -36,6 +36,13 @@ type RequirementCatalogue = {
   rows: RequirementRow[]
 }
 
+function catalogueSourceLabel(catalogue: RequirementCatalogue | null): string {
+  if (!catalogue) return ''
+  if (catalogue.catalogue === 'official') return 'Official requirement catalogue'
+  if (catalogue.catalogue === 'mapping') return 'Mapped measures'
+  return 'Requirement view derived from control mappings'
+}
+
 const cardStyle = {
   background: 'var(--color-surface)',
   border: '1px solid var(--color-border)',
@@ -151,11 +158,7 @@ export default function AuditorPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {catalogue && (
                 <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
-                  {catalogue.catalogue === 'official'
-                    ? 'Official requirement catalogue'
-                    : catalogue.catalogue === 'mapping'
-                      ? 'Mapped measures'
-                      : 'Requirement view derived from control mappings'}
+                  {catalogueSourceLabel(catalogue)}
                 </span>
               )}
               <select

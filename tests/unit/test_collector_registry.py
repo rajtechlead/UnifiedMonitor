@@ -25,6 +25,8 @@ def _make_gc(success=True, data=None):
     if success:
         resp = MagicMock()
         resp.success = True
+        resp.usable = True
+        resp.stale = False
         resp.data = data or {"value": []}
         gc.get = AsyncMock(return_value=resp)
     else:
@@ -51,9 +53,25 @@ class TestSafeGet:
         gc = MagicMock()
         resp = MagicMock()
         resp.success = False
+        resp.usable = False
+        resp.stale = False
         gc.get = AsyncMock(return_value=resp)
         result = _run(_safe_get(gc, "/endpoint", "myKey"))
         assert result == {}
+
+    def test_stale_response_still_returns_key_data(self):
+        """A Graph outage answered from last-good data is evidence, not a gap."""
+        from unimonitor.graph.collector_registry import _safe_get
+
+        gc = MagicMock()
+        resp = MagicMock()
+        resp.success = False
+        resp.usable = True
+        resp.stale = True
+        resp.data = {"value": ["cached"]}
+        gc.get = AsyncMock(return_value=resp)
+        result = _run(_safe_get(gc, "/endpoint", "myKey"))
+        assert result == {"myKey": {"value": ["cached"]}}
 
     def test_exception_returns_empty(self):
         from unimonitor.graph.collector_registry import _safe_get

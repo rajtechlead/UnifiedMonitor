@@ -24,6 +24,13 @@ def _ok(data):
     return GraphResponse(data=data, success=True)
 
 
+def _stale(data):
+    """Return the last-good response a Graph outage is answered with."""
+    from unimonitor.graph.client import GraphResponse
+
+    return GraphResponse(data=data, success=False, stale=True, error_code="GRAPH_UNAVAILABLE")
+
+
 def _fail():
     """Raise a generic exception to simulate a Graph error."""
     raise RuntimeError("Graph API unavailable")
@@ -184,6 +191,23 @@ class TestEntraIdCollector:
         result = _run(collector.collect())
         # At least one error should be recorded
         assert len(result.errors) > 0
+
+    def test_a_stale_response_still_populates_condition_access(self):
+        """An outage answered with last-good data must not silently drop evidence."""
+        from unimonitor.graph.collectors.entra_id import EntraIdCollector
+
+        policies = [{"id": "p1", "displayName": "Block legacy auth", "state": "enabled"}]
+        client = _make_client()
+
+        async def _get(endpoint, **kw):
+            if "conditionalAccess/policies" in endpoint:
+                return _stale(policies)
+            return _ok([])
+
+        client.get = _get
+        result = _run(EntraIdCollector(client).collect())
+        assert result.conditional_access_policies == policies
+        assert result.errors == {}
 
     def test_non_list_data_becomes_empty_list(self):
         from unimonitor.graph.collectors.entra_id import EntraIdCollector

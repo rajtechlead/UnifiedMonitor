@@ -28,13 +28,13 @@ class PurviewCollector:
         data = PurviewData()
         try:
             resp = await self.client.get("/informationProtection/sensitivityLabels")
-            if resp.success:
+            if resp.usable:
                 data.sensitivity_labels = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["sensitivity_labels"] = str(e)
         try:
             resp = await self.client.get("/security/informationProtection/sensitivityLabels")
-            if resp.success:
+            if resp.usable:
                 data.dlp_policies = resp.data if isinstance(resp.data, list) else []
         except Exception as e:
             data.errors["dlp_policies"] = str(e)

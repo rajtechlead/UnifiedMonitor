@@ -38,8 +38,8 @@ class FakeGraph:
         self.calls.append(endpoint)
         for prefix, payload in self.routes.items():
             if endpoint.startswith(prefix):
-                return SimpleNamespace(data=payload, success=True)
-        return SimpleNamespace(data={}, success=False)
+                return SimpleNamespace(data=payload, success=True, usable=True, stale=False)
+        return SimpleNamespace(data={}, success=False, usable=False, stale=False)
 
 
 CONTROLS = {c.id: c for c in ControlLoader().load_all()}

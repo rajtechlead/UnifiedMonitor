@@ -70,9 +70,28 @@ class TestAssembleInventory:
         monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
 
         written = write_inventory(assemble({"aws_cloudtrail_trails": [{"Name": "t", "IsLogging": True}]}), "tenant-1")
-        assert written is not None
+        assert written == tmp_path / "tenant-1.json"
         assert load_inventory("tenant-1")["resources"][0]["type"] == "logging"
-        assert (tmp_path / "latest.json").is_file()
+        # No deployment-wide file: it would mix every tenant's resources.
+        assert not (tmp_path / "latest.json").exists()
+
+    def test_another_tenants_inventory_is_not_readable(self, tmp_path, monkeypatch):
+        from unimonitor.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", str(tmp_path))
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
+
+        write_inventory(assemble({"aws_s3_buckets": [{"Name": "own"}]}), "tenant-1")
+        assert load_inventory("tenant-2") is None
+
+    def test_an_inventory_is_not_written_without_a_tenant(self, tmp_path, monkeypatch):
+        from unimonitor.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", str(tmp_path))
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
+
+        assert write_inventory(assemble({"aws_s3_buckets": [{"Name": "own"}]})) is None
+        assert not list(tmp_path.glob("*.json"))
 
 
 class TestRequirementCatalogue:
