@@ -70,10 +70,17 @@ function ChainBanner({ chain }: Readonly<{ chain: ChainCheck }>) {
   )
 }
 
-function CloudActivity({ events }: Readonly<{ events: CloudEvent[] }>) {
+function CloudActivity({ events, failures }: Readonly<{ events: CloudEvent[]; failures: Record<string, string> }>) {
   const [source, setSource] = useState('')
-  const sources = Array.from(new Set(events.map(event => event.source))).sort((a, b) => a.localeCompare(b))
+  const sources = Array.from(new Set([...events.map(event => event.source), ...Object.keys(failures)])).sort((a, b) => a.localeCompare(b))
   const shownEvents = source ? events.filter(event => event.source === source) : events
+  // Group by the platform the logs came from, so M365, AWS, GCP and Workspace each
+  // read as their own audit feed instead of one interleaved list.
+  const grouped = shownEvents.reduce<Record<string, CloudEvent[]>>((groups, event) => {
+    groups[event.source] = [...(groups[event.source] || []), event]
+    return groups
+  }, {})
+  const failedSources = Object.entries(failures).filter(([name]) => !source || name === source)
 
   return (
     <div style={panel}>
@@ -93,25 +100,42 @@ function CloudActivity({ events }: Readonly<{ events: CloudEvent[] }>) {
           {sources.map(item => <option key={item} value={item}>{item}</option>)}
         </select>
       </div>
+      {failedSources.length > 0 && (
+        <div style={{ fontSize: 12, color: '#F59E0B', marginBottom: 12 }}>
+          {failedSources.map(([name, reason]) => (
+            <div key={name}>
+              <strong>{name}</strong> could not be read: {reason}. Check the app's audit-log read permission.
+            </div>
+          ))}
+        </div>
+      )}
       {shownEvents.length === 0 ? (
         <div style={{ textAlign: 'center', padding: 32, color: 'var(--color-text-muted)', fontSize: 13 }}>
           No cloud audit events returned. Connect a platform and grant its audit-log read permission.
         </div>
       ) : (
-        <table style={table}>
-          <TableHead headers={['Timestamp', 'Platform', 'Action', 'Actor', 'Target']} cellPadding="8px 12px" background="transparent" />
-          <tbody>
-            {shownEvents.map(event => (
-              <tr key={`${event.id}-${event.created_at}`} style={{ borderBottom: '1px solid var(--color-border)' }}>
-                <td style={{ ...muted, whiteSpace: 'nowrap' }}>{new Date(event.created_at).toLocaleString()}</td>
-                <td style={{ padding: '10px 12px', fontWeight: 600 }}>{event.source}</td>
-                <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12 }}>{event.action}</td>
-                <td style={muted}>{event.actor}</td>
-                <td style={muted}>{event.target || '—'}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b)).map(([platform, platformEvents]) => (
+            <div key={platform}>
+              <div style={{ fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4, color: 'var(--color-text-muted)', marginBottom: 6 }}>
+                {platform} · {platformEvents.length} events
+              </div>
+              <table style={table}>
+                <TableHead headers={['Timestamp', 'Action', 'Actor', 'Target']} cellPadding="8px 12px" background="transparent" />
+                <tbody>
+                  {platformEvents.map(event => (
+                    <tr key={`${event.id}-${event.created_at}`} style={{ borderBottom: '1px solid var(--color-border)' }}>
+                      <td style={{ ...muted, whiteSpace: 'nowrap' }}>{new Date(event.created_at).toLocaleString()}</td>
+                      <td style={{ padding: '10px 12px', fontFamily: 'monospace', fontSize: 12 }}>{event.action}</td>
+                      <td style={muted}>{event.actor}</td>
+                      <td style={muted}>{event.target || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   )
@@ -159,6 +183,7 @@ export default function AuditPage() {
 
   const entries: AuditEntry[] = audit?.entries ?? []
   const cloudEvents: CloudEvent[] = audit?.cloud_events ?? []
+  const cloudFailures: Record<string, string> = audit?.cloud_failures ?? {}
   const { label: chainLabel } = chainSummary(chain)
 
   if (isLoading) {
@@ -195,7 +220,7 @@ export default function AuditPage() {
 
       {chain && <ChainBanner chain={chain} />}
 
-      <CloudActivity events={cloudEvents} />
+      <CloudActivity events={cloudEvents} failures={cloudFailures} />
 
       <AuditEvents entries={entries} />
     </div>

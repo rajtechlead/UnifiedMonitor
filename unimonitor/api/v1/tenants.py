@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 
@@ -21,11 +22,15 @@ router = APIRouter()
 
 
 class TenantCreate(BaseModel):
+    """A managed client. Only the name is required: a client that is not a Microsoft
+    tenant (AWS, GCP, Workspace, Okta) gets a generated identifier and connects its
+    platform on its own settings page."""
+
     name: str = Field(..., min_length=1, max_length=256)
     display_name: str = Field(..., min_length=1, max_length=256)
-    entra_tenant_id: str = Field(..., description="Azure AD / Entra ID tenant GUID")
-    client_id: str = Field(..., description="App registration client ID")
-    client_secret: SecretStr = Field(..., description="App registration client secret")
+    entra_tenant_id: str | None = Field(default=None, description="Azure AD / Entra ID tenant GUID (Microsoft clients)")
+    client_id: str | None = Field(default=None, description="App registration client ID")
+    client_secret: SecretStr | None = Field(default=None, description="App registration client secret")
     description: str | None = None
     is_msp_client: bool = False
 
@@ -186,23 +191,31 @@ async def create_tenant(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> TenantResponse:
     """Create a new tenant."""
+    import uuid
+
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.repositories.tenant_repo import TenantRepository
 
+    identifier = (body.entra_tenant_id or "").strip() or str(uuid.uuid4())
     async with async_session_factory() as session:
         repo = TenantRepository(session)
-        existing = await repo.get_by_entra_id(body.entra_tenant_id)
+        existing = await repo.get_by_entra_id(identifier)
         if existing:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Tenant with Entra ID {body.entra_tenant_id} already exists",
+                detail=f"Tenant with Entra ID {identifier} already exists",
             )
+        secret_ref = None
+        if body.client_secret:
+            from unimonitor.core.tenants import store_tenant_secret
+
+            secret_ref = await store_tenant_secret(identifier, body.client_secret.get_secret_value())
         tenant = await repo.create(
             name=body.name,
             display_name=body.display_name,
-            entra_tenant_id=body.entra_tenant_id,
-            client_id=body.client_id,
-            client_secret=body.client_secret.get_secret_value(),
+            entra_tenant_id=identifier,
+            client_id=(body.client_id or "").strip() or None,
+            client_secret_ref=secret_ref,
             description=body.description,
             is_msp_client=body.is_msp_client,
         )
@@ -535,7 +548,11 @@ async def update_tenant(
 
         updates = body.model_dump(exclude_none=True)
         if "client_secret" in updates:
-            updates["client_secret"] = updates["client_secret"].get_secret_value()
+            from unimonitor.core.tenants import store_tenant_secret
+
+            secret = updates.pop("client_secret").get_secret_value()
+            updates["client_secret_ref"] = await store_tenant_secret(tenant.tenant_id, secret)
+            updates["client_secret"] = None
 
         tenant = await repo.update(tenant_id, **updates)
 
@@ -571,20 +588,30 @@ async def test_connection(
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.repositories.tenant_repo import TenantRepository
     from unimonitor.graph.client import GraphClient
+    from unimonitor.onboarding.service import microsoft_app
 
     async with async_session_factory() as session:
         repo = TenantRepository(session)
         tenant = await repo.get_by_id(tenant_id)
         if not tenant:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
+        app = await microsoft_app(session, tenant.id)
+
+    if not app.get("configured"):
+        return ConnectionTestResponse(
+            success=False,
+            error="No connected Microsoft 365 app for this tenant. Connect it on the tenant's settings page.",
+        )
 
     # Required Graph API permissions for UniMonitor
 
     try:
         async with GraphClient(
-            tenant_id=tenant.entra_tenant_id,
-            client_id=tenant.client_id,
-            client_secret=tenant.client_secret,
+            tenant_id=app["directory"] or tenant.entra_tenant_id,
+            client_id=app["client_id"],
+            client_secret=app.get("client_secret") or None,
+            certificate_pem=app.get("certificate_pem") or None,
+            private_key_pem=app.get("private_key_pem") or None,
             cache_ttl=0,
         ) as client:
             # Test basic connectivity
@@ -614,6 +641,8 @@ async def test_connection(
                 "IdentityRiskyUser.Read.All": "/identityProtection/riskyUsers?$top=1",
                 "DeviceManagementManagedDevices.Read.All": "/deviceManagement/managedDevices?$top=1",
                 "Reports.Read.All": "/reports/getOffice365ActiveUserDetail(period='D7')",
+                "ServiceHealth.Read.All": "/admin/serviceAnnouncement/healthOverviews",
+                "AuditLog.Read.All": "/auditLogs/directoryAudits?$top=1",
             }
 
             for scope, endpoint in probe_map.items():
@@ -678,3 +707,231 @@ async def _tenant_coverage(session: Any, tenant_id: str) -> tuple[float, str | N
     mean = round(sum(cov["coverage_pct"] for _, cov in scored) / len(scored), 2)
     weakest_id, weakest = min(scored, key=lambda item: item[1]["coverage_pct"])
     return mean, weakest_id, weakest["coverage_pct"]
+
+
+# ── Per-tenant platforms and settings (primary administrator) ────────────────
+
+
+class TenantConnectionRow(BaseModel):
+    provider: str
+    account: str | None = None
+    display_name: str | None = None
+    status: str
+    config: dict[str, Any] = {}
+    last_error: str | None = None
+    last_checked_at: datetime | None = None
+
+
+class TenantBrandingSettings(BaseModel):
+    portal_name: str = "UniMonitor"
+    accent_colour: str = "#2563EB"
+    logo_url: str | None = None
+    support_email: str | None = None
+
+
+class TenantRuntimeSettings(BaseModel):
+    collection_interval_minutes: int = 60
+    auto_collection: bool = True
+    notes: str = ""
+
+
+class TenantSettingsResponse(BaseModel):
+    tenant: TenantResponse
+    branding: TenantBrandingSettings
+    collection: TenantRuntimeSettings
+    connections: list[TenantConnectionRow]
+
+
+class TenantSettingsUpdate(BaseModel):
+    """Editable per-tenant settings; omitted fields keep their stored value."""
+
+    portal_name: str | None = Field(default=None, min_length=1, max_length=64)
+    accent_colour: str | None = Field(default=None, pattern=r"^#[0-9A-Fa-f]{6}$")
+    logo_url: str | None = Field(default=None, max_length=512)
+    support_email: str | None = Field(default=None, max_length=254)
+    collection_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
+    auto_collection: bool | None = None
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+def _settings_document(raw: str | None) -> dict[str, Any]:
+    try:
+        data = json.loads(raw or "{}")
+    except ValueError:
+        return {}
+    result: dict[str, Any] = data if isinstance(data, dict) else {}
+    return result
+
+
+def _dict_section(document: dict[str, Any], key: str) -> dict[str, Any]:
+    value = document.get(key)
+    return value if isinstance(value, dict) else {}
+
+
+def _connection_row(row: Any) -> TenantConnectionRow:
+    return TenantConnectionRow(
+        provider=row.provider,
+        account=row.account,
+        display_name=row.display_name,
+        status=row.status,
+        config=_settings_document(row.config),
+        last_error=row.last_error,
+        last_checked_at=row.last_checked_at,
+    )
+
+
+async def _tenant_or_404(session: Any, tenant_id: str) -> Any:
+    from unimonitor.db.models.tenant import Tenant
+
+    tenant = await session.get(Tenant, tenant_id)
+    if tenant is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=TENANT_NOT_FOUND)
+    return tenant
+
+
+async def _tenant_connections(session: Any, tenant_id: str) -> list[TenantConnectionRow]:
+    from sqlalchemy import select
+
+    from unimonitor.db.models.cloud_connection import CloudConnection
+
+    rows = (await session.execute(select(CloudConnection).where(CloudConnection.tenant_id == tenant_id))).scalars().all()
+    return [_connection_row(row) for row in rows]
+
+
+@router.get("/{tenant_id}/connections", responses={404: {"description": "Tenant not found"}})
+async def list_tenant_connections(
+    tenant_id: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> list[TenantConnectionRow]:
+    """Platforms connected for one client tenant."""
+    from unimonitor.db.base import async_session_factory
+
+    async with async_session_factory() as session:
+        await _tenant_or_404(session, tenant_id)
+        return await _tenant_connections(session, tenant_id)
+
+
+@router.post(
+    "/{tenant_id}/connections/{provider}",
+    status_code=status.HTTP_201_CREATED,
+    responses={400: {"description": "Invalid credentials"}, "404": {"description": "Tenant not found"}},
+)
+async def connect_tenant_platform(
+    tenant_id: str,
+    provider: str,
+    payload: dict[str, Any],
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> TenantConnectionRow:
+    """Onboard one platform for a client tenant (Microsoft, AWS, GCP, Workspace or Okta).
+
+    This is the Managed tenants plug-n-play path: the same validated connectors the
+    setup wizard uses, scoped to the client's own tenant row so collection, findings
+    and settings stay isolated.
+    """
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.onboarding import service
+    from unimonitor.onboarding.clouds import CloudError
+
+    async with async_session_factory() as session:
+        await _tenant_or_404(session, tenant_id)
+        try:
+            row = await service.connect_platform(session, provider, payload, tenant_id=tenant_id)
+        except (CloudError, ValueError) as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        await session.commit()
+        logger.info("tenant_platform_connected", tenant_id=tenant_id, provider=provider, by=current_user.id)
+        return _connection_row(row)
+
+
+@router.delete(
+    "/{tenant_id}/connections/{provider}", status_code=status.HTTP_204_NO_CONTENT, responses={404: {"description": "Connection not found"}}
+)
+async def disconnect_tenant_platform(
+    tenant_id: str,
+    provider: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> None:
+    """Remove a client's platform connection and its vault entries."""
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.onboarding import service
+
+    async with async_session_factory() as session:
+        if not await service.delete_tenant_connection(session, tenant_id, provider):
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"No {provider} connection for this tenant")
+        await session.commit()
+    logger.info("tenant_platform_disconnected", tenant_id=tenant_id, provider=provider, by=current_user.id)
+
+
+@router.get("/{tenant_id}/settings", responses={404: {"description": "Tenant not found"}})
+async def get_tenant_settings(
+    tenant_id: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> TenantSettingsResponse:
+    """Everything the per-tenant settings page needs, in one guarded read."""
+    from unimonitor.db.base import async_session_factory
+
+    async with async_session_factory() as session:
+        tenant = await _tenant_or_404(session, tenant_id)
+        document = _settings_document(tenant.settings_json)
+        branding_raw = _dict_section(document, "branding")
+        collection_raw = _dict_section(document, "collection")
+        connections = await _tenant_connections(session, tenant_id)
+
+    return TenantSettingsResponse(
+        tenant=TenantResponse.model_validate(tenant),
+        branding=TenantBrandingSettings(**{key: branding_raw[key] for key in TenantBrandingSettings.model_fields if key in branding_raw}),
+        collection=TenantRuntimeSettings(**{key: collection_raw[key] for key in TenantRuntimeSettings.model_fields if key in collection_raw}),
+        connections=connections,
+    )
+
+
+@router.put("/{tenant_id}/settings", responses={400: {"description": "Invalid value"}, 404: {"description": "Tenant not found"}})
+async def put_tenant_settings(
+    tenant_id: str,
+    body: TenantSettingsUpdate,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> TenantSettingsResponse:
+    """Update one client's branding, collection cadence and notes."""
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.settings_validation import validate_logo_url, validate_support_email
+
+    try:
+        logo_url = validate_logo_url(body.logo_url)
+        support_email = validate_support_email(body.support_email)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    async with async_session_factory() as session:
+        tenant = await _tenant_or_404(session, tenant_id)
+        document = _settings_document(tenant.settings_json)
+        branding = _dict_section(document, "branding")
+        collection = _dict_section(document, "collection")
+
+        for key in ("portal_name", "accent_colour"):
+            value = getattr(body, key)
+            if value is not None:
+                branding[key] = value
+        if body.logo_url is not None:
+            branding["logo_url"] = logo_url
+        if body.support_email is not None:
+            branding["support_email"] = support_email
+        if body.collection_interval_minutes is not None:
+            collection["collection_interval_minutes"] = body.collection_interval_minutes
+        if body.auto_collection is not None:
+            collection["auto_collection"] = body.auto_collection
+        if body.notes is not None:
+            collection["notes"] = body.notes
+
+        document["branding"] = branding
+        document["collection"] = collection
+        tenant.settings_json = json.dumps(document, sort_keys=True)
+        await session.commit()
+        connections = await _tenant_connections(session, tenant_id)
+
+    logger.info("tenant_settings_updated", tenant_id=tenant_id, by=current_user.id)
+    return TenantSettingsResponse(
+        tenant=TenantResponse.model_validate(tenant),
+        branding=TenantBrandingSettings(**{key: branding[key] for key in TenantBrandingSettings.model_fields if key in branding}),
+        collection=TenantRuntimeSettings(**{key: collection[key] for key in TenantRuntimeSettings.model_fields if key in collection}),
+        connections=connections,
+    )

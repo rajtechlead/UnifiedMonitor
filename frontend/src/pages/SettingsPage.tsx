@@ -5,6 +5,7 @@ import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, K
 import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
 import BrandingPanel from '../components/BrandingPanel'
 import DelegatedAccessPanel from '../components/DelegatedAccessPanel'
+import BuiltinAiProviders from '../components/BuiltinAiProviders'
 
 const GOOGLE_SHARED = '__google_shared'
 
@@ -407,6 +408,112 @@ function PostureSnapshotEditor() {
  * panel shows which ones are ready, lets an admin test the wiring and push the
  * current open findings without leaving the product.
  */
+type ConnectorRow = {
+  slug: string
+  name: string
+  description?: string
+  docs?: string
+  configured: boolean
+  managed?: boolean
+  required_settings: string[]
+  missing_settings: string[]
+}
+
+function ConnectorForm({
+  kind,
+  connector,
+  onSaved,
+  setResult,
+}: {
+  kind: 'siem' | 'ticketing'
+  connector: ConnectorRow
+  onSaved: () => void
+  setResult: (message: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<Record<string, string>>({})
+  const [busy, setBusy] = useState(false)
+
+  const submit = async () => {
+    setBusy(true)
+    try {
+      await api.put(`/integrations/${kind}/${connector.slug}/config`, { values: draft })
+      setResult(`${connector.name} connected`)
+      setDraft({})
+      setOpen(false)
+      onSaved()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setResult(`${connector.name}: ${detail || 'could not save the settings'}`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const disconnect = async () => {
+    setBusy(true)
+    try {
+      await api.delete(`/integrations/${kind}/${connector.slug}/config`)
+      setResult(`${connector.name} disconnected`)
+      onSaved()
+    } catch {
+      setResult(`${connector.name}: could not disconnect`)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div style={{ padding: '8px 0' }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <button
+          onClick={() => setOpen((value) => !value)}
+          style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)', cursor: 'pointer' }}
+        >
+          {connector.configured ? 'Update connection' : 'Connect'}
+        </button>
+        {connector.managed && (
+          <button
+            onClick={disconnect}
+            disabled={busy}
+            style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-high)', cursor: busy ? 'not-allowed' : 'pointer' }}
+          >
+            Disconnect
+          </button>
+        )}
+      </div>
+      {open && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6, maxWidth: 420 }}>
+          <p style={{ fontSize: 11, color: 'var(--color-text-muted)', margin: 0 }}>
+            Credentials are written to the secret vault and never shown again. Use an account whose role can read
+            this platform&apos;s audit and configuration APIs.
+          </p>
+          {connector.required_settings.map((field) => (
+            <label key={field} style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+              {field}
+              <input
+                type={/TOKEN|KEY|PASSWORD|SECRET/i.test(field) ? 'password' : 'text'}
+                value={draft[field] ?? ''}
+                onChange={(event) => setDraft((current) => ({ ...current, [field]: event.target.value }))}
+                autoComplete="off"
+                spellCheck={false}
+                style={{ display: 'block', width: '100%', marginTop: 3, padding: '6px 8px', fontSize: 12, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)' }}
+              />
+            </label>
+          ))}
+          <button
+            onClick={submit}
+            disabled={busy || Object.values(draft).every((value) => !value.trim())}
+            style={{ alignSelf: 'flex-start', fontSize: 11, padding: '6px 12px', borderRadius: 6, border: 'none', background: 'var(--color-brand)', color: 'white', cursor: busy ? 'not-allowed' : 'pointer', opacity: busy ? 0.7 : 1 }}
+          >
+            {busy ? 'Saving…' : 'Save connection'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function IntegrationsPanel() {
   const { data, refetch } = useQuery({
     queryKey: ['integrations'],
@@ -433,53 +540,61 @@ function IntegrationsPanel() {
     }
   }
 
-  const siem = data?.siem ?? []
-  const ticketing = data?.ticketing ?? []
+  const siem: ConnectorRow[] = data?.siem ?? []
+  const ticketing: ConnectorRow[] = data?.ticketing ?? []
 
   return (
     <Section icon={Webhook} title="SIEM and ticketing connectors">
       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 12 }}>
-        Connectors are enabled by their deployment secrets. Nothing is sent automatically.
+        Connect a provider with its own credentials, or keep using deployment secrets. Nothing is sent automatically.
       </div>
-      {siem.map((connector: {
-        slug: string; name: string; description: string; configured: boolean; missing_settings: string[]
-      }) => (
-        <div key={connector.slug} style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-          padding: '10px 0', borderBottom: '1px solid var(--color-border)',
-        }}>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 500 }}>{connector.name}</div>
-            <div style={{ fontSize: 11, color: connector.configured ? '#10B981' : 'var(--color-text-muted)' }}>
-              {connector.configured
-                ? 'Ready'
-                : `Needs ${connector.missing_settings.join(', ')}`}
+      {siem.map((connector) => (
+        <div key={connector.slug} style={{ padding: '10px 0', borderBottom: '1px solid var(--color-border)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 500 }}>{connector.name}</div>
+              <div style={{ fontSize: 11, color: connector.configured ? '#10B981' : 'var(--color-text-muted)' }}>
+                {connector.configured
+                  ? connector.managed ? 'Connected (vault)' : 'Ready (environment)'
+                  : `Needs ${connector.missing_settings.join(', ')}`}
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => act(`${connector.name} test`, `/integrations/siem/${connector.slug}/test`)}
+                disabled={!connector.configured || busy !== ''}
+                style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)', cursor: connector.configured ? 'pointer' : 'not-allowed' }}
+              >
+                Test
+              </button>
+              <button
+                onClick={() => act(connector.name, `/integrations/siem/${connector.slug}/send`, {})}
+                disabled={!connector.configured || busy !== ''}
+                style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: 'var(--color-brand)', color: 'white', cursor: connector.configured ? 'pointer' : 'not-allowed', opacity: connector.configured ? 1 : 0.5 }}
+              >
+                <Send size={11} /> Send
+              </button>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <button
-              onClick={() => act(`${connector.name} test`, `/integrations/siem/${connector.slug}/test`)}
-              disabled={!connector.configured || busy !== ''}
-              style={{ fontSize: 11, padding: '5px 9px', borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)', cursor: connector.configured ? 'pointer' : 'not-allowed' }}
-            >
-              Test
-            </button>
-            <button
-              onClick={() => act(connector.name, `/integrations/siem/${connector.slug}/send`, {})}
-              disabled={!connector.configured || busy !== ''}
-              style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, padding: '5px 9px', borderRadius: 6, border: 'none', background: 'var(--color-brand)', color: 'white', cursor: connector.configured ? 'pointer' : 'not-allowed', opacity: connector.configured ? 1 : 0.5 }}
-            >
-              <Send size={11} /> Send
-            </button>
-          </div>
+          <ConnectorForm kind="siem" connector={connector} onSaved={() => void refetch()} setResult={setResult} />
         </div>
       ))}
 
       <div style={{ marginTop: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Ticketing sync</div>
-        {ticketing.map((provider: { slug: string; name: string; configured: boolean; missing_settings: string[] }) => (
-          <div key={provider.slug} style={{ fontSize: 11, color: provider.configured ? '#10B981' : 'var(--color-text-muted)' }}>
-            {provider.name}: {provider.configured ? 'ready' : `needs ${provider.missing_settings.join(', ')}`}
+        {ticketing.map((provider) => (
+          <div key={provider.slug} style={{ padding: '8px 0', borderBottom: '1px solid var(--color-border)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 500 }}>{provider.name}</div>
+                <div style={{ fontSize: 11, color: provider.configured ? '#10B981' : 'var(--color-text-muted)' }}>
+                  {provider.configured
+                    ? provider.managed ? 'Connected (vault)' : 'Ready (environment)'
+                    : `Needs ${provider.missing_settings.join(', ')}`}
+                </div>
+              </div>
+            </div>
+            <ConnectorForm kind="ticketing" connector={provider} onSaved={() => void refetch()} setResult={setResult} />
           </div>
         ))}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
@@ -540,6 +655,8 @@ function AiProvidersPanel() {
         title and description only). Built-in providers are tried in order and the next one is used
         automatically when one is out of quota.
       </div>
+
+      <BuiltinAiProviders />
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
         {(data?.providers || []).map(provider => (

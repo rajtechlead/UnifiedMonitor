@@ -126,6 +126,20 @@ CONNECTORS: dict[str, Connector] = {
 }
 
 
+class SettingsOverlay:
+    """Environment settings with vault-stored connector values taking precedence."""
+
+    def __init__(self, base: Any, overrides: dict[str, str] | None = None) -> None:
+        self._base = base
+        self._overrides = dict(overrides or {})
+
+    def __getattr__(self, name: str) -> Any:
+        overrides = object.__getattribute__(self, "_overrides")
+        if name in overrides:
+            return overrides[name]
+        return getattr(object.__getattribute__(self, "_base"), name, "")
+
+
 def get_connector(slug: str) -> Connector:
     connector = CONNECTORS.get(slug)
     if connector is None:
@@ -133,12 +147,22 @@ def get_connector(slug: str) -> Connector:
     return connector
 
 
-def connector_status() -> list[dict[str, Any]]:
-    """Every connector with whether it is configured and what it still needs."""
-    settings = get_settings()
+def _missing_settings(connector: Connector, settings: Any) -> list[str]:
+    return [name for name in connector.env if not str(getattr(settings, name, "") or "").strip()]
+
+
+def connector_status(configs: dict[str, dict[str, str]] | None = None) -> list[dict[str, Any]]:
+    """Every connector with whether it is configured and what it still needs.
+
+    ``configs`` carries the per-connector settings stored in the secret vault; the
+    environment is used only for connectors that have no vault entry.
+    """
+    base = get_settings()
+    managed = configs or {}
     rows = []
     for connector in CONNECTORS.values():
-        missing = [name for name in connector.env if not str(getattr(settings, name, "") or "").strip()]
+        settings = SettingsOverlay(base, managed.get(connector.slug))
+        missing = _missing_settings(connector, settings)
         rows.append(
             {
                 "slug": connector.slug,
@@ -146,6 +170,7 @@ def connector_status() -> list[dict[str, Any]]:
                 "description": connector.description,
                 "docs": connector.docs,
                 "configured": not missing,
+                "managed": connector.slug in managed,
                 "required_settings": list(connector.env),
                 "missing_settings": missing,
             }
@@ -253,11 +278,11 @@ _REQUEST_BUILDERS = {
 }
 
 
-async def send_events(slug: str, events: list[dict[str, Any]]) -> dict[str, Any]:
+async def send_events(slug: str, events: list[dict[str, Any]], config: dict[str, str] | None = None) -> dict[str, Any]:
     """Send finding events through one connector; returns a small receipt."""
     connector = get_connector(slug)
-    settings = get_settings()
-    missing = [name for name in connector.env if not str(getattr(settings, name, "") or "").strip()]
+    settings = SettingsOverlay(get_settings(), config)
+    missing = _missing_settings(connector, settings)
     if missing:
         raise IntegrationError(f"{connector.name} is not configured: set {', '.join(missing)}")
     if not events:
@@ -310,7 +335,7 @@ def _send_syslog(settings: Any, events: list[dict[str, Any]]) -> None:
     logger.info("siem_syslog_sent", host=host, port=port, count=len(events))
 
 
-async def test_connector(slug: str) -> dict[str, Any]:
+async def test_connector(slug: str, config: dict[str, str] | None = None) -> dict[str, Any]:
     """Send one synthetic event so an administrator can verify the wiring."""
     connector = get_connector(slug)
     if connector.slug == "syslog":
@@ -340,7 +365,7 @@ async def test_connector(slug: str) -> dict[str, Any]:
             "first_detected_at": None,
             "last_seen_at": None,
         }
-    receipt = await send_events(slug, [sample])
+    receipt = await send_events(slug, [sample], config)
     return {**receipt, "test": True}
 
 

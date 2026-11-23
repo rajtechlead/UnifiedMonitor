@@ -20,6 +20,7 @@ celery_app = Celery(
         "unimonitor.worker.tasks.reporting",
         "unimonitor.worker.tasks.notifications",
         "unimonitor.worker.tasks.alerts",
+        "unimonitor.worker.tasks.zerotrust",
     ],
 )
 

@@ -34,7 +34,7 @@ class TestFirstRunWindow:
         body = r.json()
         assert body["needs_admin"] is True
         assert body["configured"] is False
-        assert {p["id"] for p in body["platforms"]} == {"microsoft", "aws", "gcp", "google_workspace"}
+        assert {p["id"] for p in body["platforms"]} == {"microsoft", "aws", "gcp", "google_workspace", "okta"}
 
     async def test_admin_bootstrap_returns_a_token_and_closes_the_window(self, client: AsyncClient):
         r = await _bootstrap(client)

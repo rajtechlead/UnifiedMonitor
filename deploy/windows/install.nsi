@@ -131,8 +131,13 @@ SectionGroup "Core" SecCore
       FileWrite $0 "DATABASE_URL=sqlite+aiosqlite:///C:/ProgramData/UniMonitor/unimonitor.db$\r$\n"
       FileWrite $0 "REDIS_URL=redis://localhost:6379/0$\r$\n"
       FileWrite $0 "SECRETS_PROVIDER=local_vault$\r$\n"
+      FileWrite $0 "UNIMONITOR_ZT_DIR=$INSTDIR\ZT assessments$\r$\n"
       FileClose $0
     ${EndIf}
+
+    ; Zero Trust reports live in the install directory, as the product documents;
+    ; the service runs as LocalSystem and can write there.
+    CreateDirectory "$INSTDIR\ZT assessments"
 
     ; Create ProgramData directory for data files
     CreateDirectory "C:\ProgramData\UniMonitor"
@@ -151,7 +156,7 @@ Section "Windows Service (auto-start)" SecService
   ${If} ${FileExists} "$INSTDIR\nssm.exe"
     ExecWait '"$INSTDIR\nssm.exe" install "${SERVICE_NAME}" "$INSTDIR\UniMonitor.exe" "start --host 0.0.0.0 --port ${SERVICE_PORT}"'
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppDirectory "$INSTDIR"'
-    ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppEnvironmentExtra "UNIMONITOR_ENV=production" "UNIMONITOR_DATA_DIR=C:\ProgramData\UniMonitor"'
+    ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" AppEnvironmentExtra "UNIMONITOR_ENV=production" "UNIMONITOR_DATA_DIR=C:\ProgramData\UniMonitor" "UNIMONITOR_ZT_DIR=$INSTDIR\ZT assessments"'
     StrCpy $ServiceInstalled "1"
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" Description "${DESCRIPTION}"'
     ExecWait '"$INSTDIR\nssm.exe" set "${SERVICE_NAME}" Start SERVICE_AUTO_START'

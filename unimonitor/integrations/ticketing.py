@@ -57,18 +57,31 @@ PROVIDERS: dict[str, TicketProvider] = {
 }
 
 
-def ticketing_status() -> list[dict[str, Any]]:
+def _settings_for(base: Any, config: dict[str, str] | None) -> Any:
+    from unimonitor.integrations.siem import SettingsOverlay
+
+    return SettingsOverlay(base, config)
+
+
+def _missing_settings(provider: TicketProvider, settings: Any) -> list[str]:
+    return [name for name in provider.env if not str(getattr(settings, name, "") or "").strip()]
+
+
+def ticketing_status(configs: dict[str, dict[str, str]] | None = None) -> list[dict[str, Any]]:
     """Every provider with whether it is configured and what it still needs."""
-    settings = get_settings()
+    base = get_settings()
+    managed = configs or {}
     rows = []
     for provider in PROVIDERS.values():
-        missing = [name for name in provider.env if not str(getattr(settings, name, "") or "").strip()]
+        settings = _settings_for(base, managed.get(provider.slug))
+        missing = _missing_settings(provider, settings)
         rows.append(
             {
                 "slug": provider.slug,
                 "name": provider.name,
                 "docs": provider.docs,
                 "configured": not missing,
+                "managed": provider.slug in managed,
                 "required_settings": list(provider.env),
                 "missing_settings": missing,
             }
@@ -76,9 +89,9 @@ def ticketing_status() -> list[dict[str, Any]]:
     return rows
 
 
-def default_provider() -> str | None:
+def default_provider(configs: dict[str, dict[str, str]] | None = None) -> str | None:
     """The first configured provider, in a stable order."""
-    configured = {row["slug"] for row in ticketing_status() if row["configured"]}
+    configured = {row["slug"] for row in ticketing_status(configs) if row["configured"]}
     for slug in ("jira", "servicenow", "webhook"):
         if slug in configured:
             return slug
@@ -107,17 +120,17 @@ def _description(finding: Any) -> str:
     return "\n".join(parts)
 
 
-async def create_ticket(finding: Any, provider: str | None = None) -> dict[str, Any]:
+async def create_ticket(finding: Any, provider: str | None = None, config: dict[str, str] | None = None) -> dict[str, Any]:
     """Create one ticket for *finding*; returns provider, key and URL."""
     slug = provider or default_provider()
     if slug is None:
-        raise TicketError("No ticketing provider is configured: set Jira, ServiceNow or TICKET_WEBHOOK_URL")
+        raise TicketError("No ticketing provider is configured: connect one in Settings or set Jira, ServiceNow or TICKET_WEBHOOK_URL")
     definition = PROVIDERS.get(slug)
     if definition is None:
         raise TicketError(f"Unknown ticketing provider '{slug}'")
 
-    settings = get_settings()
-    missing = [name for name in definition.env if not str(getattr(settings, name, "") or "").strip()]
+    settings = _settings_for(get_settings(), config)
+    missing = _missing_settings(definition, settings)
     if missing:
         raise TicketError(f"{definition.name} is not configured: set {', '.join(missing)}")
 

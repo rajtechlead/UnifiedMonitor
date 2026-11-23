@@ -6,6 +6,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-11-23 (owner observations)
+
+Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
+
+### Added
+
+- Per-client settings and connections: `GET/PUT /tenants/{id}/settings`,
+  `GET/POST/DELETE /tenants/{id}/connections` and a `TenantSettingsPage`, so a primary
+  administrator can connect Microsoft 365, AWS, GCP, Google Workspace and Okta for each
+  client. Client creation now needs only a name; Microsoft fields are optional.
+- Okta as a first-class platform (provider metadata, onboarding validation and connect
+  form) and per-client Graph secrets in the vault (`client_secret_ref` only in the DB).
+- Vault-backed SIEM and ticketing connectors: `PUT/DELETE
+  /integrations/{kind}/{provider}/config`, a Connect/Update form in Settings, validated
+  fields, and the environment as fallback.
+- Built-in AI providers with vault-stored keys, per-provider test and a persisted
+  auto-switchover order (`/ai/settings`, `/ai/status`, remediation chain custom →
+  tenant built-ins → environment built-ins).
+- Zero Trust execution: background assessment task, PowerShell app-only wrapper with
+  Python fallback, and a self-contained interactive HTML report written to
+  `ZT assessments` (`POST /zerotrust/assess`, `GET /zerotrust/reports`).
+- `grc/framework_reference.py`: publisher, version, control/requirement totals, levels
+  and source link for all 34 frameworks; cumulative levels are expanded in the
+  requirement catalogue and shown in the auditor portal.
+
+### Fixed
+
+- Microsoft sign-in, service health and licensing resolve the Entra app from the saved
+  connection instead of startup settings; Graph errors map to 503/403/502 with the real
+  Graph code instead of a blanket 502.
+- `/reports/runs` used columns `AssessmentRun` does not have, so the run picker was
+  always empty; report rows are now persisted by the worker with formats and paths.
+- Audit page groups Microsoft 365, AWS, GCP and Workspace rows by platform, reports
+  per-source failures, and keeps UniMonitor's own audit log.
+
+### Packaging
+
+- Windows spec hidden imports cover `zerotrust.reports`, `zerotrust.runner`,
+  `worker.tasks.zerotrust`, `ai.builtin`, `grc.framework_reference` and the integration
+  modules; the NSIS installer creates `ZT assessments` and sets `UNIMONITOR_ZT_DIR`.
+
+---
+
 ## [Unreleased] — 2026-11-23
 
 ### Security

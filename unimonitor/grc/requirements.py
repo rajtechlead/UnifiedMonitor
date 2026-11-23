@@ -21,24 +21,47 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from unimonitor.grc.framework_reference import FRAMEWORK_REFERENCES, reference_for
+
+# Derived from the reference catalogue so every framework publishes the levels its
+# owner actually defines (IG1-3, ML1-3, AL1-3, FedRAMP baselines, ...), not a
+# hand-maintained subset. Kept as a name for callers that imported it.
 FRAMEWORK_LEVELS: dict[str, dict[int, str]] = {
-    "cpcsc": {1: "Level 1", 2: "Level 2"},
-    "fedramp-low": {1: "Low"},
-    "fedramp-moderate": {1: "Moderate"},
-    "fedramp-high": {1: "High"},
-    "essential-eight": {1: "Maturity Level 1", 2: "Maturity Level 2", 3: "Maturity Level 3"},
-    "cmmc-2": {1: "Level 1", 2: "Level 2", 3: "Level 3"},
-    "nis2": {1: "Essential entity"},
-    "dora": {1: "Pillar"},
+    framework_id: {level.id: level.name for level in reference.levels} for framework_id, reference in FRAMEWORK_REFERENCES.items()
 }
 
 _SLUG = re.compile(r"[^a-z0-9]+")
 
 
 def levels_for(framework_id: str) -> list[dict[str, Any]]:
-    """The published levels of a framework (a single level when none are published)."""
-    levels = FRAMEWORK_LEVELS.get(framework_id, {1: "Baseline"})
-    return [{"level": level, "name": name} for level, name in sorted(levels.items())]
+    """The published levels of a framework, with what each level means."""
+    reference = reference_for(framework_id)
+    return [{"level": level.id, "name": level.name, "description": level.description} for level in sorted(reference.levels, key=lambda item: item.id)]
+
+
+def _expand_levels(rows: list[dict[str, Any]], framework_id: str) -> list[dict[str, Any]]:
+    """Repeat cumulative requirements at every level, so a level filter is complete.
+
+    Only frameworks whose publisher says each requirement applies at every level
+    (IG1 -> IG3, ML1 -> ML3, AL1 -> AL3) are expanded. Separate baselines and
+    applicability classes keep one row, because duplicating them would claim a
+    requirement applies where it does not.
+    """
+    reference = reference_for(framework_id)
+    if reference.level_scope != "cumulative" or len(reference.levels) < 2:
+        return rows
+    expanded: list[dict[str, Any]] = []
+    for row in rows:
+        for level in reference.levels:
+            expanded.append(
+                {
+                    **row,
+                    "id": row["id"] if level.id == 1 else f"{row['id']}@L{level.id}",
+                    "level": level.id,
+                    "level_name": level.name,
+                }
+            )
+    return expanded
 
 
 def _catalogue_source(framework_id: str) -> str:
@@ -126,16 +149,17 @@ def requirements_for(framework_id: str) -> list[dict[str, Any]]:
 
     if framework_id == "cpcsc":
         names = {level["level"]: level["name"] for level in levels_for("cpcsc")}
-        return [{**row, "level_name": names.get(row["level"], ""), "source": "official"} for row in cpcsc_requirements()]
+        rows = [{**row, "level_name": names.get(row["level"], ""), "source": "official"} for row in cpcsc_requirements()]
+        return _expand_levels(rows, framework_id)
 
     from unimonitor.grc.framework_mappings import EXPLICIT
 
     if framework_id in EXPLICIT:
-        return _explicit_rows(framework_id)
+        return _expand_levels(_explicit_rows(framework_id), framework_id)
 
     rows = _derived_rows(framework_id)
     if rows:
-        return rows
+        return _expand_levels(rows, framework_id)
 
     # A framework derived from another one has no references of its own: reuse the
     # source catalogue, relabelled with this framework's level.
@@ -143,7 +167,14 @@ def requirements_for(framework_id: str) -> list[dict[str, Any]]:
     source = derivation.get("source")
     if source:
         level_name = levels_for(framework_id)[0]["name"]
-        return [{**row, "level": 1, "level_name": level_name, "source": "derived"} for row in requirements_for(source)]
+        # The source catalogue may itself be cumulative, so collapse its level rows
+        # back to one requirement before relabelling and expanding for this framework.
+        base_rows: dict[str, dict[str, Any]] = {}
+        for row in requirements_for(source):
+            base_id = str(row["id"]).split("@L", 1)[0]
+            if base_id not in base_rows:
+                base_rows[base_id] = {**row, "id": base_id, "level": 1, "level_name": level_name, "source": "derived"}
+        return _expand_levels(list(base_rows.values()), framework_id)
 
     # A service-selected framework (for example CISA SCuBA for Workspace) has no
     # published requirement identifiers here: one control is one requirement, and
@@ -156,7 +187,7 @@ def _control_rows(framework_id: str) -> list[dict[str, Any]]:
     from unimonitor.grc.control_loader import controls_for_framework
 
     level_name = levels_for(framework_id)[0]["name"]
-    return [
+    rows = [
         {
             "id": control.id,
             "title": control.title,
@@ -169,10 +200,17 @@ def _control_rows(framework_id: str) -> list[dict[str, Any]]:
         }
         for control in controls_for_framework(framework_id)
     ]
+    return _expand_levels(rows, framework_id)
 
 
 def catalogue(framework_id: str) -> dict[str, Any]:
-    """Requirement rows plus the metadata the auditor portal displays."""
+    """Requirement rows plus the metadata the auditor portal displays.
+
+    ``reference`` is the publisher's own shape (control and requirement totals, level
+    names, source link); ``modelled`` marks a count this platform derived because the
+    publisher does not state a total.
+    """
+    reference = reference_for(framework_id)
     rows = requirements_for(framework_id)
     return {
         "framework_id": framework_id,
@@ -180,6 +218,19 @@ def catalogue(framework_id: str) -> dict[str, Any]:
         "levels": levels_for(framework_id),
         "requirement_count": len(rows),
         "rows": rows,
+        "reference": {
+            "name": reference.name,
+            "version": reference.version,
+            "publisher": reference.publisher,
+            "control_count": reference.control_count,
+            "requirement_count": reference.requirement_count,
+            "level_count": len(reference.levels),
+            "level_scope": reference.level_scope,
+            "source_url": reference.source_url,
+            "notes": reference.notes,
+            "modelled": reference.modelled,
+            "extra": reference.extra,
+        },
     }
 
 

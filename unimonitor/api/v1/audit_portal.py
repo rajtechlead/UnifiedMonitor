@@ -37,6 +37,22 @@ class RequirementRow(BaseModel):
     status: str  # implemented | partial | gap | not_run
 
 
+class FrameworkReferenceInfo(BaseModel):
+    """The publisher's own shape of the framework."""
+
+    name: str
+    version: str = ""
+    publisher: str = ""
+    control_count: int = 0
+    requirement_count: int = 0
+    level_count: int = 1
+    level_scope: str = "none"
+    source_url: str = ""
+    notes: str = ""
+    modelled: bool = False
+    extra: dict[str, int] = {}
+
+
 class RequirementCatalogue(BaseModel):
     framework_id: str
     framework_name: str
@@ -44,6 +60,7 @@ class RequirementCatalogue(BaseModel):
     levels: list[dict[str, Any]] = []
     requirement_count: int
     level1_count: int
+    reference: FrameworkReferenceInfo | None = None
     rows: list[RequirementRow]
     generated_at: datetime
 
@@ -128,6 +145,7 @@ async def framework_requirements(
         levels=levels_for(framework_id),
         requirement_count=len(rows),
         level1_count=sum(1 for row in rows if row.level == 1),
+        reference=requirement_catalogue.get("reference"),
         rows=rows,
         generated_at=datetime.now(UTC),
     )

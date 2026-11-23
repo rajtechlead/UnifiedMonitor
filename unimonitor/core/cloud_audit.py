@@ -32,8 +32,15 @@ def _event(source: str, action: str, actor: str | None, target: str | None, at: 
     }
 
 
-async def cloud_events(db: Any, tenant_id: str | None = None, limit: int = MAX_EVENTS) -> list[dict[str, Any]]:
-    """Audit events from Microsoft 365, AWS, GCP and Google Workspace."""
+async def cloud_events(
+    db: Any, tenant_id: str | None = None, limit: int = MAX_EVENTS, failures: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
+    """Audit events from Microsoft 365, AWS, GCP and Google Workspace.
+
+    ``failures`` is filled with ``{source: reason}`` when a connected platform could not
+    be read (usually a missing read permission), so the page can say which platform is
+    silent instead of implying nothing happened.
+    """
     from unimonitor.onboarding.service import connected_providers
 
     providers = await connected_providers(db, tenant_id)
@@ -43,34 +50,49 @@ async def cloud_events(db: Any, tenant_id: str | None = None, limit: int = MAX_E
         "gcp": _gcp,
         "google_workspace": _workspace,
     }
-    jobs = [asyncio.wait_for(reader(db, limit), PER_SOURCE_TIMEOUT_SECONDS) for name, reader in readers.items() if name in providers]
-    if not jobs:
+    selected = [(name, reader) for name, reader in readers.items() if name in providers]
+    if not selected:
         return []
 
-    results = await asyncio.gather(*jobs, return_exceptions=True)
+    results = await asyncio.gather(
+        *[asyncio.wait_for(reader(db, limit, tenant_id), PER_SOURCE_TIMEOUT_SECONDS) for _, reader in selected],
+        return_exceptions=True,
+    )
     events: list[dict[str, Any]] = []
-    for result in results:
+    for (name, _reader), result in zip(selected, results, strict=True):
         if isinstance(result, BaseException):
-            logger.warning("Cloud audit source unavailable", error=str(result)[:200])
+            reason = str(result)[:200]
+            logger.warning("Cloud audit source unavailable", source=name, error=reason)
+            if failures is not None:
+                failures[name] = reason
             continue
         events.extend(result)
     events.sort(key=lambda event: str(event["created_at"]), reverse=True)
     return events[:limit]
 
 
-async def _microsoft(db: Any, limit: int) -> list[dict[str, Any]]:
+async def _microsoft(db: Any, limit: int, tenant_id: str | None = None) -> list[dict[str, Any]]:
     from sqlalchemy import select
 
     from unimonitor.db.models.tenant import Tenant
     from unimonitor.graph.client import GraphClient
+    from unimonitor.onboarding.service import microsoft_app
 
-    tenant = (await db.execute(select(Tenant).where(Tenant.is_active).limit(1))).scalar_one_or_none()
+    stmt = select(Tenant).where(Tenant.is_active)
+    if tenant_id:
+        stmt = stmt.where(Tenant.id == tenant_id)
+    tenant = (await db.execute(stmt.limit(1))).scalar_one_or_none()
     if tenant is None:
         return []
+    app = await microsoft_app(db, tenant.id)
+    if not app.get("configured"):
+        return []
     async with GraphClient(
-        tenant_id=tenant.entra_tenant_id,
-        client_id=tenant.client_id,
-        client_secret=tenant.client_secret,
+        tenant_id=app["directory"] or tenant.entra_tenant_id,
+        client_id=app["client_id"],
+        client_secret=app.get("client_secret") or None,
+        certificate_pem=app.get("certificate_pem") or None,
+        private_key_pem=app.get("private_key_pem") or None,
     ) as client:
         response = await client.get(f"/auditLogs/directoryAudits?$top={limit}")
     if not response.success:
@@ -92,7 +114,7 @@ async def _microsoft(db: Any, limit: int) -> list[dict[str, Any]]:
     return rows
 
 
-async def _aws(db: Any, limit: int) -> list[dict[str, Any]]:
+async def _aws(db: Any, limit: int, tenant_id: str | None = None) -> list[dict[str, Any]]:
     import boto3
 
     from unimonitor.onboarding.service import aws_credentials_for
@@ -121,7 +143,7 @@ async def _aws(db: Any, limit: int) -> list[dict[str, Any]]:
     return events
 
 
-async def _gcp(db: Any, limit: int) -> list[dict[str, Any]]:
+async def _gcp(db: Any, limit: int, tenant_id: str | None = None) -> list[dict[str, Any]]:
     from unimonitor.onboarding.service import google_token_for
 
     token = await google_token_for("gcp", db)
@@ -156,30 +178,38 @@ async def _gcp(db: Any, limit: int) -> list[dict[str, Any]]:
     return events
 
 
-async def _workspace(db: Any, limit: int) -> list[dict[str, Any]]:
+WORKSPACE_APPLICATIONS = ("login", "admin", "drive", "token", "mobile")
+
+
+async def _workspace(db: Any, limit: int, tenant_id: str | None = None) -> list[dict[str, Any]]:
+    """Workspace audit activity across sign-in, admin, Drive, OAuth token and mobile."""
     from unimonitor.onboarding.service import google_token_for
 
     token = await google_token_for("google_workspace", db)
     if not token:
         return []
-    async with httpx.AsyncClient(timeout=PER_SOURCE_TIMEOUT_SECONDS) as client:
-        response = await client.get(
-            f"https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/login?maxResults={min(limit, 100)}",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-        response.raise_for_status()
-        items = response.json().get("items", [])
 
-    events = []
-    for item in items:
-        names = [str((event or {}).get("name") or "") for event in item.get("events", [])]
-        events.append(
-            _event(
-                "Google Workspace",
-                ", ".join(name for name in names if name) or "Login activity",
-                (item.get("actor") or {}).get("email"),
-                "",
-                (item.get("id") or {}).get("time"),
+    per_application = max(1, min(limit, 100) // len(WORKSPACE_APPLICATIONS))
+    events: list[dict[str, Any]] = []
+    async with httpx.AsyncClient(timeout=PER_SOURCE_TIMEOUT_SECONDS) as client:
+        for application in WORKSPACE_APPLICATIONS:
+            response = await client.get(
+                f"https://admin.googleapis.com/admin/reports/v1/activity/users/all/applications/{application}?maxResults={per_application}",
+                headers={"Authorization": f"Bearer {token}"},
             )
-        )
+            if response.status_code >= 400:
+                # One application the reseller/admin has not enabled must not hide the rest.
+                logger.warning("Workspace audit application unavailable", application=application, status=response.status_code)
+                continue
+            for item in response.json().get("items", []) or []:
+                names = [str((event or {}).get("name") or "") for event in item.get("events", [])]
+                events.append(
+                    _event(
+                        "Google Workspace",
+                        ", ".join(name for name in names if name) or f"{application} activity",
+                        (item.get("actor") or {}).get("email"),
+                        application,
+                        (item.get("id") or {}).get("time"),
+                    )
+                )
     return events

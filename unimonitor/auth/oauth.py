@@ -115,13 +115,12 @@ def _acquire_token_for_client_sync(
     get_settings()
     has_certificate = bool(certificate_pem and private_key_pem)
     if client_id and tenant_id and (client_secret or has_certificate):
-        app = get_msal_app_for_tenant(
-            client_id,
-            client_secret or "",
-            tenant_id,
-            certificate_pem=certificate_pem or "",
-            private_key_pem=private_key_pem or "",
-        )
+        certificate_kwargs: dict[str, str] = {}
+        if certificate_pem:
+            certificate_kwargs["certificate_pem"] = certificate_pem
+        if private_key_pem:
+            certificate_kwargs["private_key_pem"] = private_key_pem
+        app = get_msal_app_for_tenant(client_id, client_secret or "", tenant_id, **certificate_kwargs)
     else:
         app = get_msal_app(tenant_id)
 

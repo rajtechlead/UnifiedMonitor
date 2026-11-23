@@ -4,6 +4,28 @@ Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
 Last Updated: 2026-11-23 UTC
 
+### Session 2026-11-23 (later) — owner observations 1–12
+
+Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
+
+- Items 1–3: sign-in, service health and licensing resolve the Entra app from the
+  saved connection (certificate or secret) and map Graph errors honestly (503/403/502).
+- Items 4–6: clients need only a name; each client has its own settings page and
+  platform connections (Microsoft, AWS, GCP, Google Workspace, Okta) writing secrets to
+  the vault.
+- Item 7: SIEM/ticketing connectors are connectable from Settings; settings live in the
+  vault, the environment is the fallback.
+- Item 8: built-in AI providers with vault keys, test endpoint and a persisted
+  auto-switchover order.
+- Item 9: Zero Trust assessments run in the background and write an interactive HTML
+  report to `ZT assessments`; PowerShell is best-effort with a Python fallback.
+- Item 10: audit page groups Microsoft 365/AWS/GCP/Workspace rows by platform and keeps
+  UniMonitor's own log.
+- Item 11: the report run picker query was fixed and report rows are persisted.
+- Item 12: `grc/framework_reference.py` records published controls, requirements and
+  levels for all 34 frameworks; cumulative levels expand into the requirement catalogue.
+- Windows spec/NSIS updated for the new modules, report folder and service env.
+
 ### Session 2026-11-23 — hardening, posture, requirements, resilience
 
 - Custom AI providers: metadata/link-local targets and non-loopback plain HTTP are

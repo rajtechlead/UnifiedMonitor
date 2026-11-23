@@ -59,12 +59,14 @@ async def run_assessment_now(
             run.task_id = task_id
             await db.commit()
 
+        from unimonitor.core.tenants import resolve_tenant_secret
+
         engine = AssessmentEngine(
             db=db,
             tenant_id=tenant_id,
             entra_tenant_id=tenant.entra_tenant_id,
             client_id=tenant.client_id,
-            client_secret=tenant.client_secret,
+            client_secret=await resolve_tenant_secret(tenant) or "",
         )
         completed_run = await engine.run(
             run=run,
@@ -100,10 +102,12 @@ async def run_collector_now(
         if not tenant:
             raise ValueError(f"Tenant {tenant_id} not found")
 
+        from unimonitor.core.tenants import resolve_tenant_secret
+
         registry = CollectorRegistry(
             tenant_id=tenant.entra_tenant_id,
             client_id=tenant.client_id,
-            client_secret=tenant.client_secret,
+            client_secret=await resolve_tenant_secret(tenant) or "",
         )
         data = await registry.collect_all([collector_name])
         return {"collector": collector_name, "keys_collected": len(data)}

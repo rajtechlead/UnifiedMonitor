@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
 
@@ -57,18 +58,22 @@ const inputStyle: React.CSSProperties = {
 
 function TenantLifecycle() {
   const qc = useQueryClient()
-  const [form, setForm] = useState({ name: '', display_name: '', entra_tenant_id: '', client_id: '', client_secret: '' })
+  const navigate = useNavigate()
+  const [form, setForm] = useState({ name: '', display_name: '', entra_tenant_id: '' })
   const [error, setError] = useState('')
 
   const refresh = () => void qc.invalidateQueries({ queryKey: ['tenants', 'rollup'] })
   const create = useMutation({
     mutationFn: () => api.post('/tenants', form).then(r => r.data),
-    onSuccess: () => {
-      setForm({ name: '', display_name: '', entra_tenant_id: '', client_id: '', client_secret: '' })
+    onSuccess: (tenant: { id: string }) => {
+      setForm({ name: '', display_name: '', entra_tenant_id: '' })
       setError('')
       refresh()
+      // Onboarding continues on the client's own page: connect Microsoft, AWS,
+      // Google Cloud, Workspace or Okta with that client's administrator.
+      navigate(`/tenants/${tenant.id}`)
     },
-    onError: () => setError('Could not add the tenant. An administrator needs a unique Entra tenant id and client credentials.'),
+    onError: () => setError('Could not add the client. The name must be unique; the directory id is optional.'),
   })
 
   const update = useMutation({
@@ -82,23 +87,22 @@ function TenantLifecycle() {
     onSettled: refresh,
   })
 
-  const required = form.name && form.display_name && form.entra_tenant_id && form.client_id && form.client_secret
+  const required = form.name && form.display_name
 
   return (
     <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div>
         <div style={{ fontSize: 14, fontWeight: 600 }}>Client lifecycle</div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          Add a tenant, suspend collection for it, or remove it. Suspend/activate and delete are per row below.
+          Add a client, then connect its platforms on the client's own page. Suspend/activate and
+          remove are per row below.
         </div>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
         {([
-          ['name', 'Name (slug)'],
+          ['name', 'Client name (slug)'],
           ['display_name', 'Display name'],
-          ['entra_tenant_id', 'Entra tenant id'],
-          ['client_id', 'Client id'],
-          ['client_secret', 'Client secret'],
+          ['entra_tenant_id', 'Entra tenant id (Microsoft clients, optional)'],
         ] as const).map(([key, label]) => (
           <input
             key={key}
@@ -106,7 +110,6 @@ function TenantLifecycle() {
             onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
             placeholder={label}
             aria-label={label}
-            type={key === 'client_secret' ? 'password' : 'text'}
             style={inputStyle}
           />
         ))}
@@ -122,7 +125,7 @@ function TenantLifecycle() {
             opacity: !required || create.isPending ? 0.6 : 1,
           }}
         >
-          {create.isPending ? 'Adding…' : 'Add tenant'}
+          {create.isPending ? 'Adding…' : 'Add client'}
         </button>
         {error && <span style={{ fontSize: 12, color: '#EF4444' }}>{error}</span>}
       </div>
@@ -159,6 +162,12 @@ function TenantTable({ onToggle, onDelete, pending }: Readonly<{
               {tenant.is_active ? 'active' : 'suspended'}
             </td>
             <td style={{ padding: '8px 10px', display: 'flex', gap: 8 }}>
+              <Link
+                to={`/tenants/${tenant.id}`}
+                style={{ padding: '4px 10px', fontSize: 11, borderRadius: 6, border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-brand)', textDecoration: 'none' }}
+              >
+                Settings
+              </Link>
               <button
                 type="button"
                 disabled={pending}

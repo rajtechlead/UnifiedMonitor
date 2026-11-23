@@ -68,6 +68,11 @@ export const zerotrustApi = {
   mapping: (source: string) => api.get('/zerotrust/mapping', { params: { source } }).then((r) => r.data),
   evidenceGaps: (source: string) => api.get('/zerotrust/evidence-gaps', { params: { source } }).then((r) => r.data),
   script: () => api.get('/zerotrust/script', { responseType: 'text' }).then((r) => r.data),
+  assess: (platform: string, engine: 'python' | 'powershell' = 'python') =>
+    api.post('/zerotrust/assess', { platform, engine }).then((r) => r.data as { task_id: string; report_folder: string; message: string }),
+  reports: () =>
+    api.get('/zerotrust/reports').then((r) => r.data as { name: string; platform: string; size_bytes: number; modified_at: string }[]),
+  reportUrl: (name: string) => `/api/v1/zerotrust/reports/${encodeURIComponent(name)}`,
 }
 
 export const grcApi = {
@@ -127,11 +132,58 @@ export type CustomAiProvider = {
   api_key: string
 }
 
+export type BuiltinAiProvider = {
+  name: string
+  label: string
+  model: string
+  default_model: string
+  models: string[]
+  free_tier: boolean
+  enabled: boolean
+  has_key: boolean
+  env_configured: boolean
+  configured: boolean
+  key_hint: string
+  position: number | null
+}
+
 export const aiApi = {
   status: () =>
     api.get('/ai/status').then((r) => r.data as { enabled: boolean; providers: AiProviderStatus[]; custom: CustomAiProvider[] }),
   saveCustom: (providers: { name: string; base_url: string; model: string; api_key: string; enabled: boolean }[]) =>
     api.put('/ai/providers/custom', { providers }).then((r) => r.data as CustomAiProvider[]),
+  settings: () =>
+    api.get('/ai/settings').then((r) => r.data as { providers: BuiltinAiProvider[]; order: string[]; active_chain: string[] }),
+  saveSettings: (providers: { name: string; model: string; enabled: boolean; api_key: string }[], order: string[]) =>
+    api.put('/ai/settings', { providers, order }).then((r) => r.data as { providers: BuiltinAiProvider[]; order: string[] }),
+  testProvider: (name: string) =>
+    api.post(`/ai/providers/${name}/test`).then((r) => r.data as { name: string; ok: boolean; error?: string; model?: string }),
+}
+
+export type TenantConnection = {
+  provider: string
+  account: string | null
+  display_name: string | null
+  status: string
+  config: Record<string, unknown>
+  last_error: string | null
+  last_checked_at: string | null
+}
+
+export type TenantSettings = {
+  tenant: { id: string; name: string; display_name: string | null; entra_tenant_id: string | null; is_active: boolean; last_collection_at: string | null; last_collection_status: string | null }
+  branding: { portal_name: string; accent_colour: string; logo_url: string | null; support_email: string | null }
+  collection: { collection_interval_minutes: number; auto_collection: boolean; notes: string }
+  connections: TenantConnection[]
+}
+
+export const tenantsApi = {
+  settings: (id: string) => api.get(`/tenants/${id}/settings`).then((r) => r.data as TenantSettings),
+  saveSettings: (id: string, body: Record<string, unknown>) =>
+    api.put(`/tenants/${id}/settings`, body).then((r) => r.data as TenantSettings),
+  connections: (id: string) => api.get(`/tenants/${id}/connections`).then((r) => r.data as TenantConnection[]),
+  disconnect: (id: string, provider: string) => api.delete(`/tenants/${id}/connections/${provider}`),
+  health: (id: string) => api.get(`/tenants/${id}/health`).then((r) => r.data),
 }
 
 export const assessmentsApi = {

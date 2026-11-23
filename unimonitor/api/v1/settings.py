@@ -58,16 +58,16 @@ class Branding(BaseModel):
     @classmethod
     def _safe_logo(cls, value: str | None) -> str | None:
         """Only https or site-relative URLs — never a javascript:/data: URL."""
-        if value and not value.startswith(("https://", "/")):
-            raise ValueError("logo_url must be an https:// URL or a site-relative path")
-        return value
+        from unimonitor.settings_validation import validate_logo_url
+
+        return validate_logo_url(value)
 
     @field_validator("support_email")
     @classmethod
     def _email_shape(cls, value: str | None) -> str | None:
-        if value and ("@" not in value or any(char.isspace() for char in value)):
-            raise ValueError("support_email must be an email address")
-        return value
+        from unimonitor.settings_validation import validate_support_email
+
+        return validate_support_email(value)
 
 
 def _tenant_settings(tenant: Tenant) -> dict[str, Any]:

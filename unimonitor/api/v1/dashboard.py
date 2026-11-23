@@ -201,6 +201,7 @@ class AuditViewResponse(BaseModel):
     total: int
     actions_24h: int
     cloud_events: list[CloudAuditEntry] = []
+    cloud_failures: dict[str, str] = {}
     generated_at: datetime
 
 
@@ -669,6 +670,7 @@ async def dashboard_audit(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> AuditViewResponse:
     """Audit view — recent audit trail entries and 24h activity."""
     from sqlalchemy import func, select
@@ -683,8 +685,9 @@ async def dashboard_audit(
     # Platform activity (M365 / AWS / GCP / Workspace), not just this app's own log.
     from unimonitor.core.cloud_audit import cloud_events as read_cloud_events
 
+    cloud_failures: dict[str, str] = {}
     try:
-        cloud_rows = await read_cloud_events(db, limit=limit)
+        cloud_rows = await read_cloud_events(db, tenant_id=tenant_id, limit=limit, failures=cloud_failures)
     except Exception as exc:  # noqa: BLE001 - the app audit trail must still render
         logger.warning("cloud_audit_unavailable", error=str(exc)[:200])
         cloud_rows = []
@@ -715,6 +718,7 @@ async def dashboard_audit(
             )
             for row in cloud_rows
         ],
+        cloud_failures=cloud_failures,
         generated_at=datetime.now(UTC),
     )
 

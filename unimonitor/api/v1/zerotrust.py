@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -565,3 +565,109 @@ async def zerotrust_script(current_user: Annotated[Any, Depends(get_current_user
     if not SCRIPT_PATH.exists():
         raise HTTPException(status_code=404, detail="The PowerShell runner is not bundled with this build.")
     return PlainTextResponse(SCRIPT_PATH.read_text(encoding="utf-8"), media_type="text/plain")
+
+
+# ── Background assessment runs and their HTML reports ────────────────────────
+
+
+class AssessRequest(BaseModel):
+    """Start a full assessment for one platform."""
+
+    platform: SourceLiteral
+    tenant_id: str | None = None
+    # Microsoft can use its own PowerShell module; Python is the default everywhere.
+    engine: Literal["python", "powershell"] = "python"
+
+
+class AssessResponse(BaseModel):
+    task_id: str
+    platform: str
+    tenant_id: str
+    engine: str
+    report_folder: str
+    message: str
+
+
+class ReportRow(BaseModel):
+    name: str
+    platform: str
+    size_bytes: int
+    modified_at: datetime
+
+
+@router.post("/assess", status_code=202, responses={400: {"description": "Bad request"}})
+async def zerotrust_assess(
+    body: AssessRequest,
+    current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> AssessResponse:
+    """Run every test for a platform in the background and save an HTML report.
+
+    The Microsoft engine signs in with the registered Entra app; on a host without
+    PowerShell (or when the module refuses app auth) the Python catalogue is scored
+    from collected evidence instead, and the report records which engine ran.
+    """
+    from unimonitor.auth.tenant_scope import resolve_tenant
+    from unimonitor.worker.inline import dispatch
+    from unimonitor.worker.tasks.zerotrust import run_zt_assessment_task
+    from unimonitor.zerotrust import reports
+    from unimonitor.zerotrust.runner import run_assessment_now
+
+    tenant = await _resolve_tenant(db, await resolve_tenant(db, current_user, body.tenant_id))
+    try:
+        task_id = dispatch(
+            run_zt_assessment_task,
+            run_assessment_now,
+            tenant_id=tenant,
+            platform=body.platform,
+            user_id=getattr(current_user, "id", None),
+            engine=body.engine,
+        )
+    except Exception as exc:  # noqa: BLE001 - surface a queue problem to the page
+        raise HTTPException(status_code=503, detail=f"Could not start the assessment: {exc}") from exc
+
+    await write_audit(
+        db,
+        action="zerotrust.assess",
+        tenant_id=tenant,
+        user_id=getattr(current_user, "id", None),
+        resource_type="zerotrust_run",
+        resource_id=task_id,
+        payload={"platform": body.platform, "engine": body.engine},
+    )
+    return AssessResponse(
+        task_id=task_id,
+        platform=body.platform,
+        tenant_id=tenant,
+        engine=body.engine,
+        report_folder=str(reports.zt_directory()),
+        message=f"{PLATFORMS[body.platform]} assessment queued; the report appears under 'ZT assessments'.",
+    )
+
+
+@router.get("/reports")
+async def zerotrust_reports(
+    current_user: Annotated[Any, Depends(get_current_user)],
+) -> list[ReportRow]:
+    """Every HTML assessment report on this host, newest first."""
+    from unimonitor.zerotrust import reports
+
+    try:
+        return [ReportRow(**row) for row in reports.list_reports()]
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"Report folder is unavailable: {exc}") from exc
+
+
+@router.get("/reports/{name}", response_class=FileResponse, responses={404: {"description": "Not found"}})
+async def zerotrust_report_download(
+    name: str,
+    current_user: Annotated[Any, Depends(get_current_user)],
+) -> FileResponse:
+    """Download one saved report. Only files this application wrote are served."""
+    from unimonitor.zerotrust import reports
+
+    try:
+        path = reports.resolve_report(name)
+    except (ValueError, OSError) as exc:
+        raise HTTPException(status_code=404, detail="Report not found") from exc
+    return FileResponse(path=path, media_type="text/html", filename=path.name)

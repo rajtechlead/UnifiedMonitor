@@ -132,10 +132,12 @@ function saveFile(name: string, content: string, type = 'text/plain') {
  * a generated certificate unless the administrator asks for a client secret. AWS can
  * assume a role instead of using keys, and both Google platforms can share one key.
  */
-export default function PlatformConnector({ platform, connected, onConnected }: Readonly<{
+export default function PlatformConnector({ platform, connected, onConnected, tenantId }: Readonly<{
   platform: Platform
   connected?: Connection
   onConnected: (connection: Connection) => void
+  /** When set, the connector stores the credential against one client tenant. */
+  tenantId?: string
 }>) {
   const [values, setValues] = useState<Record<string, string>>({})
   const [authMethod, setAuthMethod] = useState(platform.auth_methods[0]?.id || '')
@@ -179,7 +181,10 @@ export default function PlatformConnector({ platform, connected, onConnected }: 
   const connectManual = async () => {
     setError(''); setBusy(true)
     try {
-      const res = await api.post(`/onboarding/connections/${platform.id}`, payload())
+      const res = await api.post(
+        tenantId ? `/tenants/${tenantId}/connections/${platform.id}` : `/onboarding/connections/${platform.id}`,
+        payload(),
+      )
       onConnected(res.data.connection)
     } catch (err: unknown) {
       const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail

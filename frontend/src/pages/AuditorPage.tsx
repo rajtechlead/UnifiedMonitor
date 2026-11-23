@@ -26,14 +26,40 @@ type RequirementRow = {
   status: string
 }
 
+type FrameworkReference = {
+  name: string
+  version: string
+  publisher: string
+  control_count: number
+  requirement_count: number
+  level_count: number
+  level_scope: string
+  source_url: string
+  notes: string
+  modelled: boolean
+}
+
 type RequirementCatalogue = {
   framework_id: string
   framework_name: string
   catalogue: string
-  levels: { level: number; name: string }[]
+  levels: { level: number; name: string; description?: string }[]
   requirement_count: number
   level1_count: number
+  reference?: FrameworkReference | null
   rows: RequirementRow[]
+}
+
+function frameworkReferenceLine(reference: FrameworkReference | null | undefined): string {
+  if (!reference) return ''
+  const parts: string[] = []
+  if (reference.publisher) parts.push(reference.publisher)
+  if (reference.version) parts.push(reference.version)
+  if (reference.control_count > 0) {
+    parts.push(`${reference.control_count} ${reference.modelled ? 'modelled controls' : 'published controls'}`)
+  }
+  parts.push(`${reference.level_count} level${reference.level_count === 1 ? '' : 's'}`)
+  return parts.join(' · ')
 }
 
 function catalogueSourceLabel(catalogue: RequirementCatalogue | null): string {
@@ -149,11 +175,20 @@ export default function AuditorPage() {
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
             padding: '16px 20px', borderBottom: '1px solid var(--color-border)', gap: 12, flexWrap: 'wrap',
           }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <FileSearch size={16} color="var(--color-brand)" />
               <span style={{ fontSize: 14, fontWeight: 600 }}>
                 {catalogue ? `${catalogue.requirement_count} requirements · ${catalogue.level1_count} at Level 1` : 'Requirement status'}
               </span>
+              {catalogue?.reference && (
+                <span
+                  style={{ fontSize: 11, color: 'var(--color-text-muted)', width: '100%' }}
+                  title={catalogue.reference.notes}
+                >
+                  {frameworkReferenceLine(catalogue.reference)}
+                  {catalogue.reference.notes ? ` — ${catalogue.reference.notes}` : ''}
+                </span>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               {catalogue && (

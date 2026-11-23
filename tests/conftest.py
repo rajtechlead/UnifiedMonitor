@@ -102,9 +102,23 @@ async def client(db_session: AsyncSession, _session_factory) -> AsyncGenerator[A
 
 @pytest_asyncio.fixture
 async def tenant(db_session: AsyncSession):
-    """Create a test tenant."""
-    from unimonitor.db.models.tenant import Tenant
+    """Create a test tenant.
 
+    The test database is one shared SQLite connection, and a few request paths
+    (tenant settings, first-run bootstrap) commit their session. That commit also
+    persists this flushed fixture row, so a later fixture would collide on the
+    primary key. Clear any leftover row (its children cascade) before inserting.
+    """
+    from sqlalchemy import delete
+
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.db.models.user import AppUser
+
+    # Users first: SQLite may not enforce the FK cascade, and the email is unique.
+    await db_session.execute(delete(AppUser).where(AppUser.tenant_id == "test-tenant-id-00000000000001"))
+    await db_session.execute(delete(AppUser).where(AppUser.email == "admin@test.example.com"))
+    await db_session.execute(delete(Tenant).where(Tenant.id == "test-tenant-id-00000000000001"))
+    await db_session.flush()
     t = Tenant(
         id="test-tenant-id-00000000000001",
         name="Test Organization",

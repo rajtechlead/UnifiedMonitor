@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from unimonitor.ai.providers import configured_providers
 from unimonitor.config import get_settings
 from unimonitor.core.logging import get_logger
 
@@ -97,10 +96,14 @@ class AIRemediationEngine:
         if not settings.AI_ENABLED:
             return None
 
-        from unimonitor.ai import AIUnavailableError, anonymise, complete
+        from unimonitor.ai import AIUnavailableError, anonymise, builtin, complete
         from unimonitor.ai.custom import providers_for
 
-        chain = [*await providers_for(tenant), *configured_providers()]
+        chain = builtin.failover_chain(
+            tenant,
+            await builtin.providers_for(tenant),
+            await providers_for(tenant),
+        )
         payload = anonymise(
             {
                 "control_id": control_id,

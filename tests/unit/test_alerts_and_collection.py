@@ -162,7 +162,7 @@ async def test_licensing_maps_seats(client, auth_headers, tenant, monkeypatch) -
 async def test_service_health_reports_issues(client, auth_headers, tenant, monkeypatch) -> None:
     from unimonitor.api.v1 import monitoring
 
-    async def fake_graph(_tenant, endpoint):
+    async def fake_graph(_db, _tenant, endpoint, permission=None):
         if "healthOverviews" in endpoint:
             return {"value": [{"service": "Exchange Online", "status": "serviceDegradation"}]}
         return {

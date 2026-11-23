@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 from typing import Literal
 
@@ -90,7 +91,16 @@ def generate_report_task(
             return {"report_id": report_id, "status": "failed", "error": str(exc)[:500]}
 
 
-async def _load_report_context(db, report_id: str, run_id: str, *, tenant_id: str | None = None, formats: list[str] | None = None, report_type: str = "executive", requested_by: str | None = None):
+async def _load_report_context(
+    db,
+    report_id: str,
+    run_id: str,
+    *,
+    tenant_id: str | None = None,
+    formats: list[str] | None = None,
+    report_type: str = "executive",
+    requested_by: str | None = None,
+):
     """Load the report, its run and that run's findings, creating the row if needed.
 
     The API only knows the request, so the worker owns the row: it is created here in
@@ -126,7 +136,7 @@ async def _load_report_context(db, report_id: str, run_id: str, *, tenant_id: st
     return report, run, findings
 
 
-def _generate_files(tenant_id: str, run, findings, formats: list[ReportFormat], report_type: str) -> dict[str, str]:
+async def _generate_files(tenant_id: str, run, findings, formats: list[ReportFormat], report_type: str) -> dict[str, str]:
     """Render each requested format, skipping unknown ones and logging failures."""
     from unimonitor.reporting.csv_generator import CsvReportGenerator
     from unimonitor.reporting.docx_generator import DocxReportGenerator
@@ -151,7 +161,9 @@ def _generate_files(tenant_id: str, run, findings, formats: list[ReportFormat], 
             logger.warning("Unknown report format", extra={"fmt": fmt})
             continue
         try:
-            generated_files[fmt] = gen_cls(tenant_id=tenant_id, run=run, findings=findings).generate(report_type=report_type)
+            output = gen_cls(tenant_id=tenant_id, run=run, findings=findings).generate(report_type=report_type)
+            # DOCX and PDF generation are async; CSV/Excel/JSON/HTML are not.
+            generated_files[fmt] = await output if inspect.isawaitable(output) else output
         except Exception as exc:
             logger.error("Report generation failed", extra={"fmt": fmt, "error": str(exc)})
     return generated_files
@@ -185,7 +197,7 @@ async def _generate_report(
         report.task_id = task_id
         await db.commit()
 
-        generated_files = _generate_files(tenant_id, run, findings, formats, report_type)
+        generated_files = await _generate_files(tenant_id, run, findings, formats, report_type)
 
         report.status = ReportStatus.COMPLETED.value if generated_files else ReportStatus.FAILED.value
         report.file_paths = json.dumps(generated_files)

@@ -84,6 +84,13 @@ export default function ZeroTrustAssessmentPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [usePowershell, setUsePowershell] = useState(false)
+
+  const reports = useQuery({
+    queryKey: ['zerotrust', 'reports'],
+    queryFn: zerotrustApi.reports,
+    refetchInterval: 15000,
+  })
 
   const summary = useQuery<Summary>({
     queryKey: ['zerotrust', 'summary'],
@@ -157,6 +164,20 @@ export default function ZeroTrustAssessmentPage() {
     }
   }
 
+  const runAssessment = async () => {
+    setError(''); setMessage(''); setBusy(true)
+    try {
+      const result = await zerotrustApi.assess(source, isMicrosoft && usePowershell ? 'powershell' : 'python')
+      setMessage(`${result.message} Reports are saved in ${result.report_folder}.`)
+      void reports.refetch()
+    } catch (err: unknown) {
+      const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
+      setError(detail || 'Could not start the assessment.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const downloadScript = async () => {
     setError('')
     try {
@@ -225,6 +246,15 @@ export default function ZeroTrustAssessmentPage() {
         <button onClick={evaluateAll} disabled={busy} style={secondaryButton}>
           <Play size={14} /> Evaluate all platforms
         </button>
+        <button onClick={runAssessment} disabled={busy} style={primaryButton}>
+          <Play size={14} /> Run full assessment + report
+        </button>
+        {isMicrosoft && (
+          <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input type="checkbox" checked={usePowershell} onChange={event => setUsePowershell(event.target.checked)} />
+            Use Microsoft PowerShell module
+          </label>
+        )}
         {isMicrosoft && (
           <>
             <input
@@ -251,7 +281,25 @@ export default function ZeroTrustAssessmentPage() {
 
       {message && <div style={{ fontSize: 12, color: '#10B981' }}>{message}</div>}
       {error && <div style={{ fontSize: 12, color: '#EF4444' }}>{error}</div>}
-      {busy && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Evaluating…</div>}
+      {busy && <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Working…</div>}
+
+      {(reports.data?.length ?? 0) > 0 && (
+        <div style={{ background: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 10, padding: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Saved reports · ZT assessments</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {reports.data?.slice(0, 10).map(report => (
+              <div key={report.name} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
+                <a href={zerotrustApi.reportUrl(report.name)} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--color-brand)' }}>
+                  {report.name}
+                </a>
+                <span style={{ color: 'var(--color-text-muted)' }}>
+                  {new Date(report.modified_at).toLocaleString()} · {Math.round(report.size_bytes / 1024)} KB
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pillar strip */}
       {pillars.length > 0 && (

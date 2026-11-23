@@ -28,6 +28,7 @@ import ReportsPage from './pages/ReportsPage'
 import SettingsPage from './pages/SettingsPage'
 import AboutPage from './pages/AboutPage'
 import MspPage from './pages/MspPage'
+import TenantSettingsPage from './pages/TenantSettingsPage'
 import PosturePage from './pages/PosturePage'
 import AuditorPage from './pages/AuditorPage'
 import UsersPage from './pages/UsersPage'
@@ -117,6 +118,7 @@ export default function App() {
             <Route path="reports" element={<RouteErrorBoundary><ReportsPage /></RouteErrorBoundary>} />
             <Route path="settings" element={<RouteErrorBoundary><SettingsPage /></RouteErrorBoundary>} />
             <Route path="msp" element={<RouteErrorBoundary><MspPage /></RouteErrorBoundary>} />
+            <Route path="tenants/:tenantId" element={<RouteErrorBoundary><TenantSettingsPage /></RouteErrorBoundary>} />
             <Route path="auditor" element={<RouteErrorBoundary><AuditorPage /></RouteErrorBoundary>} />
             <Route path="about" element={<RouteErrorBoundary><AboutPage /></RouteErrorBoundary>} />
           </Route>

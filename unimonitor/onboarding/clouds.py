@@ -122,6 +122,33 @@ async def assume_role_credentials(
     return await asyncio.to_thread(_call)
 
 
+async def validate_okta(domain: str, api_token: str) -> str:
+    """Check an Okta org and API token, returning the org's display name.
+
+    The domain is a hostname only: a scheme, path or credentials in it would let an
+    administrator point the connector at an arbitrary endpoint.
+    """
+    host = domain.strip().rstrip("/").removeprefix("https://").removeprefix("http://")
+    if not host or "/" in host or "@" in host or " " in host:
+        raise CloudError("Okta domain must be a hostname such as example.okta.com")
+    if not api_token:
+        raise CloudError("An Okta API token is required")
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.get(
+                f"https://{host}/api/v1/org",
+                headers={"Authorization": f"SSWS {api_token}", "Accept": "application/json"},
+            )
+    except httpx.HTTPError as exc:
+        raise CloudError(f"Could not reach Okta: {exc}") from exc
+    if response.status_code in (401, 403):
+        raise CloudError("Okta rejected the API token")
+    if response.status_code >= 400:
+        raise CloudError(f"Okta answered HTTP {response.status_code}")
+    data = response.json() if isinstance(response.json(), dict) else {}
+    return str(data.get("companyName") or data.get("subdomain") or host)
+
+
 async def _google_token(
     credentials_json: str,
     scopes: str,

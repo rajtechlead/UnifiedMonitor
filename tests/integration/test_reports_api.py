@@ -153,4 +153,7 @@ class TestReportRuns:
                 await session.execute(delete(AssessmentRun).where(AssessmentRun.id == run_id))
                 await session.execute(delete(Assessment).where(Assessment.id == assessment_id))
                 await session.execute(delete(Tenant).where(Tenant.id == tenant_pk))
+                # The shared SQLite connection means this commit also persisted the
+                # flushed fixture tenant; remove it so the next fixture can insert it.
+                await session.execute(delete(Tenant).where(Tenant.id == "test-tenant-id-00000000000001"))
                 await session.commit()

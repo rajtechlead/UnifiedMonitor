@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from unimonitor.ai import custom
+from unimonitor.ai import builtin, custom
 from unimonitor.ai.providers import configured_providers, provider_status
 from unimonitor.ai.service import list_live_models
 from unimonitor.auth.dependencies import get_current_user, require_role
@@ -43,6 +43,8 @@ async def ai_status(
         "providers": provider_status(),
         "active": [provider.name for provider in configured_providers()],
         "custom": await custom.public_list(tenant),
+        "builtin": await builtin.public_status(tenant),
+        "order": builtin.stored_order(tenant) if tenant is not None else [],
         "anonymised": True,
     }
 
@@ -64,6 +66,57 @@ async def ai_models(
 
 class CustomProviderList(BaseModel):
     providers: list[custom.CustomProvider]
+
+
+class BuiltinProviderList(BaseModel):
+    """The tenant's built-in provider settings and their failover order."""
+
+    providers: list[builtin.BuiltinProvider]
+    order: list[str] | None = None
+
+
+@router.get("/settings", responses={404: {"description": "Tenant not found"}})
+async def ai_settings(
+    current_user: Annotated[Any, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Built-in providers a tenant can connect, and the order they fail over in."""
+    tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
+    rows = await builtin.public_status(tenant)
+    enabled = [row["name"] for row in rows if row["enabled"] and row["configured"]]
+    return {"providers": rows, "order": builtin.stored_order(tenant) if tenant is not None else [], "active_chain": enabled}
+
+
+@router.put("/settings", responses={400: {"description": "Invalid provider or order"}, "404": {"description": "Tenant not found"}})
+async def put_ai_settings(
+    body: BuiltinProviderList,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Save provider models/keys/enablement and the auto-switchover sequence."""
+    tenant = await _caller_tenant(current_user, db)
+    try:
+        rows = await builtin.save(tenant, body.providers, body.order)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    await db.flush()
+    return {"providers": rows, "order": builtin.stored_order(tenant)}
+
+
+@router.post("/providers/{name}/test", responses={400: {"description": "Unknown provider"}})
+async def test_ai_provider(
+    name: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Prove a built-in provider's key works, using the tenant key or the environment one."""
+    tenant = await db.get(Tenant, current_user.tenant_id) if current_user.tenant_id else None
+    try:
+        entry = builtin.stored(tenant).get(name.lower(), {}) if tenant is not None else {}
+        key = await builtin.key_for(tenant, name.lower())
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return await builtin.test_provider(name.lower(), model=str(entry.get("model", "")), api_key=key)
 
 
 @router.get("/providers/custom", responses={404: {"description": "Tenant not found"}})

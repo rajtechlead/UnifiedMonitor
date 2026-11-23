@@ -164,6 +164,18 @@ PLATFORM_FIELDS: dict[str, dict[str, Any]] = {
             },
         ],
     },
+    "okta": {
+        "config": [{"name": "domain", "label": "Okta domain", "placeholder": "example.okta.com", "required": "1"}],
+        "secrets": [{"name": "api_token", "label": "API token", "placeholder": "00aBcD...", "required": "1"}],
+        "automated": [],
+        "auth_methods": [
+            {
+                "id": "api_token",
+                "label": "API token",
+                "description": "Create a read-only API token as a super administrator; it is stored in the vault and never shown again.",
+            }
+        ],
+    },
 }
 
 
@@ -175,18 +187,38 @@ def _loads(raw: str | None) -> dict[str, Any]:
         return {}
 
 
+# Platforms that are connected for identity/sign-in rather than monitored as a cloud.
+# They appear in the platform picker but not in the cloud-provider roll-ups, which
+# group evidence from the control library.
+IDENTITY_PLATFORMS: tuple[dict[str, str], ...] = (
+    {
+        "id": "okta",
+        "name": "Okta",
+        "short_name": "Okta",
+        "description": "Identity provider — super-admin API token, read-only verification of the organisation",
+        "colour": "#00297A",
+    },
+)
+
+
 def platform_catalogue() -> list[dict[str, Any]]:
     """Everything the wizard needs to render the platform picker."""
     catalogue = []
-    for provider in PROVIDERS.values():
-        fields = PLATFORM_FIELDS[provider.id]
+    platforms = [
+        {
+            "id": provider.id,
+            "name": provider.name,
+            "short_name": provider.short_name,
+            "description": provider.description,
+            "colour": provider.colour,
+        }
+        for provider in PROVIDERS.values()
+    ] + list(IDENTITY_PLATFORMS)
+    for platform in platforms:
+        fields = PLATFORM_FIELDS[platform["id"]]
         catalogue.append(
             {
-                "id": provider.id,
-                "name": provider.name,
-                "short_name": provider.short_name,
-                "description": provider.description,
-                "colour": provider.colour,
+                **platform,
                 "automated": bool(fields.get("automated")),
                 "config_fields": fields["config"],
                 "secret_fields": fields["secrets"],
@@ -302,7 +334,8 @@ async def upsert_connection(
 
     row = existing or CloudConnection(tenant_id=tenant_id, provider=provider)
     row.account = account
-    row.display_name = display_name or PROVIDERS[provider].name
+    identity_name = next((platform["name"] for platform in IDENTITY_PLATFORMS if platform["id"] == provider), provider.title())
+    row.display_name = display_name or (PROVIDERS[provider].name if provider in PROVIDERS else identity_name)
     row.status = status
     row.config = json.dumps(config)
     row.secret_refs = json.dumps(secret_refs)
@@ -480,9 +513,18 @@ async def rotate_microsoft_certificate(session: AsyncSession, *, validity_days: 
     return row
 
 
-async def connect_platform(session: AsyncSession, provider: str, payload: dict[str, Any]) -> CloudConnection:
-    """Validate a platform's credentials, then persist the connection."""
-    local_tenant = _require_tenant(await first_tenant(session))
+async def connect_platform(session: AsyncSession, provider: str, payload: dict[str, Any], tenant_id: str | None = None) -> CloudConnection:
+    """Validate a platform's credentials, then persist the connection.
+
+    ``tenant_id`` lets the Managed tenants page onboard a client with its own
+    platform credentials; omitting it keeps the first-run wizard's behaviour.
+    """
+    if tenant_id:
+        if await session.get(Tenant, tenant_id) is None:
+            raise ValueError(f"Tenant '{tenant_id}' not found")
+        local_tenant = tenant_id
+    else:
+        local_tenant = _require_tenant(await first_tenant(session))
     provider = provider.strip().lower()
 
     if provider == "microsoft":
@@ -552,6 +594,20 @@ async def connect_platform(session: AsyncSession, provider: str, payload: dict[s
                 "credentials_json": str(payload.get("credentials_json", "")),
                 "access_token": str(payload.get("access_token", "")),
             },
+        )
+
+    if provider == "okta":
+        domain = str(payload.get("domain", "")).strip()
+        token = str(payload.get("api_token", "")).strip()
+        org = await clouds.validate_okta(domain, token)
+        return await upsert_connection(
+            session,
+            tenant_id=local_tenant,
+            provider="okta",
+            account=domain,
+            display_name=f"Okta {org}",
+            config={"domain": domain},
+            secrets={"api_token": token},
         )
 
     if provider == "google_workspace":
@@ -629,6 +685,26 @@ async def connect_google_service_account(
             )
         )
     return rows
+
+
+async def delete_tenant_connection(session: AsyncSession, tenant_id: str, provider: str) -> bool:
+    """Remove one tenant's connection and its stored secrets."""
+    row = (
+        (await session.execute(select(CloudConnection).where(CloudConnection.tenant_id == tenant_id, CloudConnection.provider == provider)))
+        .scalars()
+        .first()
+    )
+    if row is None:
+        return False
+    resolver = await get_secret_resolver()
+    for ref in _loads(row.secret_refs).values():
+        try:
+            await resolver.delete(ref)
+        except Exception as exc:  # noqa: BLE001 - removal must not fail on a missing secret
+            logger.warning("could not delete connection secret", ref=ref, error=str(exc))
+    await session.delete(row)
+    await session.flush()
+    return True
 
 
 async def delete_connection(session: AsyncSession, provider: str) -> bool:

@@ -1,9 +1,10 @@
 """Outbound integration endpoints — SIEM connectors and ticketing sync.
 
-Configuration lives in the deployment environment (secrets have no business in a
-request body or a database row). These endpoints report which connectors are
-wired up, let an administrator test one, push the current open findings to one,
-and open tickets for findings that do not have one yet.
+A connector is configured either from the product (its settings are written to the
+secret vault, never to a database row and never returned in a response) or from the
+deployment environment, which remains the fallback for existing installs. These
+endpoints report which connectors are wired up, connect/disconnect one, test one,
+push the current open findings to one, and open tickets for findings without one.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ class SiemConnectorRow(BaseModel):
     description: str
     docs: str
     configured: bool
+    managed: bool = False
     required_settings: list[str]
     missing_settings: list[str]
 
@@ -40,8 +42,22 @@ class TicketingRow(BaseModel):
     name: str
     docs: str
     configured: bool
+    managed: bool = False
     required_settings: list[str]
     missing_settings: list[str]
+
+
+class ConnectorConfigIn(BaseModel):
+    """Settings entered in the UI; written to the vault, never returned."""
+
+    values: dict[str, str] = Field(default_factory=dict, max_length=20)
+
+
+class ConnectorConfigResponse(BaseModel):
+    kind: str
+    provider: str
+    stored: list[str]
+    configured: bool
 
 
 class IntegrationsResponse(BaseModel):
@@ -95,11 +111,59 @@ async def list_integrations(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> IntegrationsResponse:
     """Which connectors are configured, and what each one still needs."""
+    from unimonitor.integrations.credentials import load_all
+
+    siem_configs = await load_all("siem")
+    ticketing_configs = await load_all("ticketing")
     return IntegrationsResponse(
-        siem=[SiemConnectorRow(**row) for row in connector_status()],
-        ticketing=[TicketingRow(**row) for row in ticketing_status()],
-        default_ticketing_provider=default_provider(),
+        siem=[SiemConnectorRow(**row) for row in connector_status(siem_configs)],
+        ticketing=[TicketingRow(**row) for row in ticketing_status(ticketing_configs)],
+        default_ticketing_provider=default_provider(ticketing_configs),
     )
+
+
+def _connector_kind(kind: str) -> str:
+    if kind not in ("siem", "ticketing"):
+        raise HTTPException(status_code=404, detail=f"Unknown connector kind '{kind}'")
+    return kind
+
+
+@router.put("/{kind}/{provider}/config", responses={400: {"description": "Bad request"}, 404: {"description": "Not found"}})
+async def save_connector_config(
+    kind: str,
+    provider: str,
+    body: ConnectorConfigIn,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> ConnectorConfigResponse:
+    """Connect a SIEM or ticketing provider by storing its settings in the vault."""
+    from unimonitor.integrations.credentials import ConnectorConfigError, load, save
+
+    kind = _connector_kind(kind)
+    try:
+        stored = await save(kind, provider, body.values)
+    except ConnectorConfigError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    logger.info("connector_connected", kind=kind, provider=provider, fields=stored, by=current_user.id)
+    config = await load(kind, provider) or {}
+    return ConnectorConfigResponse(kind=kind, provider=provider, stored=stored, configured=bool(config))
+
+
+@router.delete("/{kind}/{provider}/config", responses={404: {"description": "Not found"}})
+async def delete_connector_config(
+    kind: str,
+    provider: str,
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> dict[str, Any]:
+    """Disconnect a provider and fall back to its deployment environment, if any."""
+    from unimonitor.integrations.credentials import ConnectorConfigError, delete
+
+    kind = _connector_kind(kind)
+    try:
+        await delete(kind, provider)
+    except ConnectorConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    logger.info("connector_disconnected", kind=kind, provider=provider, by=current_user.id)
+    return {"kind": kind, "provider": provider, "disconnected": True}
 
 
 async def _open_findings(db: Any, tenant_id: str | None, severity: str | None, limit: int) -> list[Any]:
@@ -125,10 +189,13 @@ async def test_siem_connector(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> SendResponse:
     """Send one synthetic event so the wiring can be verified immediately."""
+    from unimonitor.integrations.credentials import ConnectorConfigError, load
     from unimonitor.integrations.siem import IntegrationError
 
     try:
-        receipt = await run_connector_test(provider)
+        receipt = await run_connector_test(provider, await load("siem", provider))
+    except ConnectorConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except IntegrationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return SendResponse(**receipt)
@@ -142,12 +209,15 @@ async def push_to_siem(
     db: Annotated[Any, Depends(get_db)],
 ) -> SendResponse:
     """Push the current open findings to one SIEM connector."""
+    from unimonitor.integrations.credentials import ConnectorConfigError, load
     from unimonitor.integrations.events import finding_event
     from unimonitor.integrations.siem import IntegrationError
 
     findings = await _open_findings(db, body.tenant_id, body.severity, body.limit)
     try:
-        receipt = await send_events(provider, [finding_event(finding) for finding in findings])
+        receipt = await send_events(provider, [finding_event(finding) for finding in findings], await load("siem", provider))
+    except ConnectorConfigError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except IntegrationError as exc:
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     logger.info("siem_pushed", provider=provider, sent=receipt.get("sent", 0), by=current_user.id)
@@ -168,9 +238,11 @@ async def sync_tickets(
     from sqlalchemy import select
 
     from unimonitor.db.models.external_ticket import ExternalTicket
+    from unimonitor.integrations.credentials import load_all
     from unimonitor.integrations.ticketing import TicketError
 
-    provider = body.provider or default_provider()
+    ticketing_configs = await load_all("ticketing")
+    provider = body.provider or default_provider(ticketing_configs)
     if provider is None:
         raise HTTPException(status_code=400, detail="No ticketing provider is configured")
     if body.min_severity.lower() not in SEVERITY_ORDER:
@@ -193,7 +265,7 @@ async def sync_tickets(
             skipped += 1
             continue
         try:
-            result = await create_ticket(finding, provider)
+            result = await create_ticket(finding, provider, ticketing_configs.get(provider))
         except TicketError as exc:
             logger.warning("ticket_sync_error", finding_id=finding.id, error=str(exc)[:200])
             errors += 1
