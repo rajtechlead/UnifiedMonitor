@@ -1,4 +1,5 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '../hooks/useApi'
 
 type RollupRow = {
@@ -48,6 +49,140 @@ const cardStyle = {
   padding: 20,
 }
 
+const inputStyle: React.CSSProperties = {
+  padding: '7px 10px', fontSize: 13, borderRadius: 6,
+  border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
+  color: 'var(--color-text)', width: '100%', boxSizing: 'border-box',
+}
+
+function TenantLifecycle() {
+  const qc = useQueryClient()
+  const [form, setForm] = useState({ name: '', display_name: '', entra_tenant_id: '', client_id: '', client_secret: '' })
+  const [error, setError] = useState('')
+
+  const refresh = () => void qc.invalidateQueries({ queryKey: ['tenants', 'rollup'] })
+  const create = useMutation({
+    mutationFn: () => api.post('/tenants', form).then(r => r.data),
+    onSuccess: () => {
+      setForm({ name: '', display_name: '', entra_tenant_id: '', client_id: '', client_secret: '' })
+      setError('')
+      refresh()
+    },
+    onError: () => setError('Could not add the tenant. An administrator needs a unique Entra tenant id and client credentials.'),
+  })
+
+  const update = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      api.put(`/tenants/${id}`, { is_active: isActive }).then(r => r.data),
+    onSettled: refresh,
+  })
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/tenants/${id}`),
+    onSettled: refresh,
+  })
+
+  const required = form.name && form.display_name && form.entra_tenant_id && form.client_id && form.client_secret
+
+  return (
+    <div style={{ ...cardStyle, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Client lifecycle</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+          Add a tenant, suspend collection for it, or remove it. Suspend/activate and delete are per row below.
+        </div>
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 8 }}>
+        {([
+          ['name', 'Name (slug)'],
+          ['display_name', 'Display name'],
+          ['entra_tenant_id', 'Entra tenant id'],
+          ['client_id', 'Client id'],
+          ['client_secret', 'Client secret'],
+        ] as const).map(([key, label]) => (
+          <input
+            key={key}
+            value={form[key]}
+            onChange={e => setForm(prev => ({ ...prev, [key]: e.target.value }))}
+            placeholder={label}
+            aria-label={label}
+            type={key === 'client_secret' ? 'password' : 'text'}
+            style={inputStyle}
+          />
+        ))}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button
+          type="button"
+          onClick={() => create.mutate()}
+          disabled={!required || create.isPending}
+          style={{
+            padding: '8px 16px', fontSize: 13, background: 'var(--color-brand)', color: 'white',
+            border: 'none', borderRadius: 8, cursor: !required || create.isPending ? 'not-allowed' : 'pointer',
+            opacity: !required || create.isPending ? 0.6 : 1,
+          }}
+        >
+          {create.isPending ? 'Adding…' : 'Add tenant'}
+        </button>
+        {error && <span style={{ fontSize: 12, color: '#EF4444' }}>{error}</span>}
+      </div>
+
+      <TenantTable onToggle={(id, isActive) => update.mutate({ id, isActive })} onDelete={(id) => remove.mutate(id)} pending={update.isPending || remove.isPending} />
+    </div>
+  )
+}
+
+function TenantTable({ onToggle, onDelete, pending }: Readonly<{
+  onToggle: (id: string, isActive: boolean) => void
+  onDelete: (id: string) => void
+  pending: boolean
+}>) {
+  const { data } = useQuery<{ items: Array<{ id: string; name: string; display_name: string | null; is_active: boolean }> }>({
+    queryKey: ['tenants', 'admin-list'],
+    queryFn: () => api.get('/tenants', { params: { page_size: 100 } }).then(r => r.data),
+  })
+
+  return (
+    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+      <thead>
+        <tr style={{ textAlign: 'left', color: 'var(--color-text-muted)', fontSize: 11, textTransform: 'uppercase' }}>
+          {['Tenant', 'Status', ''].map(heading => (
+            <th key={heading} style={{ padding: '8px 10px', borderTop: '1px solid var(--color-border)', fontWeight: 600 }}>{heading}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {(data?.items ?? []).map(tenant => (
+          <tr key={tenant.id} style={{ borderTop: '1px solid var(--color-border)' }}>
+            <td style={{ padding: '8px 10px' }}>{tenant.display_name || tenant.name}</td>
+            <td style={{ padding: '8px 10px', color: tenant.is_active ? '#10B981' : 'var(--color-text-muted)' }}>
+              {tenant.is_active ? 'active' : 'suspended'}
+            </td>
+            <td style={{ padding: '8px 10px', display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => onToggle(tenant.id, !tenant.is_active)}
+                style={{ padding: '4px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer', border: '1px solid var(--color-border)', background: 'var(--color-surface-2)', color: 'var(--color-text)' }}
+              >
+                {tenant.is_active ? 'Suspend' : 'Activate'}
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => { if (window.confirm(`Remove ${tenant.display_name || tenant.name}? Findings and history are retained.`)) onDelete(tenant.id) }}
+                style={{ padding: '4px 10px', fontSize: 11, borderRadius: 6, cursor: 'pointer', border: '1px solid #EF4444', background: 'transparent', color: '#EF4444' }}
+              >
+                Remove
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  )
+}
+
 export default function MspPage() {
   const { data, isLoading, isError } = useQuery<RollupResponse>({
     queryKey: ['tenants', 'rollup'],
@@ -93,6 +228,8 @@ export default function MspPage() {
           </div>
         ))}
       </div>
+
+      <TenantLifecycle />
 
       <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>

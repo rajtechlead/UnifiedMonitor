@@ -61,6 +61,11 @@ class Settings(BaseSettings):
     API_V1_PREFIX: str = "/api/v1"
     # Optional JSON file supplying posture keys Graph cannot expose (see collectors/snapshot.py)
     UNIMONITOR_POSTURE_SNAPSHOT: str = ""
+    # Build the posture inventory from every collection run so the posture engines
+    # run on live data instead of requiring a hand-exported document.
+    POSTURE_AUTO_INVENTORY: bool = True
+    # Directory for the automatic inventory; empty uses REPORT_STORAGE_PATH/posture.
+    POSTURE_AUTO_INVENTORY_PATH: str = ""
 
     # ── Database ─────────────────────────────────────────────
     DATABASE_URL: str = "sqlite+aiosqlite:///./unimonitor.db"

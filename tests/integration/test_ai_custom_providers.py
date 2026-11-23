@@ -121,3 +121,57 @@ class TestCustomProviders:
 
     async def test_listing_needs_authentication(self, client: AsyncClient, tenant, vault):
         assert (await client.get(URL)).status_code == 401
+
+    @pytest.mark.parametrize(
+        "base_url",
+        [
+            "https://169.254.169.254/latest/meta-data",
+            "http://169.254.169.254/v1",
+            "https://metadata.google.internal/computeMetadata/v1",
+            "https://[fd00:ec2::254]/v1",
+            "https://100.100.100.200/v1",
+            "https://[fe80::1]/v1",
+        ],
+    )
+    async def test_metadata_and_link_local_targets_are_rejected(self, client: AsyncClient, auth_headers: dict, tenant, vault, base_url: str):
+        r = await client.put(
+            URL,
+            json=_body({"name": "metadata", "base_url": base_url, "model": "m"}),
+            headers=auth_headers,
+        )
+        assert r.status_code == 422, r.text
+
+    async def test_plain_http_is_only_allowed_for_a_loopback_gateway(self, client: AsyncClient, auth_headers: dict, tenant, vault):
+        rejected = await client.put(
+            URL,
+            json=_body({"name": "gw", "base_url": "http://gw.example.com/v1", "model": "m"}),
+            headers=auth_headers,
+        )
+        assert rejected.status_code == 422
+
+        accepted = await client.put(
+            URL,
+            json=_body({"name": "local", "base_url": "http://127.0.0.1:11434/v1", "model": "m"}),
+            headers=auth_headers,
+        )
+        assert accepted.status_code == 200, accepted.text
+
+    async def test_a_malformed_stored_entry_does_not_break_the_settings_page(
+        self, client: AsyncClient, auth_headers: dict, tenant, db_session, vault
+    ):
+        tenant.settings_json = (
+            '{"ai_providers": ['
+            '{"name": "good", "base_url": "https://gw.example.com/v1", "model": "m", "enabled": true},'
+            '{"name": "no-model", "base_url": "https://gw.example.com/v1"},'
+            '{"name": "bad-url", "base_url": "ftp://x", "model": "m"},'
+            '"not-a-dict"'
+            "]}"
+        )
+        await db_session.flush()
+
+        r = await client.get(URL, headers=auth_headers)
+        assert r.status_code == 200, r.text
+        assert [entry["name"] for entry in r.json()] == ["good"]
+
+        chain = await custom.providers_for(tenant)
+        assert chain == []  # the good entry has no key, so it is not in the chain

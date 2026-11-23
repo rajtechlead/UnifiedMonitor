@@ -76,6 +76,10 @@ export const grcApi = {
     api
       .get(`/grc/frameworks/${frameworkId}/controls`, { params: tenantId ? { tenant_id: tenantId } : {} })
       .then((r) => r.data),
+  evidenceCoverage: (frameworkId: string, tenantId?: string) =>
+    api
+      .get(`/grc/frameworks/${frameworkId}/evidence-coverage`, { params: tenantId ? { tenant_id: tenantId } : {} })
+      .then((r) => r.data),
 }
 
 export const usersApi = {

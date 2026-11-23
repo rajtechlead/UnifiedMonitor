@@ -10,6 +10,8 @@ pytestmark = pytest.mark.asyncio
 
 async def test_posture_analysis_without_snapshot_is_404(client: AsyncClient, auth_headers: dict, monkeypatch) -> None:
     monkeypatch.setattr("unimonitor.api.v1.posture.load_snapshot", lambda: {})
+    # The automatic inventory is the other source; this test is about neither existing.
+    monkeypatch.setattr("unimonitor.posture.assemble.load_inventory", lambda tenant_id="": None)
     response = await client.get("/api/v1/posture/analysis", headers=auth_headers)
     assert response.status_code == 404
     assert "UNIMONITOR_POSTURE_SNAPSHOT" in response.json()["detail"]

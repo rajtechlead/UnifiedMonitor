@@ -529,4 +529,46 @@ async def framework_evidence_coverage(
     from unimonitor.config import get_settings
 
     summary["stale_after_days"] = get_settings().EVIDENCE_STALE_DAYS
+    summary["by_provider"] = _provider_coverage(controls, statuses)
     return summary
+
+
+def _provider_coverage(controls: list, statuses: dict[str, EvidenceStatus]) -> dict[str, dict]:
+    """Evidence coverage per cloud provider, and the providers left unmeasured.
+
+    A framework can be 80% covered overall while an entire provider contributes no
+    evidence; the roll-up hides that. This breakdown makes the provider gap visible
+    and names the provider rather than leaving an unexplained shortfall.
+    """
+    from unimonitor.grc.providers import PROVIDERS, provider_for_service
+
+    buckets: dict[str, dict] = {}
+    for control in controls:
+        provider = provider_for_service(control.service)
+        provider_id = provider.id if provider else "unmapped"
+        bucket = buckets.setdefault(
+            provider_id,
+            {
+                "provider_id": provider_id,
+                "provider_name": provider.name if provider else "Unmapped",
+                "controls": 0,
+                "evaluated": 0,
+                "stale": 0,
+                "never_evaluated": 0,
+            },
+        )
+        status = statuses.get(control.id)
+        bucket["controls"] += 1
+        bucket[status.status if status else "never_evaluated"] += 1
+
+    for bucket in buckets.values():
+        bucket["coverage_pct"] = round(bucket["evaluated"] * 100 / bucket["controls"], 1) if bucket["controls"] else 0.0
+
+    measured = {provider_id for provider_id, bucket in buckets.items() if bucket["evaluated"]}
+    known = set(PROVIDERS)
+    return {
+        "providers": dict(sorted(buckets.items())),
+        "measured_providers": sorted(measured & known),
+        "missing_providers": sorted(known - measured),
+        "unmapped_controls": buckets.get("unmapped", {}).get("controls", 0),
+    }

@@ -25,6 +25,12 @@ type FrameworkControl = {
   evidence: Evidence[]
 }
 
+type ProviderCoverage = {
+  providers: Record<string, { provider_id: string; provider_name: string; controls: number; evaluated: number; coverage_pct: number }>
+  measured_providers: string[]
+  missing_providers: string[]
+}
+
 const STATE_LABELS: Record<string, string> = {
   implemented: 'Met',
   partially_implemented: 'Partially met',
@@ -53,6 +59,11 @@ export default function FrameworkPage() {
   const { data: controls, isLoading, isError } = useQuery<FrameworkControl[]>({
     queryKey: ['grc', 'framework-controls', frameworkId],
     queryFn: () => grcApi.frameworkControls(frameworkId),
+    enabled: Boolean(frameworkId),
+  })
+  const { data: providerCoverage } = useQuery<ProviderCoverage>({
+    queryKey: ['grc', 'framework-provider-coverage', frameworkId],
+    queryFn: () => grcApi.evidenceCoverage(frameworkId),
     enabled: Boolean(frameworkId),
   })
 
@@ -110,6 +121,38 @@ export default function FrameworkPage() {
           </div>
         ))}
       </div>
+
+      {providerCoverage && (
+        <div style={{
+          background: 'var(--color-surface)', border: '1px solid var(--color-border)',
+          borderRadius: 10, padding: 16, display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ShieldCheck size={15} color="var(--color-brand)" />
+            <span style={{ fontSize: 13, fontWeight: 600 }}>Evidence by provider</span>
+            {providerCoverage.missing_providers.length > 0 && (
+              <span style={{ fontSize: 11, color: '#F59E0B' }}>
+                no current evidence from {providerCoverage.missing_providers.join(', ')}
+              </span>
+            )}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+            {Object.values(providerCoverage.providers).map(provider => (
+              <div key={provider.provider_id} style={{ fontSize: 12 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                  <span>{provider.provider_name}</span>
+                  <span style={{ fontWeight: 600, color: provider.coverage_pct >= 80 ? '#10B981' : provider.coverage_pct >= 50 ? '#F59E0B' : '#EF4444' }}>
+                    {Math.round(provider.coverage_pct)}%
+                  </span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  {provider.evaluated} of {provider.controls} controls measured
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div style={{
         background: 'var(--color-surface)', border: '1px solid var(--color-border)',

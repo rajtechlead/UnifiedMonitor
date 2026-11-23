@@ -293,6 +293,48 @@ class TestGraphClientGet:
 
         _run(_test())
 
+    def test_an_outage_is_answered_from_the_last_good_response(self):
+        async def _test():
+            gc = self._make_client_with_mocked_http(status_code=503)
+            gc._token = "tok"
+            gc._token_expiry = time.monotonic() + 7200
+            with patch("unimonitor.graph.client.cache_get", new=AsyncMock(return_value=[{"id": "last-good"}])):
+                result = await gc.get("/users", use_cache=False)
+            assert result.success is False
+            assert result.stale is True
+            assert result.data == [{"id": "last-good"}]
+            assert result.error_code == "GRAPH_UNAVAILABLE"
+
+        _run(_test())
+
+    def test_a_revoked_permission_is_not_masked_by_stale_data(self):
+        from unimonitor.exceptions import GraphPermissionError
+
+        async def _test():
+            gc = self._make_client_with_mocked_http(status_code=403)
+            gc._http_client.get.return_value.text = "Forbidden"
+            gc._token = "tok"
+            gc._token_expiry = time.monotonic() + 7200
+            with patch("unimonitor.graph.client.cache_get", new=AsyncMock(return_value=[{"id": "stale"}])):
+                with pytest.raises(GraphPermissionError):
+                    await gc.get("/users", use_cache=False)
+
+        _run(_test())
+
+    def test_a_client_error_is_not_an_outage(self):
+        from unimonitor.exceptions import GraphAPIError
+
+        async def _test():
+            gc = self._make_client_with_mocked_http(status_code=404)
+            gc._http_client.get.return_value.text = "Not found"
+            gc._token = "tok"
+            gc._token_expiry = time.monotonic() + 7200
+            with patch("unimonitor.graph.client.cache_get", new=AsyncMock(return_value=[{"id": "stale"}])):
+                with pytest.raises(GraphAPIError):
+                    await gc.get("/users", use_cache=False)
+
+        _run(_test())
+
     def test_http_error_raises_graph_api_error(self):
         import httpx
 

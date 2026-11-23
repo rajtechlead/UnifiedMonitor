@@ -2,7 +2,7 @@ import { Fragment, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { findingsApi } from '../hooks/useApi'
-import { Search, ChevronDown, ChevronUp, TrendingUp } from 'lucide-react'
+import { Search, TrendingUp } from 'lucide-react'
 
 type Finding = {
   id: string
@@ -50,6 +50,14 @@ type TimelineItem = {
 const SEVERITIES = ['', 'CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFORMATIONAL']
 const STATES = ['', 'implemented', 'partially_implemented', 'not_implemented', 'not_applicable']
 const TRIAGE = ['', 'open', 'acknowledged', 'snoozed', 'resolved']
+
+// A workspace starts from a reviewer's question, not from four empty dropdowns.
+const SAVED_VIEWS = [
+  { label: 'Open critical', severity: 'CRITICAL', state: '', triage: 'open' },
+  { label: 'High, unacknowledged', severity: 'HIGH', state: '', triage: 'open' },
+  { label: 'Not implemented', severity: '', state: 'not_implemented', triage: '' },
+  { label: 'Needs triage', severity: '', state: '', triage: 'open' },
+] as const
 
 const selectStyle: React.CSSProperties = {
   padding: '6px 10px', borderRadius: 6, fontSize: 13,
@@ -146,6 +154,8 @@ export default function FindingsPage() {
   }
   const [page, setPage] = useState(1)
   const [expandedId, setExpandedId] = useState<string | null>(() => searchParams.get('finding'))
+  const [selected, setSelected] = useState<string[]>([])
+  const [bulkBusy, setBulkBusy] = useState(false)
   const pageSize = 25
   const queryClient = useQueryClient()
 
@@ -209,6 +219,31 @@ export default function FindingsPage() {
       refresh()
     } catch {
       // best-effort
+    }
+  }
+
+  const applyView = (view: (typeof SAVED_VIEWS)[number]) => {
+    setSeverity(view.severity)
+    setState(view.state)
+    setTriage(view.triage)
+    setPage(1)
+    setSelected([])
+  }
+
+  const toggleSelected = (id: string) => {
+    setSelected(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id])
+  }
+
+  // One triage call per selected finding: the API is per-finding, and a partial
+  // failure leaves the rest triaged rather than discarding the whole batch.
+  const bulkTriage = async (status: string) => {
+    setBulkBusy(true)
+    try {
+      await Promise.all(selected.map(id => findingsApi.triage(id, { status }).catch(() => null)))
+      setSelected([])
+      refresh()
+    } finally {
+      setBulkBusy(false)
     }
   }
 
@@ -292,6 +327,44 @@ export default function FindingsPage() {
         </select>
       </div>
 
+      {/* Saved views and bulk triage */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {SAVED_VIEWS.map(view => (
+          <button
+            key={view.label}
+            type="button"
+            onClick={() => applyView(view)}
+            style={{
+              padding: '5px 12px', fontSize: 12, borderRadius: 999, cursor: 'pointer',
+              border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
+              color: 'var(--color-text)',
+            }}
+          >
+            {view.label}
+          </button>
+        ))}
+        {selected.length > 0 && (
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{selected.length} selected</span>
+            {['acknowledged', 'resolved'].map(status => (
+              <button
+                key={status}
+                type="button"
+                disabled={bulkBusy}
+                onClick={() => void bulkTriage(status)}
+                style={{
+                  padding: '5px 12px', fontSize: 12, borderRadius: 6, cursor: bulkBusy ? 'not-allowed' : 'pointer',
+                  border: 'none', background: 'var(--color-brand)', color: 'white', opacity: bulkBusy ? 0.6 : 1,
+                }}
+              >
+                Mark {status}
+              </button>
+            ))}
+            <button type="button" onClick={() => setSelected([])} style={{ ...selectStyle, fontSize: 12 }}>Clear</button>
+          </div>
+        )}
+      </div>
+
       {/* Table */}
       <div style={{
         background: 'var(--color-surface)', border: '1px solid var(--color-border)',
@@ -311,7 +384,14 @@ export default function FindingsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
-                <th style={{ width: 24 }} />
+                <th style={{ width: 24, padding: '10px 14px' }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all findings on this page"
+                    checked={findings.length > 0 && findings.every(f => selected.includes(f.id))}
+                    onChange={e => setSelected(e.target.checked ? findings.map(f => f.id) : [])}
+                  />
+                </th>
                 {[
                   { label: 'Control', sort: 'external_control_id' },
                   { label: 'Title', sort: 'title' },
@@ -343,8 +423,13 @@ export default function FindingsPage() {
                     }}
                     onClick={() => setExpandedId(expandedId === f.id ? null : f.id)}
                   >
-                    <td style={{ padding: '10px 14px', width: 24 }}>
-                      {expandedId === f.id ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    <td style={{ padding: '10px 14px', width: 24 }} onClick={e => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${f.external_control_id}`}
+                        checked={selected.includes(f.id)}
+                        onChange={() => toggleSelected(f.id)}
+                      />
                     </td>
                     <td style={{ padding: '10px 14px', fontFamily: 'monospace', fontSize: 11, whiteSpace: 'nowrap' }}>
                       {f.external_control_id}
@@ -387,7 +472,7 @@ export default function FindingsPage() {
                   </tr>
                   {expandedId === f.id && (
                     <tr style={{ borderBottom: '1px solid var(--color-border)' }}>
-                      <td colSpan={7} style={{ padding: '16px 20px', background: 'var(--color-surface-2)' }}>
+                      <td colSpan={8} style={{ padding: '16px 20px', background: 'var(--color-surface-2)' }}>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
                           <div>
                             <div style={{ fontWeight: 600, fontSize: 12, color: 'var(--color-text-muted)', marginBottom: 6 }}>

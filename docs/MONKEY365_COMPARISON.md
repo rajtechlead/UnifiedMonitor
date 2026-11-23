@@ -1,9 +1,14 @@
 # Monkey365 comparison and multi-cloud plan
 
 Analysis of [silverhack/monkey365](https://github.com/silverhack/monkey365) against
-UnifiedMonitor, and the plan for AWS, GCP and Google Workspace. **This document is an
-analysis and a plan; the multi-cloud collectors described at the end are not
-implemented.** Nothing here should be read as delivered functionality.
+UnifiedMonitor. This document began as an analysis and a plan; the first multi-cloud
+slices have since been implemented in
+`unimonitor/graph/collectors/cloud_providers.py` (AWS IAM/S3/CloudTrail/GuardDuty/
+Config/Security Hub, EC2 metadata and RDS exposure; GCP IAM, firewall, audit sinks,
+buckets, KMS and compute instances; Workspace 2SV, admin roles, OAuth grants, Drive
+sharing, groups and mobile devices). They are best-effort, return no key when a provider
+cannot be reached, and are verified against fake payloads only — no live account was
+available in the agent workspace.
 
 ## What Monkey365 is good at
 
@@ -15,7 +20,7 @@ implemented.** Nothing here should be read as delivered functionality.
 | Execution | Parallel per-workload runs, throttling-aware Graph client | Celery/Redis with an in-process fallback, rate-limited Graph client, per-run snapshots and trends |
 | Auth | Device code / interactive MSAL, app-only with certificate or secret | App-only certificate/secret per tenant, plus SSO for the web UI |
 | Extensibility | PowerShell collector modules | Python collectors registered in `unimonitor/graph/collector_registry.py` |
-| Multi-cloud | Azure subscriptions alongside M365 | Microsoft-centric; no AWS, GCP or Google Workspace collectors |
+| Multi-cloud | Azure subscriptions alongside M365 | Microsoft plus AWS, GCP and Google Workspace collectors (best-effort, no live account verified) |
 
 ## Concrete gaps worth closing
 
@@ -41,7 +46,7 @@ every read, an evidence and auditor workflow, alerting with lifecycle metrics, s
 assessments with trend history, and a vault-backed secret store. Those are the reasons
 not to copy Monkey365's architecture wholesale.
 
-## Multi-cloud plan (not implemented)
+## Multi-cloud plan (first slices implemented)
 
 The collector registry is already the seam. A cloud collector needs to satisfy the same
 contract as the Graph collectors — return `dict[str, Any]` keyed by control input — so

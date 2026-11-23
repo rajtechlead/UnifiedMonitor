@@ -8,18 +8,90 @@ here, and it is tried before the built-in chain. The API key never touches
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import re
 from typing import Any
+from urllib.parse import urlsplit
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from unimonitor.ai.providers import Provider
+from unimonitor.core.logging import get_logger
 from unimonitor.notifications.preferences import tenant_settings
+
+logger = get_logger(__name__)
 
 SETTINGS_KEY = "ai_providers"
 MASK = "******"
 _NAME = re.compile(r"^[a-z0-9][a-z0-9-]{1,31}$")
+
+# Names and addresses that answer with cloud instance credentials. A tenant
+# administrator may point a provider at an internal gateway, but never at the
+# host's metadata service: that would let a model request mint cloud credentials.
+_BLOCKED_HOSTNAMES = frozenset(
+    {
+        "metadata",
+        "metadata.google.internal",
+        "metadata.goog",
+        "instance-data",
+        "instance-data.ec2.internal",
+    }
+)
+_BLOCKED_ADDRESSES = frozenset(
+    ipaddress.ip_address(address)
+    for address in (
+        "169.254.169.254",  # AWS, Azure, GCP, OpenStack
+        "169.254.170.2",  # ECS task credentials
+        "100.100.100.200",  # Alibaba Cloud
+        "192.0.0.192",  # Oracle Cloud
+        "fd00:ec2::254",  # AWS IPv6
+    )
+)
+_LOOPBACK_NAMES = frozenset({"localhost", "localhost.localdomain"})
+
+
+def _is_loopback(host: str) -> bool:
+    """True for a host that only reaches the local machine."""
+    if host in _LOOPBACK_NAMES or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
+def _validate_target(value: str) -> str:
+    """Reject schemes, credentials and addresses a provider must never reach."""
+    parts = urlsplit(value)
+    if parts.scheme not in ("http", "https"):
+        raise ValueError("base_url must start with https:// (or http:// for a local gateway)")
+    if parts.username or parts.password:
+        raise ValueError("base_url must not carry credentials")
+    host = (parts.hostname or "").strip().rstrip(".").lower()
+    if not host:
+        raise ValueError("base_url must include a host")
+    if host in _BLOCKED_HOSTNAMES:
+        raise ValueError("base_url must not point at a cloud metadata service")
+
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        address = None
+        # A single all-numeric label is an alternative encoding of an IPv4 literal.
+        if host.replace(".", "").isdigit():
+            raise ValueError("base_url must use a hostname or canonical IP address") from None
+
+    if address is not None:
+        candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
+        if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
+            candidates.append(address.ipv4_mapped)
+        if any(candidate.is_link_local or candidate in _BLOCKED_ADDRESSES or candidate.is_unspecified for candidate in candidates):
+            raise ValueError("base_url must not point at a link-local or cloud metadata address")
+
+    if parts.scheme == "http" and not _is_loopback(host):
+        raise ValueError("base_url must use https://; http:// is only allowed for a loopback gateway")
+    return value.rstrip("/")
 
 
 class CustomProvider(BaseModel):
@@ -41,9 +113,7 @@ class CustomProvider(BaseModel):
     @field_validator("base_url")
     @classmethod
     def _https(cls, value: str) -> str:
-        if not value.startswith(("https://", "http://")):
-            raise ValueError("base_url must start with https:// (or http:// for a local gateway)")
-        return value.rstrip("/")
+        return _validate_target(value)
 
 
 def secret_name(tenant_id: str, name: str) -> str:
@@ -52,14 +122,42 @@ def secret_name(tenant_id: str, name: str) -> str:
 
 
 def stored(tenant: Any) -> list[dict[str, Any]]:
-    """Custom providers as persisted, without their keys."""
+    """Custom providers as persisted, without their keys.
+
+    A hand-edited ``settings_json`` (or an entry written by an older version) must
+    not break the settings page, so every entry is validated and a malformed one is
+    skipped with a warning rather than raising on read.
+    """
     raw = tenant_settings(tenant).get(SETTINGS_KEY)
     if not isinstance(raw, list):
         return []
     items: list[dict[str, Any]] = []
     for entry in raw:
-        if isinstance(entry, dict) and entry.get("name") and entry.get("base_url"):
-            items.append(entry)
+        if not isinstance(entry, dict):
+            continue
+        enabled = entry.get("enabled", True)
+        try:
+            provider = CustomProvider(
+                name=str(entry.get("name") or ""),
+                base_url=str(entry.get("base_url") or ""),
+                model=str(entry.get("model") or ""),
+                enabled=enabled if isinstance(enabled, bool) else True,
+            )
+        except (ValidationError, TypeError, ValueError) as exc:
+            logger.warning(
+                "custom_ai_provider_skipped",
+                name=str(entry.get("name"))[:64],
+                error=str(exc)[:200],
+            )
+            continue
+        items.append(
+            {
+                "name": provider.name,
+                "base_url": provider.base_url,
+                "model": provider.model,
+                "enabled": provider.enabled,
+            }
+        )
     return items
 
 

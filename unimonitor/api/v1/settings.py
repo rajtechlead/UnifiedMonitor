@@ -9,12 +9,16 @@ configured.
 
 from __future__ import annotations
 
+import io
 import json
+import zipfile
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Annotated, Any
 
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -220,3 +224,107 @@ async def put_posture_snapshot(
 
     logger.info("posture_snapshot_updated", path=str(path), by=current_user.id, keys=len(body))
     return PostureSnapshotResponse(configured=True, path=str(path), snapshot=load_snapshot(path))
+
+
+# ── Diagnostics bundle ───────────────────────────────────────
+
+_REDACT_MARKERS = ("SECRET", "PASSWORD", "TOKEN", "API_KEY", "PRIVATE", "CREDENTIAL", "DATABASE_URL")
+
+
+def _redact(value: Any) -> Any:
+    """Hide anything that could be a credential without hiding its presence."""
+    if isinstance(value, dict):
+        redacted: dict[str, Any] = {}
+        for key, item in value.items():
+            sensitive = any(marker in str(key).upper() for marker in _REDACT_MARKERS)
+            redacted[str(key)] = "<redacted>" if sensitive else _redact(item)
+        return redacted
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
+
+
+async def _diagnostics_manifest() -> dict[str, Any]:
+    """Versions, counts and collector catalogue — no credentials, no finding text."""
+    from sqlalchemy import func, select
+
+    from unimonitor import __version__
+    from unimonitor.db.base import async_session_factory
+    from unimonitor.db.models.assessment import AssessmentRun
+    from unimonitor.db.models.finding import Finding
+    from unimonitor.db.models.tenant import Tenant
+    from unimonitor.db.models.user import AppUser
+    from unimonitor.graph.collector_registry import CollectorRegistry
+    from unimonitor.grc.providers import PROVIDERS
+
+    settings = get_settings()
+    async with async_session_factory() as session:
+        tenants = (await session.execute(select(func.count(Tenant.id)))).scalar_one()
+        users = (await session.execute(select(func.count(AppUser.id)))).scalar_one()
+        finding_counts = select(Finding.severity, Finding.state, func.count(Finding.id)).group_by(Finding.severity, Finding.state)
+        findings = (await session.execute(finding_counts)).all()
+        latest_run = (await session.execute(select(AssessmentRun).order_by(AssessmentRun.started_at.desc()).limit(1))).scalar_one_or_none()
+
+    return {
+        "generated_at": datetime.now(UTC).isoformat(),
+        "application": {
+            "name": "UniMonitor",
+            "version": __version__,
+            "environment": settings.UNIMONITOR_ENV,
+            "python": __import__("sys").version.split()[0],
+        },
+        "inventory": {
+            "tenants": tenants,
+            "users": users,
+            "findings": [{"severity": severity, "state": state, "count": count} for severity, state, count in findings],
+            "latest_assessment": {
+                "run_id": latest_run.id if latest_run else None,
+                "status": latest_run.status if latest_run else None,
+                "started_at": latest_run.started_at.isoformat() if latest_run and latest_run.started_at else None,
+                "completed_at": latest_run.completed_at.isoformat() if latest_run and latest_run.completed_at else None,
+                "error": (latest_run.error_message or "")[:500] if latest_run else None,
+            },
+        },
+        "collectors": list(CollectorRegistry.ALL_COLLECTORS),
+        "providers": [
+            {
+                "id": provider.id,
+                "name": provider.name,
+                "collectors": list(provider.collectors),
+                "credential_settings": list(provider.credential_settings),
+            }
+            for provider in PROVIDERS.values()
+        ],
+        "configuration": _redact(settings.model_dump()),
+        "posture": {
+            "auto_inventory": bool(settings.POSTURE_AUTO_INVENTORY),
+            "configured_snapshot": bool(settings.UNIMONITOR_POSTURE_SNAPSHOT),
+        },
+    }
+
+
+@router.get(
+    "/diagnostics",
+    responses={401: {"description": "Not authenticated"}, 403: {"description": "Administrator role required"}},
+)
+async def diagnostics_bundle(
+    current_user: Annotated[Any, Depends(require_role("admin"))],
+) -> StreamingResponse:
+    """Download a redacted support bundle: versions, counts, collectors and settings.
+
+    Built in memory and never written to disk. Credential-shaped settings are
+    replaced with ``<redacted>``; finding text and user details are not included.
+    """
+    manifest = await _diagnostics_manifest()
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("manifest.json", json.dumps(manifest, indent=2, sort_keys=True, default=str))
+        archive.writestr("README.txt", "UniMonitor diagnostics bundle\nAll values under configuration that look credential-shaped are redacted.\n")
+    buffer.seek(0)
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
+    logger.info("diagnostics_bundle_created", by=current_user.id)
+    return StreamingResponse(
+        buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="unimonitor-diagnostics-{stamp}.zip"'},
+    )

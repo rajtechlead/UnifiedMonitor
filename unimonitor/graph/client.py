@@ -30,6 +30,15 @@ logger = get_logger(__name__)
 
 JSON_CONTENT_TYPE = "application/json"
 
+# How long the last successful response is kept so an outage can be answered
+# with the data of the previous run instead of with nothing.
+LAST_GOOD_TTL = 7 * 24 * 3600
+
+
+def last_good_cache_key(cache_key: str) -> str:
+    """Key holding the most recent successful body for an endpoint."""
+    return f"{cache_key}:last-good"
+
 
 @dataclass
 class GraphResponse:
@@ -39,6 +48,20 @@ class GraphResponse:
     error_message: str | None = None
     endpoint: str | None = None
     cached: bool = False
+    # True when the body came from the last successful response because Graph
+    # could not be reached now. Never a fresh result.
+    stale: bool = False
+
+
+def classify_error(exc: Exception) -> str:
+    """``consent`` or ``outage`` for a Graph failure.
+
+    A consent problem needs an administrator to grant a permission; an outage only
+    needs time, and may be answered from the last good response.
+    """
+    from unimonitor.exceptions import AuthenticationError, GraphPermissionError
+
+    return "consent" if isinstance(exc, (GraphPermissionError, AuthenticationError)) else "outage"
 
 
 class RateLimiter:
@@ -135,7 +158,36 @@ class GraphClient:
 
         async with self._semaphore:
             await self._rate_limiter.acquire()
-            return await self._execute_get(endpoint, params=params, cache_key=cache_key, cache_ttl=cache_ttl)
+            try:
+                return await self._execute_get(endpoint, params=params, cache_key=cache_key, cache_ttl=cache_ttl)
+            except GraphTimeoutError as exc:
+                return await self._last_good(cache_key, endpoint, exc)
+            except GraphAPIError as exc:
+                from unimonitor.exceptions import GraphPermissionError
+
+                upstream_status = getattr(exc, "upstream_status", None)
+                if isinstance(exc, GraphPermissionError) or (upstream_status is not None and upstream_status < 500):
+                    # A revoked permission or a bad request is not an outage; stale
+                    # data would hide something an administrator must fix.
+                    raise
+                return await self._last_good(cache_key, endpoint, exc)
+
+    async def _last_good(self, cache_key: str, endpoint: str, exc: Exception) -> GraphResponse:
+        """Answer an outage from the last successful response, or re-raise."""
+        last_good = await cache_get(last_good_cache_key(cache_key))
+        if last_good is None:
+            raise exc
+        logger.warning("Graph API unavailable; using last good response", endpoint=endpoint, error=str(exc))
+        message = getattr(exc, "message", str(exc))[:200]
+        return GraphResponse(
+            data=last_good,
+            success=False,
+            cached=True,
+            stale=True,
+            endpoint=endpoint,
+            error_code="GRAPH_UNAVAILABLE",
+            error_message=f"{message} — showing the last successful response",
+        )
 
     @retry(
         retry=retry_if_exception_type(GraphRateLimitError),
@@ -184,16 +236,19 @@ class GraphClient:
             raise AuthenticationError(f"Unauthorised accessing {endpoint}")
 
         if not resp.is_success:
-            raise GraphAPIError(
+            error = GraphAPIError(
                 f"Graph API error {resp.status_code} for {endpoint}",
                 detail=resp.text[:500],
             )
+            error.upstream_status = resp.status_code
+            raise error
 
         data = resp.json()
         result_data = data.get("value", data)
 
         if cache_key:
             await cache_set(cache_key, result_data, ttl=cache_ttl or self.cache_ttl)
+            await cache_set(last_good_cache_key(cache_key), result_data, ttl=LAST_GOOD_TTL)
 
         return GraphResponse(data=result_data, success=True, endpoint=endpoint)
 

@@ -10,6 +10,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- A tenant's custom AI provider URL may not target a cloud metadata service or a
+  link-local address (`169.254.0.0/16`, `fe80::/10`, AWS/Azure/GCP/Alibaba/Oracle
+  metadata hosts), and plain `http://` is accepted only for a loopback gateway.
+  Credentials in the URL are refused.
+- A malformed entry in a tenant's stored provider list is skipped with a warning
+  instead of turning the settings page into a 500.
 - The retired master key (`vault.key.previous`) is written owner-only and ignored by
   git, like `vault.key` itself.
 - Every endpoint that accepts `tenant_id` now resolves it through
@@ -27,6 +33,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- Automatic posture inventory: every assessment run assembles the collected AWS, GCP,
+  Google Workspace and Microsoft data into the normalised resource model and writes it
+  atomically, so the CIS/DSPM/CIEM/AI-SPM/attack-path engines run without an operator
+  exporting JSON. A configured `UNIMONITOR_POSTURE_SNAPSHOT` still wins; the API now
+  reports which source it used.
+- Per-provider evidence coverage on `/grc/frameworks/{id}/evidence-coverage`
+  (`by_provider`, `measured_providers`, `missing_providers`), shown on the framework page.
+- A requirement/level catalogue for every framework (`unimonitor/grc/requirements.py`):
+  CPCSC keeps its official 98, NIS2 and DORA their named measures, everything else a
+  requirement view derived from existing control references or one control per
+  requirement — labelled by source and filterable by level.
+- Graph resilience: an outage (timeout, 5xx, connection error) is answered from the last
+  successful response, marked `stale`, instead of leaving collectors empty; a revoked
+  permission (401/403) is still a hard failure so stale data cannot hide it.
+- Diagnostics bundle (`GET /settings/diagnostics`) and its Settings panel: versions,
+  counts, collector catalogue and redacted configuration as a zip.
+- Tenant lifecycle controls on the Managed Tenants page: add, suspend/activate, remove.
+- Findings workspace: saved views and bulk acknowledge/resolve across selected rows.
+- Monkey365-shaped collector additions: AWS EC2 metadata options/public IP/volume
+  encryption, EBS default encryption and RDS exposure; GCP compute instances with
+  external IPs and shielded-VM state; Workspace users without 2SV and group settings.
 - Vault master-key rotation with retained previous keys, and `migrate_secrets()` to
   copy secrets (with tags) to another provider when changing backends.
 - Framework registry test and a composite findings index (migration 009).

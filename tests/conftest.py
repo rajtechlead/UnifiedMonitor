@@ -20,6 +20,8 @@ os.environ.setdefault("UNIMONITOR_SECRET_KEY", "test-secret-key-for-testing-only
 os.environ.setdefault("UNIMONITOR_ENV", "test")  # avoids production secret-key validation
 os.environ.setdefault("ENVIRONMENT", "testing")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
+# Assessment runs must not write posture inventories into the repository during tests.
+os.environ.setdefault("POSTURE_AUTO_INVENTORY", "false")
 
 import unimonitor.db.base as _db_base  # patched below to redirect async_session_factory
 import unimonitor.db.models  # noqa: F401 — registers all ORM models with Base.metadata

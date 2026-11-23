@@ -59,15 +59,28 @@ async def get_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
     platform: Annotated[str | None, Query(description="CIS pack to evaluate, e.g. aws")] = None,
 ) -> dict[str, Any]:
-    """Analyse the snapshot configured in ``UNIMONITOR_POSTURE_SNAPSHOT``."""
+    """Analyse the configured snapshot, or the inventory the last run assembled.
+
+    A configured ``UNIMONITOR_POSTURE_SNAPSHOT`` wins; otherwise the inventory
+    written automatically after the most recent collection is used, so the engines
+    run without an operator exporting anything.
+    """
     snapshot = load_snapshot()
+    source = "configured"
+    if not snapshot:
+        from unimonitor.posture.assemble import load_inventory
+
+        snapshot = load_inventory() or {}
+        source = "collected"
     if not snapshot:
         raise HTTPException(
             status_code=404,
-            detail="No posture snapshot is configured. Set UNIMONITOR_POSTURE_SNAPSHOT in Settings and upload an inventory.",
+            detail="No posture inventory is available yet. Run a collection, or set UNIMONITOR_POSTURE_SNAPSHOT in Settings.",
         )
     result = _analyse(platform, snapshot)
-    logger.info("posture_analysis", platform=platform, findings=len(result["findings"]), by=current_user.id)
+    result["source"] = source
+    result["resources"] = len(snapshot.get("resources", [])) if isinstance(snapshot.get("resources"), list) else 0
+    logger.info("posture_analysis", platform=platform, findings=len(result["findings"]), source=source, by=current_user.id)
     return result
 
 

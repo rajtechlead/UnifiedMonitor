@@ -1,3 +1,31 @@
+## 2026-11-23 — provider hardening, automatic posture, requirements, resilience
+
+- ✅ Custom AI provider `base_url` refuses cloud metadata and link-local targets, and
+  plain `http://` only for a loopback gateway. Malformed stored entries are skipped
+  rather than 500ing Settings.
+- ✅ #5 automatic posture inventory: `posture.assemble` builds the normalised inventory
+  from collected AWS/GCP/Workspace/Microsoft data; each assessment run writes it
+  atomically (per tenant plus `latest.json`), and `/posture/analysis` falls back to it
+  and reports its source. `POSTURE_AUTO_INVENTORY` / `POSTURE_AUTO_INVENTORY_PATH`
+  control it.
+- ✅ #8 per-provider coverage: `/grc/frameworks/{id}/evidence-coverage` returns
+  `by_provider` with measured and missing providers, rendered on the framework page.
+- ✅ #10 requirement/level model: `grc.requirements` gives every framework a catalogue
+  (official / mapped / derived / per-control) with levels, and the auditor portal now
+  offers every framework with a level filter and an honest source label.
+- ✅ #11 Graph resilience: last-good responses answer outages (marked stale); consent
+  failures stay hard errors. `GraphResponse.stale` and `classify_error()` describe which.
+- ✅ #12 tenant lifecycle UI (add/suspend/activate/remove on Managed Tenants).
+- ✅ #13 findings workspace (saved views and bulk acknowledge/resolve).
+- ✅ #14 diagnostics bundle endpoint + Settings download, credentials redacted.
+- ✅ Monkey365-equivalent collector additions for AWS (EC2 IMDS/public IP/EBS, RDS),
+  GCP (compute instances, shielded VM) and Workspace (users without 2SV, group
+  external members). All remain best-effort and are exercised against fake payloads only.
+- Verification: full suite **919 passed** (was 893 + new tests), ruff/format/mypy clean;
+  frontend `tsc --noEmit`, `eslint --max-warnings 0` and `npm run build` clean.
+- Still open: #11 live verification against a real tenant, weekly/monthly collector
+  cadence for the new keys, controls that consume them, and the Windows installer block.
+
 ## 2026-11-22 (sixth) — rotation, registry test, findings index, Sonar
 
 - ✅ Vault master-key rotation (`MultiFernet`, previous key retained) and provider

@@ -214,10 +214,69 @@ def _aws_governance_snapshot(session: Any) -> dict[str, Any]:
     return data
 
 
+def _aws_compute_snapshot(session: Any) -> dict[str, Any]:
+    """EC2 instances, EBS default encryption and RDS exposure.
+
+    The Monkey365 EC2/RDS checks that were missing: instance metadata options
+    (IMDSv2), a public IP, unencrypted volumes and a publicly reachable database.
+    """
+    data: dict[str, Any] = {}
+
+    try:
+        ec2 = session.client("ec2")
+        instances = []
+        for reservation in ec2.describe_instances().get("Reservations", []):
+            for instance in reservation.get("Instances", []):
+                options = instance.get("MetadataOptions") if isinstance(instance.get("MetadataOptions"), dict) else {}
+                instances.append(
+                    {
+                        "InstanceId": instance.get("InstanceId", ""),
+                        "State": (instance.get("State") or {}).get("Name", ""),
+                        "PublicIpAddress": instance.get("PublicIpAddress", ""),
+                        "HttpTokens": options.get("HttpTokens", "optional"),
+                        "HttpEndpoint": options.get("HttpEndpoint", "enabled"),
+                        "VolumesEncrypted": all(
+                            (mapping.get("Ebs") or {}).get("Encrypted", False) for mapping in instance.get("BlockDeviceMappings", [])
+                        ),
+                    }
+                )
+        data["aws_ec2_instances"] = instances
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS EC2 instances failed", error=str(exc))
+
+    try:
+        data["aws_ebs_encryption_default"] = bool(session.client("ec2").get_ebs_encryption_by_default().get("EbsEncryptionByDefault", False))
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS EBS default encryption failed", error=str(exc))
+
+    try:
+        rds = session.client("rds")
+        data["aws_rds_instances"] = [
+            {
+                "DBInstanceIdentifier": instance.get("DBInstanceIdentifier", ""),
+                "PubliclyAccessible": bool(instance.get("PubliclyAccessible", False)),
+                "StorageEncrypted": bool(instance.get("StorageEncrypted", False)),
+                "BackupRetentionPeriod": instance.get("BackupRetentionPeriod", 0),
+            }
+            for instance in rds.describe_db_instances().get("DBInstances", [])
+        ]
+    except Exception as exc:  # noqa: BLE001
+        logger.debug("AWS RDS failed", error=str(exc))
+
+    return data
+
+
 def _aws_snapshot(session: Any) -> dict[str, Any]:
     """Blocking boto3 calls; runs in a worker thread."""
     data: dict[str, Any] = {}
-    for section in (_aws_iam_snapshot, _aws_storage_snapshot, _aws_audit_snapshot, _aws_network_snapshot, _aws_governance_snapshot):
+    for section in (
+        _aws_iam_snapshot,
+        _aws_storage_snapshot,
+        _aws_audit_snapshot,
+        _aws_network_snapshot,
+        _aws_governance_snapshot,
+        _aws_compute_snapshot,
+    ):
         data.update(section(session))
     return data
 
@@ -356,6 +415,40 @@ async def _gcp_logging(client: httpx.AsyncClient, project_id: str, token: str) -
     return data
 
 
+async def _gcp_compute(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
+    """Compute instances with their external addresses and shielded-VM state."""
+    data: dict[str, Any] = {}
+
+    instances_payload = await _rest(client, f"{GCP_COMPUTE}/projects/{project_id}/aggregated/instances", token)
+    instances = []
+    zone_payload = instances_payload.get("items")
+    zones: dict[str, Any] = zone_payload if isinstance(zone_payload, dict) else {}
+    for zone in zones.values():
+        for instance in (zone or {}).get("instances", []):
+            external_ips = [
+                config.get("natIP", "")
+                for interface in instance.get("networkInterfaces", [])
+                for config in interface.get("accessConfigs", [])
+                if config.get("natIP")
+            ]
+            shielded = instance.get("shieldedInstanceConfig") if isinstance(instance.get("shieldedInstanceConfig"), dict) else {}
+            instances.append(
+                {
+                    "name": instance.get("name", ""),
+                    "status": instance.get("status", ""),
+                    "externalIps": external_ips,
+                    "shieldedVm": bool(shielded.get("enableSecureBoot") and shielded.get("enableVtpm")),
+                    "serviceAccounts": [
+                        {"email": account.get("email", ""), "scopes": account.get("scopes", [])} for account in instance.get("serviceAccounts", [])
+                    ],
+                }
+            )
+    if instances:
+        data["gcp_instances"] = instances
+
+    return data
+
+
 async def _gcp_storage(client: httpx.AsyncClient, project_id: str, token: str) -> dict[str, Any]:
     """Storage buckets and KMS keys."""
     data: dict[str, Any] = {}
@@ -422,7 +515,7 @@ async def collect_gcp(
     client = client or httpx.AsyncClient(timeout=20)
 
     try:
-        for section in (_gcp_identity, _gcp_network, _gcp_logging, _gcp_storage, _gcp_zero_trust):
+        for section in (_gcp_identity, _gcp_network, _gcp_logging, _gcp_storage, _gcp_compute, _gcp_zero_trust):
             data.update(await section(client, project_id, token))
     finally:
         if owns_client:
@@ -464,6 +557,13 @@ async def collect_google_workspace(
             data["gws_super_admins"] = [
                 {"email": u.get("primaryEmail", "")} for u in user_rows if u.get("isAdmin") is True and u.get("isDelegatedAdmin") is False
             ]
+            # Monkey365's per-user 2SV check: who is not enrolled, not just the
+            # tenant-wide percentage.
+            data["gws_users_without_2sv"] = [
+                {"email": u.get("primaryEmail", ""), "isAdmin": bool(u.get("isAdmin"))}
+                for u in user_rows
+                if u.get("isEnrolledIn2Sv") is not True and u.get("suspended") is not True
+            ]
 
         roles = await _rest(client, f"{GWS_ADMIN}/directory/v1/customer/{customer}/roles", token)
         if roles:
@@ -490,6 +590,18 @@ async def collect_google_workspace(
                 "allowExternalSharing": drive_settings.get("externalSharingAllowed", False),
                 "allowAnyone": drive_settings.get("allowAnyOneAccess", False),
             }
+
+        groups = await _rest(client, f"{GWS_ADMIN}/directory/v1/groups", token, {"customer": customer, "maxResults": 200})
+        if groups.get("groups") is not None:
+            data["gws_groups"] = [
+                {
+                    "email": group.get("email", ""),
+                    "name": group.get("name", ""),
+                    "directMembersCount": group.get("directMembersCount", "0"),
+                    "allowExternalMembers": str(group.get("allowExternalMembers", "false")).lower() == "true",
+                }
+                for group in groups.get("groups", [])
+            ]
 
         gmail = await _rest(client, f"{GWS_ADMIN}/directory/v1/customer/{customer}/devices/mobile", token)
         if gmail:

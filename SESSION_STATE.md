@@ -2,7 +2,17 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-22 UTC
+Last Updated: 2026-11-23 UTC
+
+### Session 2026-11-23 — hardening, posture, requirements, resilience
+
+- Custom AI providers: metadata/link-local targets and non-loopback plain HTTP are
+  rejected; malformed `settings_json` entries are skipped, not fatal.
+- Automatic posture inventory from every collection run, per-provider evidence coverage,
+  a requirement/level catalogue for all frameworks, Graph last-good resilience, the
+  diagnostics bundle, tenant lifecycle UI, findings workspace and extra AWS/GCP/Workspace
+  collectors.
+- Suite: 919 passed; ruff/format/mypy, tsc, eslint and `npm run build` clean.
 
 ## Current Session Commits (2026-11-18)
 
@@ -14,8 +24,8 @@ Last Updated: 2026-11-22 UTC
   prompts and automatic failover (Freebuff/Groq/OpenAI/Anthropic/Azure OpenAI).
 - Generic OIDC sign-in for Microsoft, Google Workspace and Okta; first-time SSO
   accounts now get a tenant (the NOT NULL column was never set).
-- `docs/MONKEY365_COMPARISON.md`: analysis and a sequenced multi-cloud plan — the
-  AWS/GCP/Google Workspace collectors are NOT implemented.
+- `docs/MONKEY365_COMPARISON.md`: analysis and a sequenced multi-cloud plan. The
+  AWS/GCP/Google Workspace collectors were added later (see the 2026-11-23 entry).
 
 ### Session 2026-11-22 (third) — notifications, manual runs, contract tests
 

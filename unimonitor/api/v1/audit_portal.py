@@ -25,6 +25,9 @@ class RequirementRow(BaseModel):
     family: str
     family_code: str
     level: int
+    level_name: str = ""
+    source: str = "official"
+    controls: list[str] = []
     controls_total: int
     implemented: int
     partial: int
@@ -37,6 +40,8 @@ class RequirementRow(BaseModel):
 class RequirementCatalogue(BaseModel):
     framework_id: str
     framework_name: str
+    catalogue: str = "official"
+    levels: list[dict[str, Any]] = []
     requirement_count: int
     level1_count: int
     rows: list[RequirementRow]
@@ -49,16 +54,19 @@ def _control_state(finding: Any) -> str:
     return finding.state
 
 
-@router.get("/frameworks/{framework_id}/requirements", responses={404: {"description": "Not found"}})
+@router.get("/frameworks/{framework_id}/requirements", responses={401: {"description": "Not authenticated"}, 404: {"description": "Not found"}})
 async def framework_requirements(
     framework_id: str,
     current_user: Annotated[Any, Depends(require_compliance())],
     tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
+    level: Annotated[int | None, Query(ge=1, le=10, description="Only requirements at this level")] = None,
 ) -> RequirementCatalogue:
-    """Per-requirement status for a framework with a requirement catalogue.
+    """Per-requirement status for any framework, optionally filtered by level.
 
-    Today that is CPCSC (98 ITSP.10.171 requirements). Other frameworks have
-    control-level mappings only, and say so rather than inventing requirement ids.
+    CPCSC uses its official 98-requirement catalogue; NIS2 and DORA use their named
+    measures; every other framework derives one requirement per reference its
+    controls already map to. ``catalogue`` says which of the three the caller got,
+    so a derived grouping is never presented as an official crosswalk.
     """
     from datetime import UTC, datetime
 
@@ -67,17 +75,17 @@ async def framework_requirements(
     from unimonitor.api.v1.controls import SUPPORTED_FRAMEWORKS
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.models.finding import Finding
-    from unimonitor.grc.framework_mappings import cpcsc_requirements
     from unimonitor.grc.frameworks import get_framework
+    from unimonitor.grc.requirements import catalogue, levels_for
 
     fw_info = next((f for f in SUPPORTED_FRAMEWORKS if f["id"] == framework_id), None)
     if not fw_info:
         raise HTTPException(status_code=404, detail=f"Framework '{framework_id}' not found")
-    if framework_id != "cpcsc":
-        raise HTTPException(
-            status_code=404,
-            detail=f"Framework '{framework_id}' has no requirement catalogue; use /frameworks/{framework_id}/controls",
-        )
+
+    requirement_catalogue = catalogue(framework_id)
+    requirements = requirement_catalogue["rows"]
+    if level is not None:
+        requirements = [row for row in requirements if row["level"] == level]
 
     async with async_session_factory() as session:
         stmt = select(Finding.external_control_id, Finding.state)
@@ -86,7 +94,7 @@ async def framework_requirements(
         states = {row[0]: row[1] for row in (await session.execute(stmt)).all()}
 
     rows: list[RequirementRow] = []
-    for requirement in cpcsc_requirements():
+    for requirement in requirements:
         counts = _requirement_counts(requirement, states)
         applicable = sum(counts[key] for key in ("implemented", "partial", "not_implemented", "not_run"))
         coverage = round(((counts["implemented"] + counts["partial"] * 0.5) / applicable) * 100, 2) if applicable else 0.0
@@ -96,9 +104,12 @@ async def framework_requirements(
             RequirementRow(
                 id=requirement["id"],
                 title=requirement["title"],
-                family=requirement["family"],
-                family_code=requirement["family_code"],
+                family=requirement.get("family", ""),
+                family_code=requirement.get("family_code", ""),
                 level=requirement["level"],
+                level_name=requirement.get("level_name", ""),
+                source=requirement.get("source", "official"),
+                controls=list(requirement.get("controls", [])),
                 controls_total=len(requirement["controls"]),
                 implemented=counts["implemented"],
                 partial=counts["partial"],
@@ -113,6 +124,8 @@ async def framework_requirements(
     return RequirementCatalogue(
         framework_id=framework_id,
         framework_name=meta.name if meta else fw_info["name"],
+        catalogue=requirement_catalogue["catalogue"],
+        levels=levels_for(framework_id),
         requirement_count=len(rows),
         level1_count=sum(1 for row in rows if row.level == 1),
         rows=rows,

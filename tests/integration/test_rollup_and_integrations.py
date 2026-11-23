@@ -44,9 +44,13 @@ async def test_cpcsc_requirement_catalogue_covers_all_98(client: AsyncClient, au
     assert {row["id"] for row in body["rows"] if row["level"] == 1} == set(CPCSC_LEVEL1)
     assert len(cpcsc_requirements()) == 98
 
-    # A framework without a requirement catalogue says so instead of inventing ids.
+    # Every framework now has a requirement view; a derived one labels itself so it
+    # is never mistaken for an official crosswalk.
     other = await client.get("/api/v1/grc/frameworks/iso27001-2022/requirements", headers=auth_headers)
-    assert other.status_code == 404
+    assert other.status_code == 200
+    derived = other.json()
+    assert derived["catalogue"] == "derived"
+    assert derived["requirement_count"] == len(derived["rows"]) > 0
 
 
 @pytest.mark.asyncio

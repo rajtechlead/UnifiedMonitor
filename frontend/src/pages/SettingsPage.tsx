@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { aiApi, api } from '../hooks/useApi'
-import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook, Sparkles } from 'lucide-react'
+import { Save, Bell, Mail, MessageSquare, Shield, Plug, Trash2, AlertTriangle, KeyRound, FileJson, Send, Webhook, Sparkles, Download } from 'lucide-react'
 import PlatformConnector, { GoogleSharedConnector, type Connection, type Platform } from '../components/PlatformConnector'
 import BrandingPanel from '../components/BrandingPanel'
 import DelegatedAccessPanel from '../components/DelegatedAccessPanel'
@@ -21,6 +21,48 @@ type NotificationSettings = {
   daily_digest: boolean
   weekly_digest: boolean
   alert_severity_threshold: string
+}
+
+function DiagnosticsPanel() {
+  const [message, setMessage] = useState('')
+
+  const download = async () => {
+    setMessage('')
+    try {
+      const response = await api.get('/settings/diagnostics', { responseType: 'blob' })
+      const url = URL.createObjectURL(response.data as Blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'unimonitor-diagnostics.zip'
+      link.click()
+      URL.revokeObjectURL(url)
+      setMessage('Bundle downloaded. Credential-shaped settings are redacted.')
+    } catch {
+      setMessage('Only an administrator can download the diagnostics bundle.')
+    }
+  }
+
+  return (
+    <Section icon={Download} title="Diagnostics bundle">
+      <p style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+        Versions, tenant and finding counts, the collector catalogue and redacted configuration,
+        packaged as a zip for a support case. No finding text, user detail or credential value is included.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <button
+          type="button"
+          onClick={() => void download()}
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', fontSize: 13,
+            background: 'var(--color-brand)', color: 'white', border: 'none', borderRadius: 8, cursor: 'pointer',
+          }}
+        >
+          <Download size={14} /> Download diagnostics
+        </button>
+        {message && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{message}</span>}
+      </div>
+    </Section>
+  )
 }
 
 function Section({ icon: Icon, title, children }: Readonly<{
@@ -634,6 +676,8 @@ export default function SettingsPage() {
       <BrandingPanel />
 
       <DelegatedAccessPanel />
+
+      <DiagnosticsPanel />
 
       {/* Tenant info */}
       {tenantData && (

@@ -16,6 +16,8 @@ type RequirementRow = {
   title: string
   family: string
   level: number
+  level_name: string
+  source: string
   controls_total: number
   implemented: number
   partial: number
@@ -27,6 +29,8 @@ type RequirementRow = {
 type RequirementCatalogue = {
   framework_id: string
   framework_name: string
+  catalogue: string
+  levels: { level: number; name: string }[]
   requirement_count: number
   level1_count: number
   rows: RequirementRow[]
@@ -48,7 +52,7 @@ const statusColor = (status: string) => {
 
 export default function AuditorPage() {
   const [frameworkId, setFrameworkId] = useState('cpcsc')
-  const [level1Only, setLevel1Only] = useState(false)
+  const [level, setLevel] = useState(0)
   const [downloading, setDownloading] = useState(false)
   const [message, setMessage] = useState('')
 
@@ -57,11 +61,12 @@ export default function AuditorPage() {
     queryFn: grcApi.frameworks,
   })
 
-  const supportsRequirements = frameworkId === 'cpcsc'
   const { data: catalogue, isError: catalogueError } = useQuery<RequirementCatalogue>({
-    queryKey: ['grc', 'requirements', frameworkId],
-    queryFn: () => api.get(`/grc/frameworks/${frameworkId}/requirements`).then((r) => r.data),
-    enabled: supportsRequirements,
+    queryKey: ['grc', 'requirements', frameworkId, level],
+    queryFn: () =>
+      api
+        .get(`/grc/frameworks/${frameworkId}/requirements`, { params: level ? { level } : undefined })
+        .then((r) => r.data),
   })
 
   const download = async () => {
@@ -83,7 +88,7 @@ export default function AuditorPage() {
     }
   }
 
-  const rows = (catalogue?.rows ?? []).filter((row) => !level1Only || row.level === 1)
+  const rows = catalogue?.rows ?? []
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
@@ -131,7 +136,7 @@ export default function AuditorPage() {
         {message && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{message}</span>}
       </div>
 
-      {supportsRequirements ? (
+      {(
         <div style={{ ...cardStyle, padding: 0, overflow: 'hidden' }}>
           <div style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -143,10 +148,32 @@ export default function AuditorPage() {
                 {catalogue ? `${catalogue.requirement_count} requirements · ${catalogue.level1_count} at Level 1` : 'Requirement status'}
               </span>
             </div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer' }}>
-              <input type="checkbox" checked={level1Only} onChange={(e) => setLevel1Only(e.target.checked)} />{' '}
-              Level 1 only
-            </label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              {catalogue && (
+                <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
+                  {catalogue.catalogue === 'official'
+                    ? 'Official requirement catalogue'
+                    : catalogue.catalogue === 'mapping'
+                      ? 'Mapped measures'
+                      : 'Requirement view derived from control mappings'}
+                </span>
+              )}
+              <select
+                aria-label="Filter by level"
+                value={level}
+                onChange={(e) => setLevel(Number(e.target.value))}
+                style={{
+                  padding: '6px 10px', fontSize: 12, borderRadius: 6,
+                  border: '1px solid var(--color-border)', background: 'var(--color-surface-2)',
+                  color: 'var(--color-text)', cursor: 'pointer',
+                }}
+              >
+                <option value={0}>All levels</option>
+                {(catalogue?.levels ?? []).map((item) => (
+                  <option key={item.level} value={item.level}>{item.name}</option>
+                ))}
+              </select>
+            </div>
           </div>
           {catalogueError && (
             <p style={{ padding: 20, fontSize: 13, color: 'var(--color-text-muted)' }}>
@@ -171,7 +198,7 @@ export default function AuditorPage() {
                     <div style={{ fontWeight: 500 }}>{row.title}</div>
                   </td>
                   <td style={{ padding: '10px 16px', color: 'var(--color-text-muted)' }}>{row.family}</td>
-                  <td style={{ padding: '10px 16px' }}>{row.level}</td>
+                  <td style={{ padding: '10px 16px' }}>{row.level_name || row.level}</td>
                   <td style={{ padding: '10px 16px', color: statusColor(row.status), fontWeight: 600 }}>
                     {Math.round(row.coverage_pct)}%
                     <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: 'var(--color-text-muted)' }}>
@@ -185,10 +212,6 @@ export default function AuditorPage() {
               ))}
             </tbody>
           </table>
-        </div>
-      ) : (
-        <div style={{ ...cardStyle, fontSize: 13, color: 'var(--color-text-muted)' }}>
-          This framework has control-level evidence only; the evidence package above still covers every mapped control.
         </div>
       )}
     </div>

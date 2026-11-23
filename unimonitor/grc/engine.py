@@ -85,6 +85,11 @@ class AssessmentEngine:
             collected_data = await collector_registry.collect_all(collector_names)
             logger.info("Data collected", extra={"collectors": len(collected_data), "run_id": run.id})
 
+            # 2b. Turn the collected evidence into a posture inventory so the CIS,
+            # DSPM, CIEM, AI-SPM and attack-path engines run automatically. A
+            # write failure is logged and never fails the assessment.
+            self._write_posture_inventory(collected_data)
+
             # 3. Evaluate controls
             findings: list[Finding] = []
             evaluated = 0
@@ -147,6 +152,15 @@ class AssessmentEngine:
             run.completed_at = datetime.now(UTC)
             await self.db.commit()
             raise
+
+    def _write_posture_inventory(self, collected_data: dict[str, Any]) -> None:
+        """Assemble and persist the automatic posture inventory for this tenant."""
+        from unimonitor.posture.assemble import assemble, write_inventory
+
+        try:
+            write_inventory(assemble(collected_data), self.tenant_id)
+        except Exception as exc:  # noqa: BLE001 — posture is supplementary to the run
+            logger.warning("Posture inventory assembly failed", extra={"tenant_id": self.tenant_id, "error": str(exc)})
 
     async def _record_snapshots(self, findings: list[Finding], run_id: str) -> None:
         """Write the per-control history and prune it in one transaction.
