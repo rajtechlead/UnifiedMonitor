@@ -17,6 +17,7 @@ from typing import Any
 
 from unimonitor.core.logging import get_logger
 from unimonitor.graph.client import GraphClient
+from unimonitor.graph.staleness import mark_stale
 
 logger = get_logger(__name__)
 
@@ -24,12 +25,26 @@ logger = get_logger(__name__)
 # ── helpers ────────────────────────────────────────────────────────────────
 
 
-async def _get_list(gc: GraphClient, endpoint: str, params: dict | None = None) -> list[dict]:
+def _note_stale(resp: Any, keys: tuple[str, ...], stale: set[str] | None) -> None:
+    """Record the data keys a last-good response is about to fill."""
+    if stale is not None and getattr(resp, "stale", False):
+        stale.update(key for key in keys if key)
+
+
+async def _get_list(
+    gc: GraphClient,
+    endpoint: str,
+    params: dict | None = None,
+    *,
+    keys: tuple[str, ...] = (),
+    stale: set[str] | None = None,
+) -> list[dict]:
     """Return the ``value`` array of a Graph collection, or [] on any failure."""
     try:
         resp = await gc.get(endpoint, params=params) if params else await gc.get(endpoint)
         if not resp.usable:
             return []
+        _note_stale(resp, keys, stale)
         if isinstance(resp.data, list):
             return resp.data
         return list(resp.data.get("value", []) or []) if isinstance(resp.data, dict) else []
@@ -38,10 +53,19 @@ async def _get_list(gc: GraphClient, endpoint: str, params: dict | None = None) 
         return []
 
 
-async def _get_obj(gc: GraphClient, endpoint: str) -> dict:
+async def _get_obj(
+    gc: GraphClient,
+    endpoint: str,
+    *,
+    keys: tuple[str, ...] = (),
+    stale: set[str] | None = None,
+) -> dict:
     try:
         resp = await gc.get(endpoint)
-        return resp.data if resp.usable and isinstance(resp.data, dict) else {}
+        if not resp.usable or not isinstance(resp.data, dict):
+            return {}
+        _note_stale(resp, keys, stale)
+        return resp.data
     except Exception as exc:  # noqa: BLE001
         logger.debug("Graph object skipped", endpoint=endpoint, error=str(exc))
         return {}
@@ -65,8 +89,9 @@ def _score_ratio(rows: list[dict], *needles: str) -> tuple[bool, float]:
     return matched, round(best, 3)
 
 
-async def _score_rows(gc: GraphClient) -> list[dict]:
-    return await _get_list(gc, "/security/secureScoreControlProfiles", {"$top": "300"})
+async def _score_rows(gc: GraphClient, stale: set[str] | None = None) -> list[dict]:
+    """Secure Score control profiles; every key derived from them is stale when they are."""
+    return await _get_list(gc, "/security/secureScoreControlProfiles", {"$top": "300"}, stale=stale)
 
 
 # ── Intune ─────────────────────────────────────────────────────────────────
@@ -75,31 +100,48 @@ async def _score_rows(gc: GraphClient) -> list[dict]:
 async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
     """Security baselines, device count, app inventory and app control."""
     data: dict[str, Any] = {}
+    stale: set[str] = set()
 
     intents = await _get_list(
         gc,
         "/deviceManagement/intents",
         {"$expand": "assignments", "$filter": "isTemplate eq false", "$top": "100"},
+        keys=("intune_security_baselines",),
+        stale=stale,
     )
     if intents:
         data["intune_security_baselines"] = [_baseline_row(intent) for intent in intents]
 
-    overview = await _get_obj(gc, "/deviceManagement/managedDeviceOverview")
+    overview = await _get_obj(gc, "/deviceManagement/managedDeviceOverview", keys=("intune_managed_device_count",), stale=stale)
     if overview:
         data["intune_managed_device_count"] = overview.get("managedDeviceCount", 0)
 
-    configs = await _get_list(gc, "/deviceManagement/deviceConfigurations", {"$top": "100"})
+    configs = await _get_list(
+        gc,
+        "/deviceManagement/deviceConfigurations",
+        {"$top": "100"},
+        keys=("intune_device_configurations", "intune_windows_laps_policies"),
+        stale=stale,
+    )
     if configs:
         data["intune_device_configurations"] = configs
         laps = [c for c in configs if "laps" in str(c.get("displayName", "")).lower()]
         if laps:
             data["intune_windows_laps_policies"] = laps
 
-    app_control = _app_control_policies(await _get_list(gc, "/deviceManagement/configurationPolicies", {"$top": "100"}))
+    app_control = _app_control_policies(
+        await _get_list(gc, "/deviceManagement/configurationPolicies", {"$top": "100"}, keys=("intune_app_control_policies",), stale=stale)
+    )
     if app_control:
         data["intune_app_control_policies"] = app_control
 
-    apps = await _get_list(gc, "/deviceManagement/detectedApps", {"$top": "200"})
+    apps = await _get_list(
+        gc,
+        "/deviceManagement/detectedApps",
+        {"$top": "200"},
+        keys=("intune_detected_apps", "intune_app_inventory_coverage_pct"),
+        stale=stale,
+    )
     if apps:
         data["intune_detected_apps"] = _detected_apps(apps)
         managed = data.get("intune_managed_device_count") or 0
@@ -107,7 +149,7 @@ async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
         if managed and reporting:
             data["intune_app_inventory_coverage_pct"] = round(min(100.0, len(reporting) / managed * 100), 1)
 
-    return data
+    return mark_stale(data, stale)
 
 
 # ── Defender for Office ────────────────────────────────────────────────────
@@ -115,7 +157,8 @@ async def collect_intune_extended(gc: GraphClient) -> dict[str, Any]:
 
 async def collect_defender_office(gc: GraphClient) -> dict[str, Any]:
     """Office protection posture derived from matching Secure Score controls."""
-    rows = await _score_rows(gc)
+    stale: set[str] = set()
+    rows = await _score_rows(gc, stale)
     if not rows:
         return {}
     data: dict[str, Any] = {}
@@ -165,6 +208,9 @@ async def collect_defender_office(gc: GraphClient) -> dict[str, Any]:
     if found:
         data["air_settings"] = {"isEnabled": ratio >= 1.0}
 
+    if stale:
+        # Every key here is derived from the same Secure Score rows.
+        mark_stale(data, tuple(data))
     return data
 
 
@@ -174,12 +220,13 @@ async def collect_defender_office(gc: GraphClient) -> dict[str, Any]:
 async def collect_defender_identity(gc: GraphClient) -> dict[str, Any]:
     """MDI sensors, honeytokens, sensitive accounts and health issues."""
     data: dict[str, Any] = {}
+    stale: set[str] = set()
 
-    health = await _get_list(gc, "/security/identitySecurities/healthIssues", {"$top": "100"})
+    health = await _get_list(gc, "/security/identitySecurities/healthIssues", {"$top": "100"}, keys=("mdi_health_issues",), stale=stale)
     if health:
         data["mdi_health_issues"] = health
 
-    sensors = await _get_list(gc, "/security/identitySecurities/sensors", {"$top": "100"})
+    sensors = await _get_list(gc, "/security/identitySecurities/sensors", {"$top": "100"}, keys=("mdi_sensors",), stale=stale)
     if sensors:
         data["mdi_sensors"] = [
             {
@@ -190,22 +237,27 @@ async def collect_defender_identity(gc: GraphClient) -> dict[str, Any]:
             for s in sensors
         ]
 
-    honeytokens = await _get_list(gc, "/security/identitySecurities/honeytokenAccounts", {"$top": "50"})
+    honeytokens = await _get_list(gc, "/security/identitySecurities/honeytokenAccounts", {"$top": "50"}, keys=("mdi_honeytokens",), stale=stale)
     if honeytokens:
         data["mdi_honeytokens"] = honeytokens
 
-    sensitive = await _get_list(gc, "/security/identitySecurities/sensitiveAccounts", {"$top": "100"})
+    sensitive = await _get_list(gc, "/security/identitySecurities/sensitiveAccounts", {"$top": "100"}, keys=("mdi_sensitive_accounts",), stale=stale)
     if sensitive:
         data["mdi_sensitive_accounts"] = sensitive
 
-    settings = await _get_obj(gc, "/security/identitySecurities/settings")
+    settings = await _get_obj(
+        gc,
+        "/security/identitySecurities/settings",
+        keys=("mdi_integration", "mdi_mean_time_to_acknowledge_hours"),
+        stale=stale,
+    )
     if settings:
         data["mdi_integration"] = {"xdrIntegrationEnabled": bool(settings.get("xdrIntegrationEnabled", True))}
         mtta = settings.get("meanTimeToAcknowledgeHours")
         if mtta is not None:
             data["mdi_mean_time_to_acknowledge_hours"] = mtta
 
-    return data
+    return mark_stale(data, stale)
 
 
 # ── Defender for Cloud Apps ────────────────────────────────────────────────
@@ -219,12 +271,14 @@ def _high_privilege(scopes: str) -> bool:
 async def collect_cloud_apps(gc: GraphClient) -> dict[str, Any]:
     """OAuth consent grants are real Graph data; MDCA policy posture comes from Secure Score."""
     data: dict[str, Any] = {}
+    grant_stale: set[str] = set()
+    score_stale: set[str] = set()
 
-    grants = await _get_list(gc, "/oauth2PermissionGrants", {"$top": "300"})
+    grants = await _get_list(gc, "/oauth2PermissionGrants", {"$top": "300"}, keys=("oauth_apps",), stale=grant_stale)
     if grants:
         data["oauth_apps"] = [_oauth_app(grant) for grant in grants]
 
-    rows = await _score_rows(gc)
+    rows = await _score_rows(gc, score_stale)
     if rows:
         data.update(_cloud_app_score_sections(rows))
 
@@ -236,6 +290,10 @@ async def collect_cloud_apps(gc: GraphClient) -> dict[str, Any]:
     if found:
         data["mcas_file_policies"] = [{"displayName": "Secure Score: file policies", "state": "enabled" if ratio >= 1.0 else "off"}]
 
+    mark_stale(data, grant_stale)
+    if score_stale:
+        # Everything but the consent grants is derived from the Secure Score rows.
+        mark_stale(data, tuple(key for key in data if key != "oauth_apps"))
     return data
 
 
@@ -244,7 +302,8 @@ async def collect_cloud_apps(gc: GraphClient) -> dict[str, Any]:
 
 async def collect_insider_risk(gc: GraphClient) -> dict[str, Any]:
     """Insider Risk posture from Secure Score; audit availability from the tenant."""
-    rows = await _score_rows(gc)
+    stale: set[str] = set()
+    rows = await _score_rows(gc, stale)
     if not rows:
         return {}
     data: dict[str, Any] = {}
@@ -267,6 +326,8 @@ async def collect_insider_risk(gc: GraphClient) -> dict[str, Any]:
     data["insider_risk_priority_assets"] = ["priorityAssets"] if enabled else []
     data["insider_risk_privacy_settings"] = {"anonymizeUsers": enabled}
     data["insider_risk_adaptive_protection"] = {"enabled": enabled, "appliedToDlp": enabled}
+    if stale:
+        mark_stale(data, tuple(data))
     return data
 
 
@@ -276,8 +337,9 @@ async def collect_insider_risk(gc: GraphClient) -> dict[str, Any]:
 async def collect_ediscovery(gc: GraphClient) -> dict[str, Any]:
     """eDiscovery cases and role-group membership are real Graph data."""
     data: dict[str, Any] = {}
+    stale: set[str] = set()
 
-    cases = await _get_list(gc, "/security/cases/ediscoveryCases", {"$top": "50"})
+    cases = await _get_list(gc, "/security/cases/ediscoveryCases", {"$top": "50"}, keys=("ediscovery_cases",), stale=stale)
     if cases:
         data["ediscovery_cases"] = [
             {
@@ -290,7 +352,7 @@ async def collect_ediscovery(gc: GraphClient) -> dict[str, Any]:
             for c in cases
         ]
 
-    roles = await _get_list(gc, "/directoryRoles", {"$expand": "members", "$top": "100"})
+    roles = await _get_list(gc, "/directoryRoles", {"$expand": "members", "$top": "100"}, keys=("ediscovery_role_groups",), stale=stale)
     if roles:
         groups = [
             {"displayName": r.get("displayName", ""), "members": r.get("members", [])}
@@ -300,7 +362,7 @@ async def collect_ediscovery(gc: GraphClient) -> dict[str, Any]:
         if groups:
             data["ediscovery_role_groups"] = groups
 
-    return data
+    return mark_stale(data, stale)
 
 
 # ── Copilot Studio ─────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Activity, AlertTriangle } from 'lucide-react'
-import { monitoringApi } from '../hooks/useApi'
+import { errorDetail, monitoringApi } from '../hooks/useApi'
 
 type Service = { service: string; status: string }
 type Issue = {
@@ -42,7 +42,9 @@ export default function ServiceHealthPage() {
     return (
       <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
         Service health is unavailable. The Microsoft app needs <code>ServiceHealth.Read.All</code> and admin consent.
-        <div style={{ fontSize: 11, marginTop: 6 }}>{String((error as Error)?.message || '')}</div>
+        <div style={{ fontSize: 11, marginTop: 6 }}>
+          {errorDetail(error, (error as Error)?.message || 'The request failed.')}
+        </div>
       </div>
     )
   }

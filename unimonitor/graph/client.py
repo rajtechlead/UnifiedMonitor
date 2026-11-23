@@ -112,10 +112,14 @@ class GraphClient:
         client_id: str | None = None,
         client_secret: str | None = None,
         cache_ttl: int = 3600,
+        certificate_pem: str | None = None,
+        private_key_pem: str | None = None,
     ) -> None:
         self.tenant_id = tenant_id
         self.client_id = client_id
         self.client_secret = client_secret
+        self.certificate_pem = certificate_pem
+        self.private_key_pem = private_key_pem
         self.cache_ttl = cache_ttl
         settings = get_settings()
         self.base_url = settings.graph_base_url
@@ -145,6 +149,8 @@ class GraphClient:
             tenant_id=self.tenant_id,
             client_id=self.client_id,
             client_secret=self.client_secret,
+            certificate_pem=self.certificate_pem,
+            private_key_pem=self.private_key_pem,
         )
         self._token_expiry = now + 3600
         return self._token

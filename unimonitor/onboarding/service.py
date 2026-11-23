@@ -356,7 +356,7 @@ async def connect_microsoft(
     if certificate_pem:
         config["certificate_thumbprint"] = certificates.thumbprint(certificate_pem)
         config["certificate_expires_at"] = certificates.expiry(certificate_pem).replace(microsecond=0).isoformat()
-    return await upsert_connection(
+    row = await upsert_connection(
         session,
         tenant_id=tenant_id,
         provider="microsoft",
@@ -369,6 +369,10 @@ async def connect_microsoft(
             "private_key_pem": private_key_pem,
         },
     )
+    # Sign-in and the pages that call Graph straight after setup must see this app
+    # without waiting for the next process restart.
+    await _hydrate_microsoft(session, get_settings(), row, config)
+    return row
 
 
 async def verify_microsoft_connection(session: AsyncSession) -> CloudConnection:
@@ -393,6 +397,7 @@ async def verify_microsoft_connection(session: AsyncSession) -> CloudConnection:
     row.last_error = None
     row.last_checked_at = datetime.now(UTC)
     await session.flush()
+    await _hydrate_microsoft(session, get_settings(), row, config)
     logger.info("microsoft connection verified", provider="microsoft", auth=auth_method)
     return row
 
@@ -641,10 +646,8 @@ async def delete_connection(session: AsyncSession, provider: str) -> bool:
     return True
 
 
-async def _stored_secret(session: AsyncSession, provider: str, field: str) -> str:
-    row = (await session.execute(select(CloudConnection).where(CloudConnection.provider == provider))).scalars().first()
-    if row is None:
-        return ""
+async def _connection_secret(session: AsyncSession, row: CloudConnection, field: str) -> str:
+    """Resolve one stored secret for a specific connection."""
     ref = _loads(row.secret_refs).get(field)
     if not ref:
         return ""
@@ -652,6 +655,63 @@ async def _stored_secret(session: AsyncSession, provider: str, field: str) -> st
         return await (await get_secret_resolver()).get(ref)
     except KeyError:
         return ""
+
+
+async def _stored_secret(session: AsyncSession, provider: str, field: str) -> str:
+    row = (await session.execute(select(CloudConnection).where(CloudConnection.provider == provider))).scalars().first()
+    if row is None:
+        return ""
+    return await _connection_secret(session, row, field)
+
+
+async def microsoft_app(session: AsyncSession, tenant_id: str | None = None) -> dict[str, Any]:
+    """The connected Entra app, with its credential resolved from the vault.
+
+    One resolver serves sign-in and the Graph client so neither has to guess at the
+    `Tenant` row (which stores a reference, not a credential) and a certificate-based
+    connection works everywhere a client secret does.
+    """
+    settings = get_settings()
+    stmt = select(CloudConnection).where(CloudConnection.provider == "microsoft", CloudConnection.status == "connected")
+    if tenant_id:
+        stmt = stmt.where(CloudConnection.tenant_id == tenant_id)
+    row = (await session.execute(stmt.order_by(CloudConnection.created_at))).scalars().first()
+
+    if row is None:
+        return {
+            "configured": bool(settings.ENTRA_CLIENT_ID and settings.ENTRA_TENANT_ID),
+            "client_id": settings.ENTRA_CLIENT_ID,
+            "directory": settings.ENTRA_TENANT_ID,
+            "auth_method": "certificate" if settings.ENTRA_CLIENT_CERTIFICATE else "client_secret",
+            "client_secret": settings.ENTRA_CLIENT_SECRET,
+            "certificate_pem": settings.ENTRA_CLIENT_CERTIFICATE,
+            "private_key_pem": settings.ENTRA_CLIENT_PRIVATE_KEY,
+            "source": "settings",
+        }
+
+    config = _loads(row.config)
+    auth_method = config.get("auth_method", "client_secret")
+    certificate_pem = private_key_pem = ""
+    client_secret = ""
+    if auth_method == "certificate":
+        certificate_pem = await _connection_secret(session, row, "certificate_pem")
+        private_key_pem = await _connection_secret(session, row, "private_key_pem")
+    else:
+        client_secret = await _connection_secret(session, row, "client_secret")
+
+    client_id = config.get("client_id", "")
+    return {
+        "configured": bool(client_id and row.account),
+        "client_id": client_id,
+        "directory": row.account,
+        "auth_method": auth_method,
+        "client_secret": client_secret,
+        "certificate_pem": certificate_pem,
+        "private_key_pem": private_key_pem,
+        "source": "connection",
+        "connection_id": row.id,
+        "display_name": row.display_name,
+    }
 
 
 async def google_token_for(provider: str, session: AsyncSession | None = None) -> str:

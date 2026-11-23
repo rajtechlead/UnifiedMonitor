@@ -23,6 +23,7 @@ from unimonitor.db.models.assessment import AssessmentRun, AssessmentStatus
 from unimonitor.db.models.control_snapshot import ControlSnapshot
 from unimonitor.db.models.finding import Finding, FindingEvidence, FindingSeverity, FindingState
 from unimonitor.graph.collector_registry import CollectorRegistry
+from unimonitor.graph.staleness import stale_keys
 from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
 from unimonitor.grc.control_trends import prune_control_snapshots
 from unimonitor.grc.scoring import calculate_scores
@@ -215,7 +216,13 @@ class AssessmentEngine:
         # a fabricated failure (and never a pass).
         keys = sorted(expected_keys(control_def))
         missing = [key for key in keys if eval_data.get(key) in (None, "", [], {})]
-        coverage_text = json.dumps({"keys": keys, "missing": missing}) if keys else None
+        # Data answered from the last-good Graph cache during an outage is usable
+        # but not fresh; a control scored from it must say so.
+        stale = sorted(stale_keys(eval_data) & set(keys))
+        coverage: dict[str, Any] = {"keys": keys, "missing": missing}
+        if stale:
+            coverage["stale"] = stale
+        coverage_text = json.dumps(coverage) if keys else None
 
         if keys and len(missing) == len(keys):
             state = FindingState.NOT_APPLICABLE.value
@@ -263,6 +270,19 @@ class AssessmentEngine:
                     evidence_type="api_evaluation",
                     source=f"control:{control_id}",
                     content=evidence_text[:10000],
+                )
+            )
+        if stale:
+            finding.evidence.append(
+                FindingEvidence(
+                    evidence_type="stale_data",
+                    source="graph-last-good",
+                    content=json.dumps(
+                        {
+                            "stale_keys": stale,
+                            "reason": "Microsoft Graph was unavailable; these keys came from the last successful responses.",
+                        }
+                    )[:10000],
                 )
             )
 

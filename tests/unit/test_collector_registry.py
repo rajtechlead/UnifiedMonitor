@@ -71,7 +71,8 @@ class TestSafeGet:
         resp.data = {"value": ["cached"]}
         gc.get = AsyncMock(return_value=resp)
         result = _run(_safe_get(gc, "/endpoint", "myKey"))
-        assert result == {"myKey": {"value": ["cached"]}}
+        assert result == {"myKey": {"value": ["cached"]}, "_stale_keys": ["myKey"]}
+        assert result["_stale_keys"] == ["myKey"], "the collected data must carry the stale marker"
 
     def test_exception_returns_empty(self):
         from unimonitor.graph.collector_registry import _safe_get

@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import TableHead from '../components/TableHead'
 import { KeyRound } from 'lucide-react'
-import { monitoringApi } from '../hooks/useApi'
+import { errorDetail, monitoringApi } from '../hooks/useApi'
 
 type Sku = {
   sku_id: string
@@ -45,7 +45,9 @@ export default function LicensesPage() {
       <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>
         Licence posture is unavailable. Check the Microsoft connection and that the app can read{' '}
         <code>Organization.Read.All</code>.
-        <div style={{ fontSize: 11, marginTop: 6 }}>{String((error as Error)?.message || '')}</div>
+        <div style={{ fontSize: 11, marginTop: 6 }}>
+          {errorDetail(error, (error as Error)?.message || 'The request failed.')}
+        </div>
       </div>
     )
   }

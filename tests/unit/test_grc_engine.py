@@ -100,6 +100,24 @@ class TestEvidenceCoverage:
         assert finding.state == "implemented"
         coverage = next(item for item in finding.evidence if item.evidence_type == "data_coverage")
         assert '"missing": []' in coverage.content
+        assert not [item for item in finding.evidence if item.evidence_type == "stale_data"], "fresh data is not stale"
+
+    def test_a_control_scored_from_last_good_data_is_marked_stale(self):
+        """A Graph outage must not make stale evidence look like a fresh pass."""
+        engine, _ = _make_engine()
+        ctrl = _control_with_data(keys=("conditionalAccessPolicies",))
+        collected = {
+            "conditionalAccessPolicies": [{"id": "1"}],
+            "_stale_keys": ["conditionalAccessPolicies"],
+        }
+
+        finding = engine._evaluate_control(ctrl, collected, "run-001")
+
+        coverage = next(item for item in finding.evidence if item.evidence_type == "data_coverage")
+        assert '"stale": ["conditionalAccessPolicies"]' in coverage.content
+        stale = next(item for item in finding.evidence if item.evidence_type == "stale_data")
+        assert stale.source == "graph-last-good"
+        assert "conditionalAccessPolicies" in stale.content
 
 
 # ---------------------------------------------------------------------------

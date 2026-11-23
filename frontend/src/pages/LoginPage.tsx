@@ -10,20 +10,24 @@ export default function LoginPage() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(true)
+  const [ssoReason, setSsoReason] = useState('')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const setAuth = useAuthStore((s) => s.setAuth)
 
   useEffect(() => {
     api.get('/auth/sso')
-      .then((res) => setSsoEnabled(Boolean(res.data.enabled)))
+      .then((res) => {
+        setSsoEnabled(Boolean(res.data.enabled))
+        setSsoReason(typeof res.data.reason === 'string' ? res.data.reason : '')
+      })
       .catch(() => setSsoEnabled(false))
   }, [])
 
   useEffect(() => {
     const ssoError = searchParams.get('error')
     if (ssoError === 'sso_unavailable') {
-      setError('Microsoft sign-in is not configured. Connect Microsoft 365 in Settings, or sign in with your local admin account.')
+      setError('Microsoft sign-in is not configured. Connect Microsoft 365 in Settings, or sign in with your local administrator account (the break-glass account created during setup).')
     }
   }, [searchParams])
 
@@ -111,7 +115,9 @@ export default function LoginPage() {
         </button>
         {!ssoEnabled && (
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -12, marginBottom: 16, textAlign: 'center' }}>
-            Connect Microsoft 365 in Settings to enable single sign-on.
+            {ssoReason || 'Connect Microsoft 365 in Settings to enable single sign-on.'}
+            <br />
+            Your local administrator account stays available as the break-glass sign-in.
           </p>
         )}
 

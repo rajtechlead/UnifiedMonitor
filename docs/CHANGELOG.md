@@ -14,6 +14,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   caller's own tenant produced; it no longer falls back to the deployment-wide
   `latest.json`, which mixed every tenant's resources. Automatic inventories are written
   per tenant only, and nothing is written when no tenant is supplied.
+- `/posture/analysis` accepts an optional `tenant_id` resolved through the shared
+  tenant-scope dependency. Administrators and holders of a delegated `tenant_access`
+  grant may read another tenant's collected inventory; everyone else stays pinned to
+  their home tenant.
 
 ### Fixed
 
@@ -21,6 +25,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `GraphResponse.usable` is true for a fresh or a stale body, and every collector now
   checks it, so a transient Graph failure no longer empties the evidence a control
   evaluates. A 401/403 still raises instead of being masked by stale data.
+- The stale flag is carried into the collected data (`_stale_keys`) and into finding
+  evidence, so a control scored from last-good responses is visibly marked `stale`
+  instead of looking like a fresh evaluation.
 - Cleared the open Sonar findings from the 2026-11-23 scan: the nested ternaries in
   `AuditorPage` and `FrameworkPage` (S3358), the cognitive-complexity overruns in
   `custom._validate_target`, `cloud_providers.collect_google_workspace`,

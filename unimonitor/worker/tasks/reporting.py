@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Literal
 
 from celery.utils.log import get_task_logger
@@ -20,6 +21,31 @@ def _run_async(coro):
         return loop.run_until_complete(coro)
     finally:
         loop.close()
+
+
+async def run_report_now(
+    *,
+    report_id: str,
+    tenant_id: str,
+    run_id: str,
+    formats: list[ReportFormat],
+    report_type: str = "executive",
+    requested_by: str | None = None,
+) -> dict:
+    """In-process report generation for installs without a Celery broker.
+
+    `worker.inline.dispatch` calls this when the broker is unreachable, so a
+    single-process Windows install can still generate a report from the UI.
+    """
+    return await _generate_report(
+        report_id=report_id,
+        tenant_id=tenant_id,
+        run_id=run_id,
+        formats=formats,
+        report_type=report_type,
+        task_id="inline",
+        requested_by=requested_by,
+    )
 
 
 @celery_app.task(
@@ -53,6 +79,7 @@ def generate_report_task(
                 formats=formats,
                 report_type=report_type,
                 task_id=self.request.id,
+                requested_by=requested_by,
             )
         )
     except Exception as exc:
@@ -63,17 +90,33 @@ def generate_report_task(
             return {"report_id": report_id, "status": "failed", "error": str(exc)[:500]}
 
 
-async def _load_report_context(db, report_id: str, run_id: str):
-    """Load the report, its run and that run's findings, or explain what is missing."""
+async def _load_report_context(db, report_id: str, run_id: str, *, tenant_id: str | None = None, formats: list[str] | None = None, report_type: str = "executive", requested_by: str | None = None):
+    """Load the report, its run and that run's findings, creating the row if needed.
+
+    The API only knows the request, so the worker owns the row: it is created here in
+    the same transaction that stores the generated files.
+    """
     from sqlalchemy import select
 
     from unimonitor.db.models.assessment import AssessmentRun
     from unimonitor.db.models.finding import Finding
-    from unimonitor.db.models.report import Report
+    from unimonitor.db.models.report import Report, ReportStatus
 
     report = (await db.execute(select(Report).where(Report.id == report_id))).scalar_one_or_none()
-    if not report:
-        raise ValueError(f"Report {report_id} not found")
+    if report is None:
+        if not tenant_id:
+            raise ValueError(f"Report {report_id} not found")
+        report = Report(
+            id=report_id,
+            tenant_id=tenant_id,
+            assessment_run_id=run_id,
+            status=ReportStatus.PENDING.value,
+            formats=json.dumps(formats or []),
+            report_type=report_type,
+            requested_by=requested_by,
+        )
+        db.add(report)
+        await db.flush()
 
     run = (await db.execute(select(AssessmentRun).where(AssessmentRun.id == run_id))).scalar_one_or_none()
     if not run:
@@ -122,12 +165,21 @@ async def _generate_report(
     formats: list[ReportFormat],
     report_type: str,
     task_id: str,
+    requested_by: str | None = None,
 ) -> dict:
     from unimonitor.db.base import async_session_factory
     from unimonitor.db.models.report import ReportStatus
 
     async with async_session_factory() as db:
-        report, run, findings = await _load_report_context(db, report_id, run_id)
+        report, run, findings = await _load_report_context(
+            db,
+            report_id,
+            run_id,
+            tenant_id=tenant_id,
+            formats=list(formats),
+            report_type=report_type,
+            requested_by=requested_by,
+        )
 
         report.status = ReportStatus.GENERATING.value
         report.task_id = task_id
@@ -136,7 +188,7 @@ async def _generate_report(
         generated_files = _generate_files(tenant_id, run, findings, formats, report_type)
 
         report.status = ReportStatus.COMPLETED.value if generated_files else ReportStatus.FAILED.value
-        report.file_paths = generated_files
+        report.file_paths = json.dumps(generated_files)
         await db.commit()
 
     return {"report_id": report_id, "status": report.status, "files": generated_files}

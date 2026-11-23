@@ -106,61 +106,60 @@ async def login_local(
 
 
 @router.get("/sso")
-async def sso_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, bool]:
+async def sso_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
     """Whether "Sign in with Microsoft" can work on this install.
 
-    The setup wizard stores the Entra app in the database, not in .env, so a
-    configured Microsoft connection must enable the button even though the
-    settings singleton only picks it up on the next restart.
+    The setup wizard stores the Entra app in the database and the vault, not in
+    .env, so the connected app — not the settings singleton — decides this.
     """
+    from unimonitor.onboarding.service import microsoft_app
+
+    app = await microsoft_app(db)
     settings = get_settings()
-    if settings.ENTRA_CLIENT_ID and settings.ENTRA_REDIRECT_URI:
-        return {"enabled": True}
-
-    from sqlalchemy import select
-
-    from unimonitor.db.models.cloud_connection import CloudConnection
-
-    row = (
-        (await db.execute(select(CloudConnection).where(CloudConnection.provider == "microsoft", CloudConnection.status == "connected")))
-        .scalars()
-        .first()
-    )
-    if row is None or not bool(settings.ENTRA_REDIRECT_URI):
-        return {"enabled": False}
-    import json
-
-    try:
-        config = json.loads(row.config or "{}")
-    except ValueError:
-        config = {}
-    return {"enabled": bool(config.get("client_id"))}
+    return {
+        "enabled": bool(app.get("configured") and settings.ENTRA_REDIRECT_URI),
+        "provider": "microsoft",
+        "source": app.get("source"),
+        "reason": None if app.get("configured") else "Connect Microsoft 365 under Settings → Platform connections.",
+    }
 
 
 @router.get("/login")
 async def login(
     request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
     redirect_after: Annotated[str, Query(alias="redirect")] = "/",
 ) -> RedirectResponse:
     """Redirect to Entra ID OAuth2 authorization endpoint."""
+    from unimonitor.onboarding.service import microsoft_app
+
+    app = await microsoft_app(db)
     state = secrets.token_urlsafe(32)
 
     # Store state + redirect destination in cache (5 min TTL)
     await cache_set(f"oauth_state:{state}", {"redirect": redirect_after}, ttl=300)
 
     try:
-        authorize_url = build_authorize_url(state=state)
-    except Exception as exc:  # no client id / bad authority: tell the page, don't 500
+        authorize_url = build_authorize_url(
+            state=state,
+            client_id=app["client_id"],
+            tenant_id=app["directory"],
+            client_secret=app.get("client_secret") or None,
+            certificate_pem=app.get("certificate_pem") or None,
+            private_key_pem=app.get("private_key_pem") or None,
+        )
+    except Exception as exc:  # bad app id / authority: tell the page, don't 500
         logger.warning("oauth_login_unavailable", error=str(exc))
         return RedirectResponse(url="/login?error=sso_unavailable", status_code=status.HTTP_303_SEE_OTHER)
 
-    logger.info("oauth_login_initiated", state=state[:8])
+    logger.info("oauth_login_initiated", state=state[:8], source=app.get("source"))
     return RedirectResponse(url=authorize_url, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/callback")
 async def oauth_callback(
     request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
     code: Annotated[str, Query(...)],
     state: Annotated[str, Query(...)],
     error: Annotated[str | None, Query()] = None,
@@ -182,8 +181,18 @@ async def oauth_callback(
             detail="Invalid or expired OAuth state parameter",
         )
 
+    from unimonitor.onboarding.service import microsoft_app
+
+    app = await microsoft_app(db)
     try:
-        token_data = await exchange_code_for_token(code=code)
+        token_data = await exchange_code_for_token(
+            code=code,
+            client_id=app.get("client_id"),
+            tenant_id=app.get("directory"),
+            client_secret=app.get("client_secret") or None,
+            certificate_pem=app.get("certificate_pem") or None,
+            private_key_pem=app.get("private_key_pem") or None,
+        )
     except Exception as exc:
         logger.error("token_exchange_failed", error=str(exc))
         raise HTTPException(

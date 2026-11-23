@@ -134,6 +134,51 @@ class TestTenantScope:
         response = await client.get("/api/v1/users", headers=headers)
         assert response.status_code == 403
 
+    async def test_posture_analysis_honours_a_scoped_tenant_id(
+        self, client: AsyncClient, db_session, tenant, other_tenant, auth_headers: dict, monkeypatch, tmp_path
+    ):
+        """An administrator or delegated grant may read another collected inventory."""
+        from unimonitor.config import get_settings
+        from unimonitor.posture.assemble import write_inventory
+
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY_PATH", str(tmp_path))
+        monkeypatch.setattr(get_settings(), "POSTURE_AUTO_INVENTORY", True)
+        monkeypatch.setattr("unimonitor.api.v1.posture.load_snapshot", lambda: {})
+        write_inventory({"resources": [{"type": "storage", "provider": "aws", "id": "home-1"}], "edges": []}, tenant.id)
+        write_inventory(
+            {
+                "resources": [
+                    {"type": "storage", "provider": "aws", "id": "other-1"},
+                    {"type": "storage", "provider": "aws", "id": "other-2"},
+                ],
+                "edges": [],
+            },
+            other_tenant.id,
+        )
+
+        user = await _make_user(db_session, tenant.id)
+        headers = await _headers(client, "analyst@test.example.com")
+
+        own = await client.get("/api/v1/posture/analysis", headers=headers)
+        assert own.status_code == 200, own.text
+        assert own.json()["resources"] == 1, "an analyst reads the home tenant by default"
+
+        blocked = await client.get("/api/v1/posture/analysis", params={"tenant_id": other_tenant.id}, headers=headers)
+        assert blocked.status_code == 403
+
+        from unimonitor.db.models.tenant_access import TenantAccess
+
+        db_session.add(TenantAccess(user_id=user.id, tenant_id=other_tenant.id, role="viewer"))
+        await db_session.flush()
+
+        delegated = await client.get("/api/v1/posture/analysis", params={"tenant_id": other_tenant.id}, headers=headers)
+        assert delegated.status_code == 200, delegated.text
+        assert delegated.json()["resources"] == 2, "the delegated inventory is the requested one"
+
+        admin = await client.get("/api/v1/posture/analysis", params={"tenant_id": other_tenant.id}, headers=auth_headers)
+        assert admin.status_code == 200, admin.text
+        assert admin.json()["resources"] == 2
+
     async def test_a_body_carried_tenant_id_is_scoped_too(self, client: AsyncClient, db_session, tenant, other_tenant):
         """A Pydantic request field bypasses the parameter dependency."""
         await _make_user(db_session, tenant.id)

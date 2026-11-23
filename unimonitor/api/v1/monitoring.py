@@ -477,21 +477,60 @@ class ServiceHealthResponse(BaseModel):
     generated_at: datetime
 
 
-async def _graph_json(tenant: Tenant, endpoint: str) -> dict[str, Any]:
-    """GET one Graph collection for a tenant, raising an actionable error."""
+async def _graph_json(
+    db: AsyncSession,
+    tenant: Tenant,
+    endpoint: str,
+    *,
+    permission: str,
+) -> dict[str, Any]:
+    """GET one Graph collection with the tenant's connected app credentials.
+
+    The `Tenant` row holds a secret *reference*, so building a Graph client from it
+    authenticated as the wrong app (or failed outright) and every page that called
+    Graph directly answered 502. Credentials now come from the same resolver the
+    collectors use, certificate connections included.
+    """
+    from unimonitor.exceptions import AuthenticationError, GraphPermissionError
     from unimonitor.graph.client import GraphClient
+    from unimonitor.onboarding.service import microsoft_app
+
+    app = await microsoft_app(db, tenant.id)
+    if not app.get("configured"):
+        raise HTTPException(
+            status_code=503,
+            detail="Microsoft 365 is not connected. Connect it under Settings → Platform connections.",
+        )
 
     try:
         async with GraphClient(
-            tenant_id=tenant.entra_tenant_id,
-            client_id=tenant.client_id,
-            client_secret=tenant.client_secret,
+            tenant_id=app["directory"] or tenant.entra_tenant_id,
+            client_id=app["client_id"],
+            client_secret=app.get("client_secret") or None,
+            certificate_pem=app.get("certificate_pem") or None,
+            private_key_pem=app.get("private_key_pem") or None,
             cache_ttl=300,
         ) as gc:
             response = await gc.get(endpoint)
+    except GraphPermissionError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=f"The Microsoft app is missing {permission} (or its admin consent). Grant it in the Entra portal, then reload this page.",
+        ) from exc
+    except AuthenticationError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "Could not authenticate the Microsoft app. Re-check the application ID, "
+                "directory ID and certificate/secret under Settings → Platform connections."
+            ),
+        ) from exc
     except Exception as exc:  # noqa: BLE001 - surface configuration errors to the page
         raise HTTPException(status_code=502, detail=f"Graph request failed: {exc}") from exc
-    if not response.success:
+
+    # A last-good response is still useful during an outage; only a hard failure is
+    # an error the page cannot render.
+    if not response.success and not (response.stale and response.data is not None):
         raise HTTPException(status_code=502, detail=response.error_message or "Graph request failed")
     return response.data if isinstance(response.data, dict) else {"value": response.data}
 
@@ -613,8 +652,10 @@ async def get_licensing(
     """Licence posture: seats bought, assigned, idle and suspended per SKU."""
     tenant = await _resolve_tenant(db, tenant_id)
     payload = await _graph_json(
+        db,
         tenant,
         "/subscribedSkus?$select=skuId,skuPartNumber,capabilityStatus,consumedUnits,prepaidUnits",
+        permission="Organization.Read.All",
     )
     skus: list[LicenceSku] = []
     for row in payload.get("value", []) or []:
@@ -666,10 +707,17 @@ async def get_service_health(
 ) -> ServiceHealthResponse:
     """Microsoft 365 service health and unresolved advisories."""
     tenant = await _resolve_tenant(db, tenant_id)
-    health = await _graph_json(tenant, "/admin/serviceAnnouncement/healthOverviews")
-    issues_payload = await _graph_json(
+    health = await _graph_json(
+        db,
         tenant,
-        "/admin/serviceAnnouncement/issues?$filter=isResolved eq false&$top=50",
+        "/admin/serviceAnnouncement/healthOverviews",
+        permission="ServiceHealth.Read.All",
+    )
+    issues_payload = await _graph_json(
+        db,
+        tenant,
+        "/admin/serviceAnnouncement/issues?%24filter=isResolved%20eq%20false&%24top=50",
+        permission="ServiceHealth.Read.All",
     )
 
     services = [

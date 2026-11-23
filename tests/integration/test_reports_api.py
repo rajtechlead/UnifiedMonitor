@@ -81,7 +81,8 @@ class TestGenerateReport:
         assert r.status_code == 202, r.text
         assert captured["formats"] == ["json"]
 
-    async def test_queue_failure_is_reported_not_silently_queued(self, client: AsyncClient, auth_headers: dict, tenant, monkeypatch):
+    async def test_broker_less_install_runs_the_report_in_process(self, client: AsyncClient, auth_headers: dict, tenant, monkeypatch):
+        """No Celery broker must not fail the request: the inline worker runs it."""
         import unimonitor.worker.tasks as tasks
 
         def boom(**kwargs):
@@ -95,5 +96,61 @@ class TestGenerateReport:
             headers=auth_headers,
         )
         assert r.status_code == 202
+        assert r.json()["status"] == "queued"
+        assert str(r.json()["task_id"]).startswith("inline:")
+
+    async def test_dispatch_failure_is_reported_not_silently_queued(self, client: AsyncClient, auth_headers: dict, tenant, monkeypatch):
+        import unimonitor.worker.inline as inline
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("no queue")
+
+        monkeypatch.setattr(inline, "dispatch", boom)
+
+        r = await client.post(
+            "/api/v1/reports/generate",
+            json={"run_id": "run-1", "tenant_id": tenant.id},
+            headers=auth_headers,
+        )
+        assert r.status_code == 202
         assert r.json()["status"] == "failed"
         assert "queue" in r.json()["error_message"].lower()
+
+
+class TestReportRuns:
+    async def test_a_completed_run_appears_in_the_report_picker(self, client: AsyncClient, auth_headers: dict, _session_factory):
+        """Regression: the picker read AssessmentRun.tenant_id/created_at, which do
+        not exist, so the handler returned an empty list for every install.
+
+        The route opens its own session, so the fixture data has to be committed —
+        and removed again so the shared SQLite file stays clean.
+        """
+        from sqlalchemy import delete
+
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun
+        from unimonitor.db.models.tenant import Tenant
+
+        tenant_pk = "reports-picker-tenant-00000000001"
+        assessment_id = "reports-picker-assessment-0000001"
+        run_id = "reports-picker-run-00000000000001"
+        try:
+            async with _session_factory() as session:
+                session.add(Tenant(id=tenant_pk, tenant_id="reports-picker", name="Picker Org"))
+                session.add(Assessment(id=assessment_id, tenant_id=tenant_pk, name="Quarterly Assessment"))
+                session.add(AssessmentRun(id=run_id, assessment_id=assessment_id, status="completed"))
+                await session.commit()
+
+            r = await client.get("/api/v1/reports/runs", headers=auth_headers)
+            assert r.status_code == 200, r.text
+            body = r.json()
+            assert body["total"] >= 1
+            row = next(item for item in body["items"] if item["run_id"] == run_id)
+            assert row["tenant_id"] == tenant_pk
+            assert row["assessment_name"] == "Quarterly Assessment"
+            assert row["started_at"]
+        finally:
+            async with _session_factory() as session:
+                await session.execute(delete(AssessmentRun).where(AssessmentRun.id == run_id))
+                await session.execute(delete(Assessment).where(Assessment.id == assessment_id))
+                await session.execute(delete(Tenant).where(Tenant.id == tenant_pk))
+                await session.commit()

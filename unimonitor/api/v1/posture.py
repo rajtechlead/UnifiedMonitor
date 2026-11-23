@@ -14,6 +14,7 @@ import structlog
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from unimonitor.auth.dependencies import get_current_user, require_role
+from unimonitor.auth.tenant_scope import tenant_scope
 from unimonitor.graph.collectors.snapshot import load_snapshot
 from unimonitor.posture.analysis import analyse, supported_platforms
 
@@ -58,20 +59,23 @@ async def list_platforms(
 async def get_analysis(
     current_user: Annotated[Any, Depends(get_current_user)],
     platform: Annotated[str | None, Query(description="CIS pack to evaluate, e.g. aws")] = None,
+    tenant_id: Annotated[str | None, Depends(tenant_scope)] = None,
 ) -> dict[str, Any]:
-    """Analyse the configured snapshot, or this tenant's last assembled inventory.
+    """Analyse the configured snapshot, or a tenant's last assembled inventory.
 
     A configured ``UNIMONITOR_POSTURE_SNAPSHOT`` wins; otherwise the inventory
-    written after the caller's own tenant was collected is used. The inventory is
-    never read across tenants: one tenant's resources must not appear in another
-    tenant's analysis.
+    written after collection is used. ``tenant_id`` goes through the shared
+    tenant-scope dependency, so an administrator or a delegated grant may read
+    another tenant's inventory while everyone else stays pinned to their home
+    tenant. Omitting it reads the caller's own tenant.
     """
+    target_tenant = tenant_id or current_user.tenant_id
     snapshot = load_snapshot()
     source = "configured"
     if not snapshot:
         from unimonitor.posture.assemble import load_inventory
 
-        snapshot = load_inventory(current_user.tenant_id) or {}
+        snapshot = load_inventory(target_tenant) or {}
         source = "collected"
     if not snapshot:
         raise HTTPException(
@@ -81,7 +85,14 @@ async def get_analysis(
     result = _analyse(platform, snapshot)
     result["source"] = source
     result["resources"] = len(snapshot.get("resources", [])) if isinstance(snapshot.get("resources"), list) else 0
-    logger.info("posture_analysis", platform=platform, findings=len(result["findings"]), source=source, by=current_user.id)
+    logger.info(
+        "posture_analysis",
+        platform=platform,
+        findings=len(result["findings"]),
+        source=source,
+        tenant=target_tenant,
+        by=current_user.id,
+    )
     return result
 
 

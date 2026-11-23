@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from pathlib import Path
@@ -51,18 +52,29 @@ class ReportGenerateRequest(BaseModel):
 
 
 class ReportStatusResponse(BaseModel):
+    """One report, in the shape both the API and the Reports page read.
+
+    ``id``/``formats``/``requested_by``/``run_id`` are what the SPA renders; the
+    original ``report_id``/``report_format`` names stay for existing clients.
+    """
+
     report_id: str
+    id: str | None = None
     task_id: str | None
     status: str
     report_type: str
-    report_format: str
+    report_format: str = "pdf"
     tenant_id: str
-    title: str
+    title: str = ""
     created_at: datetime
     completed_at: datetime | None
-    file_size_bytes: int | None
-    download_url: str | None
-    error_message: str | None
+    file_size_bytes: int | None = None
+    download_url: str | None = None
+    error_message: str | None = None
+    formats: list[str] = []
+    file_paths: dict[str, str] = {}
+    requested_by: str | None = None
+    run_id: str | None = None
 
 
 class ReportListResponse(BaseModel):
@@ -93,6 +105,33 @@ async def _tenant_for_run(run_id: str) -> str | None:
     except Exception as exc:  # noqa: BLE001 - DB down means we cannot resolve the run
         logger.warning("report_run_lookup_failed", run_id=run_id, error=str(exc))
         return None
+
+
+def _report_item(row: Any) -> ReportStatusResponse:
+    """Map a stored `Report` row (JSON strings on disk) to the API shape."""
+    formats = json.loads(row.formats) if isinstance(row.formats, str) and row.formats else (row.formats or [])
+    if not isinstance(formats, list):
+        formats = []
+    paths = json.loads(row.file_paths) if isinstance(row.file_paths, str) and row.file_paths else (row.file_paths or {})
+    if not isinstance(paths, dict):
+        paths = {}
+    return ReportStatusResponse(
+        report_id=row.id,
+        id=row.id,
+        task_id=row.task_id,
+        status=row.status,
+        report_type=row.report_type,
+        report_format=formats[0] if formats else "pdf",
+        tenant_id=row.tenant_id,
+        title=f"{row.report_type.title()} Report",
+        created_at=row.created_at,
+        completed_at=row.completed_at,
+        formats=formats,
+        file_paths=paths,
+        requested_by=row.requested_by,
+        run_id=row.assessment_run_id,
+        download_url=f"/api/v1/reports/{row.id}/download",
+    )
 
 
 ScorecardFormat = Literal["csv", "xlsx", "pdf"]
@@ -166,11 +205,17 @@ async def generate_report(
         "config": body.model_dump(mode="json"),
     }
 
-    # Dispatch to Celery (the worker owns file generation + report row updates)
+    # Celery when a broker answers, otherwise the same coroutine runs in-process.
+    # The worker creates the report row inside its own transaction: there is no
+    # `ReportRepository.create_report`, so the old code never persisted anything and
+    # every download answered "Report not found".
     try:
-        from unimonitor.worker.tasks import generate_report_task
+        from unimonitor.worker.inline import dispatch
+        from unimonitor.worker.tasks.reporting import generate_report_task, run_report_now
 
-        task = generate_report_task.delay(
+        task_id = dispatch(
+            generate_report_task,
+            run_report_now,
             report_id=report_id,
             tenant_id=tenant_id,
             run_id=body.run_id,
@@ -178,23 +223,18 @@ async def generate_report(
             report_type=body.report_type,
             requested_by=str(current_user.id),
         )
-        report_record["task_id"] = task.id
+        report_record["task_id"] = task_id
         report_record["status"] = "queued"
-    except Exception as exc:
-        logger.warning("report_celery_unavailable", error=str(exc))
+    except Exception as exc:  # noqa: BLE001 - the row records the failure
+        logger.warning("report_dispatch_failed", error=str(exc))
         report_record["status"] = "failed"
-        report_record["error_message"] = "Report queue unavailable; check the Celery worker"
+        report_record["error_message"] = f"Could not queue the report: {exc}"
 
-    # Persist to DB if available, else in-memory
-    try:
-        from unimonitor.db.base import async_session_factory
-        from unimonitor.db.repositories.assessment_repo import ReportRepository
-
-        async with async_session_factory() as session:
-            repo = ReportRepository(session)
-            await repo.create_report(**{k: v for k, v in report_record.items() if k not in ("config",)})
-    except Exception:
-        _reports_store[report_id] = report_record
+    report_record["formats"] = formats
+    report_record["requested_by"] = str(current_user.id)
+    report_record["run_id"] = body.run_id
+    report_record["id"] = report_id
+    _reports_store[report_id] = report_record
 
     logger.info("report_queued", report_id=report_id, type=body.report_type, format=body.report_format)
     return ReportStatusResponse(**{k: v for k, v in report_record.items() if k in ReportStatusResponse.model_fields})
@@ -211,18 +251,20 @@ async def list_reports(
     """List generated reports."""
     # Try DB first, fall back to in-memory
     try:
+        from sqlalchemy import func, select
+
         from unimonitor.db.base import async_session_factory
-        from unimonitor.db.repositories.assessment_repo import ReportRepository
+        from unimonitor.db.models.report import Report
 
         async with async_session_factory() as session:
-            repo = ReportRepository(session)
-            reports, total = await repo.list_reports(
-                tenant_id=tenant_id,
-                report_type=report_type,
-                page=page,
-                page_size=page_size,
-            )
-        items = [ReportStatusResponse.model_validate(r) for r in reports]
+            stmt = select(Report)
+            if tenant_id:
+                stmt = stmt.where(Report.tenant_id == tenant_id)
+            if report_type:
+                stmt = stmt.where(Report.report_type == report_type)
+            total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+            rows = (await session.execute(stmt.order_by(Report.created_at.desc()).offset((page - 1) * page_size).limit(page_size))).scalars().all()
+        items = [_report_item(row) for row in rows]
         return ReportListResponse(items=items, total=total)
     except Exception:  # noqa: S110  # NOSONAR - the in-memory store below is the fallback
         pass
@@ -293,49 +335,49 @@ async def list_report_runs(
 
         from unimonitor.db.base import async_session_factory
         from unimonitor.db.models.assessment import Assessment, AssessmentRun
+        from unimonitor.db.models.report import Report
 
         async with async_session_factory() as session:
-            # Manual and continuous-monitoring runs alike: any finished run has
-            # findings to report on.
-            stmt = select(AssessmentRun).where(AssessmentRun.status.in_(["completed", "failed"]))
-            if tenant_id:
-                stmt = stmt.where(AssessmentRun.tenant_id == tenant_id)
-            elif hasattr(current_user, "tenant_id") and current_user.tenant_id and current_user.role != "admin":
-                stmt = stmt.where(AssessmentRun.tenant_id == current_user.tenant_id)
-
-            # Total count
-            count_stmt = select(func.count()).select_from(stmt.subquery())
-            total_result = await session.execute(count_stmt)
-            total = total_result.scalar_one()
-
-            # Paginate, most recent first
-            stmt = stmt.order_by(AssessmentRun.completed_at.desc().nullslast())
-            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
-            result = await session.execute(stmt)
-            runs = result.scalars().all()
-
-            names = dict(
-                (await session.execute(select(Assessment.id, Assessment.name).where(Assessment.id.in_([run.assessment_id for run in runs])))).all()
+            # `AssessmentRun` has no tenant or created_at column: the tenant lives on
+            # the parent assessment. Reading those attributes raised, the handler
+            # returned an empty list, and the Reports page only ever offered
+            # "Select a run".
+            stmt = (
+                select(AssessmentRun, Assessment)
+                .join(Assessment, AssessmentRun.assessment_id == Assessment.id)
+                .where(AssessmentRun.status.in_(["completed", "failed"]))
             )
+            if tenant_id:
+                stmt = stmt.where(Assessment.tenant_id == tenant_id)
+            elif hasattr(current_user, "tenant_id") and current_user.tenant_id and current_user.role != "admin":
+                stmt = stmt.where(Assessment.tenant_id == current_user.tenant_id)
 
-            # Resolve associated reports from in-memory store (or DB)
+            total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+            rows = (
+                await session.execute(
+                    stmt.order_by(AssessmentRun.completed_at.desc().nullslast(), AssessmentRun.started_at.desc())
+                    .offset((page - 1) * page_size)
+                    .limit(page_size)
+                )
+            ).all()
+
+            report_rows = (
+                (await session.execute(select(Report).where(Report.assessment_run_id.in_([run.id for run, _ in rows])))).scalars().all()
+                if rows
+                else []
+            )
+            reports_by_run = {row.assessment_run_id: row for row in report_rows}
+
             items: list[RunReportSummary] = []
-            for run in runs:
-                rpt_id = None
-                rpt_status = None
-                # Check in-memory store
-                for rid, rec in _reports_store.items():
-                    if rec.get("config", {}).get("run_id") == run.id:
-                        rpt_id = rid
-                        rpt_status = rec.get("status")
-                        break
+            for run, assessment in rows:
+                report = reports_by_run.get(run.id)
                 items.append(
                     RunReportSummary(
                         run_id=run.id,
                         assessment_id=run.assessment_id,
-                        assessment_name=names.get(run.assessment_id, ""),
+                        assessment_name=assessment.name,
                         trigger=run.trigger or "manual",
-                        tenant_id=run.tenant_id,
+                        tenant_id=assessment.tenant_id,
                         status=run.status,
                         security_score=run.security_score,
                         compliance_score=run.compliance_score,
@@ -344,10 +386,10 @@ async def list_report_runs(
                         controls_passed=run.controls_passed or 0,
                         critical_count=run.critical_count or 0,
                         high_count=run.high_count or 0,
-                        started_at=run.created_at,
+                        started_at=run.started_at,
                         completed_at=run.completed_at,
-                        report_id=rpt_id,
-                        report_status=rpt_status,
+                        report_id=report.id if report else None,
+                        report_status=report.status if report else None,
                     )
                 )
 

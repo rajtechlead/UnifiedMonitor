@@ -20,6 +20,7 @@ from unimonitor.graph.collectors.extended import (
     collect_intune_extended,
 )
 from unimonitor.graph.collectors.snapshot import load_snapshot, merge_snapshot
+from unimonitor.graph.staleness import mark_stale, merge_data, stale_keys
 
 logger = get_logger(__name__)
 
@@ -74,7 +75,7 @@ class CollectorRegistry:
                     logger.error("Collector failed", collector=name, error=str(result))
                     all_data[f"_error_{name}"] = str(result)
                 elif isinstance(result, dict):
-                    all_data.update(result)
+                    merge_data(all_data, result)
 
         # Snapshot fills keys with no Graph endpoint; live data always wins.
         return merge_snapshot(all_data, load_snapshot())
@@ -107,10 +108,18 @@ class CollectorRegistry:
 
 
 async def _safe_get(gc: GraphClient, endpoint: str, key: str) -> dict[str, Any]:
-    """Get a Graph endpoint, return empty on failure."""
+    """Get a Graph endpoint, return empty on failure.
+
+    Data answered from the last successful response during an outage is still
+    evidence, but the key it fills is flagged stale so the control scored from
+    it can say so.
+    """
     try:
         resp = await gc.get(endpoint)
-        return {key: resp.data} if resp.usable else {}
+        if not resp.usable:
+            return {}
+        data = {key: resp.data}
+        return mark_stale(data, key) if resp.stale else data
     except Exception as exc:
         logger.debug("Graph endpoint skipped", endpoint=endpoint, error=str(exc))
         return {}
@@ -137,7 +146,7 @@ async def _collect_entra_id(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     return data
 
@@ -163,9 +172,9 @@ async def _collect_intune(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
-    data.update(await collect_intune_extended(gc))
+    merge_data(data, await collect_intune_extended(gc))
     # The control library reads normalised intune_* keys; expose the Graph results
     # under those names instead of asking every control to know the API spelling.
     aliases = {
@@ -177,11 +186,16 @@ async def _collect_intune(gc: GraphClient) -> dict[str, Any]:
         "intune_endpoint_security_configs": "configurationPolicies",
         "intune_update_rings": "windowsUpdatePolicies",
     }
+    stale = stale_keys(data)
     for target, source in aliases.items():
         if source in data:
             data[target] = data[source]
+            if source in stale:
+                mark_stale(data, target)
     if "managedDevices" in data:
         data["intune_managed_device_count"] = len(data["managedDevices"])
+        if "managedDevices" in stale:
+            mark_stale(data, "intune_managed_device_count")
     return data
 
 
@@ -202,11 +216,10 @@ async def _collect_defender(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
-    data.update(await collect_defender_office(gc))
-    data.update(await collect_defender_identity(gc))
-    data.update(await collect_cloud_apps(gc))
+    for section in (collect_defender_office(gc), collect_defender_identity(gc), collect_cloud_apps(gc)):
+        merge_data(data, await section)
     return data
 
 
@@ -224,10 +237,10 @@ async def _collect_purview(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
-    data.update(await collect_insider_risk(gc))
-    data.update(await collect_ediscovery(gc))
+    for section in (collect_insider_risk(gc), collect_ediscovery(gc)):
+        merge_data(data, await section)
     return data
 
 
@@ -243,7 +256,7 @@ async def _collect_exchange(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     return data
 
@@ -259,11 +272,15 @@ async def _collect_sharepoint(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     # Control library spelling for the same SharePoint data.
     data.setdefault("sharePointSettings", data.get("sharepointSettings"))
     data.setdefault("sharePointSites", data.get("sites", []))
+    stale = stale_keys(data)
+    for target, source in (("sharePointSettings", "sharepointSettings"), ("sharePointSites", "sites")):
+        if source in stale:
+            mark_stale(data, target)
     return data
 
 
@@ -278,7 +295,7 @@ async def _collect_teams(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     return data
 
@@ -294,9 +311,9 @@ async def _collect_copilot(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
-    data.update(collect_copilot_studio())
+    merge_data(data, collect_copilot_studio())
     return data
 
 
@@ -311,7 +328,7 @@ async def _collect_azure_security(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     return data
 
@@ -348,6 +365,6 @@ async def _collect_secure_score(gc: GraphClient) -> dict[str, Any]:
     results = await asyncio.gather(*tasks, return_exceptions=True)
     for r in results:
         if isinstance(r, dict):
-            data.update(r)
+            merge_data(data, r)
 
     return data
