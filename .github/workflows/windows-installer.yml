@@ -24,7 +24,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # The Zero Trust runner is bundled as a download in the app; a syntax error
       # would only surface on a customer's workstation, so parse it here.
