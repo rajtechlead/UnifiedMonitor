@@ -65,9 +65,5 @@ def evaluate_rules(rules: list[Rule], resources: dict[str, list[dict[str, Any]]]
     }
 
 
-def pass_if(condition: bool, detail: str, failure: str) -> CheckResult:
-    return (True, detail) if condition else (False, failure)
-
-
 def no_resources(what: str) -> CheckResult:
     return None, f"no {what} in the snapshot"

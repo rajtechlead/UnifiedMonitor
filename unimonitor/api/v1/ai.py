@@ -66,7 +66,7 @@ class CustomProviderList(BaseModel):
     providers: list[custom.CustomProvider]
 
 
-@router.get("/providers/custom")
+@router.get("/providers/custom", responses={404: {"description": "Tenant not found"}})
 async def list_custom_providers(
     current_user: Annotated[Any, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],

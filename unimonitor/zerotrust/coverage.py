@@ -28,7 +28,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from unimonitor.db.models.finding import Finding, FindingEvidence
 from unimonitor.grc.control_loader import ControlDefinition, ControlLoader
-from unimonitor.zerotrust.platform_tests import PlatformTest, tests_for
+from unimonitor.zerotrust.platform_tests import tests_for
 from unimonitor.zerotrust.service import PLATFORM_SERVICES, _finding_states
 
 COLLECTORS_DIR = Path(__file__).resolve().parents[1] / "graph" / "collectors"
@@ -180,12 +180,6 @@ def _control_evidence(control: ControlDefinition, states: dict[str, str], covera
         has_finding=control.id in states,
         has_evidence=bool(recorded) and not recorded.get("missing"),
     )
-
-
-def _catalogue_tests(platform: str) -> tuple[list[PlatformTest], list[str]]:
-    """Tests plus the control ids they map, for catalogue platforms."""
-    tests = list(tests_for(platform))
-    return tests, sorted({control_id for test in tests for control_id in test.control_ids})
 
 
 async def platform_coverage(db: AsyncSession, tenant_id: str, platform: str) -> PlatformCoverage:

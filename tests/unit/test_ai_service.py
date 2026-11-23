@@ -146,9 +146,10 @@ class TestFailover:
         def handler(request: httpx.Request) -> httpx.Response:
             return httpx.Response(429)
 
+        providers = [_provider("a"), _provider("b")]
         client = _client(handler)
         with pytest.raises(AIUnavailableError):
-            await complete("sys", "user", providers=[_provider("a"), _provider("b")], client=client)
+            await complete("sys", "user", providers=providers, client=client)
         await client.aclose()
 
     @pytest.mark.asyncio

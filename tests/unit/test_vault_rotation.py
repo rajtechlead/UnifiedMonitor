@@ -8,6 +8,9 @@ change, not a re-entry of every credential.
 
 from __future__ import annotations
 
+import os
+import stat
+
 import pytest
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -34,8 +37,10 @@ class TestMasterKeyRotation:
         assert await vault.get_secret("b") == "two"
         assert vault._enc_path.read_bytes() != before
 
+        ciphertext = vault._enc_path.read_bytes()
+        retired = Fernet(old_key)
         with pytest.raises(InvalidToken):
-            Fernet(old_key).decrypt(vault._enc_path.read_bytes())
+            retired.decrypt(ciphertext)
 
     async def test_the_previous_key_is_retained_for_recovery(self, vault: LocalVaultProvider):
         await vault.set_secret("a", "one")
@@ -45,6 +50,10 @@ class TestMasterKeyRotation:
 
         previous = vault._previous_key_path.read_bytes().decode().splitlines()
         assert old_key.decode() in previous
+
+        # A retired key is still a master key: only its owner may read it.
+        if os.name == "posix":
+            assert stat.S_IMODE(vault._previous_key_path.stat().st_mode) == 0o600
 
         # The retained key still decrypts a ciphertext written before rotation.
         backup = Fernet(old_key).encrypt(b'{"a": "one"}')

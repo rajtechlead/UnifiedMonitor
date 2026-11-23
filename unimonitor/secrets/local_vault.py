@@ -63,6 +63,14 @@ def _atomic_write(path: Path, data: bytes) -> None:
         raise
 
 
+def _owner_only(path: Path) -> None:
+    """Restrict a key file to its owner (a no-op where POSIX modes do not apply)."""
+    try:
+        os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
+    except Exception:  # noqa: S110 - Windows has no POSIX modes
+        pass
+
+
 class LocalVaultProvider:
     """Fernet-encrypted local secret vault."""
 
@@ -119,10 +127,7 @@ class LocalVaultProvider:
         self._ensure_vault_dir()
         key = Fernet.generate_key()
         _atomic_write(self._key_path, key)
-        try:
-            os.chmod(self._key_path, stat.S_IRUSR | stat.S_IWUSR)
-        except Exception:  # noqa: S110
-            pass
+        _owner_only(self._key_path)
         logger.info("New vault master key generated", key_path=str(self._key_path))
         return key
 
@@ -164,12 +169,12 @@ class LocalVaultProvider:
             data = self._read_vault()
             old_keys = self._load_keys()
             new_key = Fernet.generate_key()
+            # The retained keys are as sensitive as the current one: restrict them
+            # before anything else can read the file the temporary blob became.
             _atomic_write(self._previous_key_path, b"\n".join(old_keys))
+            _owner_only(self._previous_key_path)
             _atomic_write(self._key_path, new_key)
-            try:
-                os.chmod(self._key_path, stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:  # noqa: S110 - Windows
-                pass
+            _owner_only(self._key_path)
             # Write with only the new key: the ciphertext must not stay readable by
             # the retired keys.
             self._fernet = MultiFernet([Fernet(new_key)])
@@ -202,10 +207,7 @@ class LocalVaultProvider:
             plaintext = json.dumps(data, ensure_ascii=False).encode("utf-8")
             ciphertext = self._get_fernet().encrypt(plaintext)
             _atomic_write(self._enc_path, ciphertext)
-            try:
-                os.chmod(self._enc_path, stat.S_IRUSR | stat.S_IWUSR)
-            except Exception:  # noqa: S110
-                pass
+            _owner_only(self._enc_path)
 
     def _read_meta(self) -> dict[str, dict]:
         """Return metadata dict (non-sensitive)."""

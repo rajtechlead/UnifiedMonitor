@@ -66,7 +66,7 @@ class TestConnectPlatforms:
         admin = await _bootstrap(client)
         headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
 
-        async def fake_validate(region, key_id, secret, token=None):
+        async def fake_validate(region, _key_id, _secret, token=None):
             assert region == "eu-west-1"
             return "123456789012"
 
@@ -117,7 +117,7 @@ class TestConnectPlatforms:
         admin = await _bootstrap(client)
         headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
 
-        async def fake_aws(region, key_id, secret, token=None):
+        async def fake_aws(region, _key_id, _secret, token=None):
             return "123456789012"
 
         async def fake_gcp(project_id, credentials_json="", access_token="", client=None):
@@ -147,7 +147,7 @@ class TestConnectPlatforms:
         admin = await _bootstrap(client)
         headers = {"Authorization": f"Bearer {admin.json()['access_token']}"}
 
-        async def fake_aws(region, key_id, secret, token=None):
+        async def fake_aws(region, _key_id, _secret, token=None):
             return "123456789012"
 
         monkeypatch.setattr("unimonitor.onboarding.service.clouds.validate_aws", fake_aws)

@@ -62,7 +62,7 @@ engine = _create_engine()
 if settings.is_sqlite:
 
     @event.listens_for(engine.sync_engine, "connect")
-    def set_sqlite_pragma(dbapi_conn, connection_record):
+    def set_sqlite_pragma(dbapi_conn, _connection_record):
         cursor = dbapi_conn.cursor()
         cursor.execute("PRAGMA journal_mode=WAL")
         cursor.execute("PRAGMA foreign_keys=ON")

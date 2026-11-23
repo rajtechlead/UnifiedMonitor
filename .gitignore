@@ -48,6 +48,7 @@ venv.bak/
 vault.enc
 vault.meta
 vault.key
+vault.key.previous
 secrets.json
 credentials.json
 service_account*.json

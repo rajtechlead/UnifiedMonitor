@@ -509,7 +509,7 @@ function AiProvidersPanel() {
             {provider.name}{provider.free_tier ? ' (free tier)' : ''}{provider.configured ? '' : ' — not configured'}
           </span>
         ))}
-        {data && data.providers.length === 0 && (
+        {data?.providers.length === 0 && (
           <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>No built-in provider has a key yet.</span>
         )}
       </div>

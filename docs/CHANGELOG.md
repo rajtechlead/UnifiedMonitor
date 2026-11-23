@@ -10,11 +10,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Security
 
+- The retired master key (`vault.key.previous`) is written owner-only and ignored by
+  git, like `vault.key` itself.
 - Every endpoint that accepts `tenant_id` now resolves it through
   `unimonitor/auth/tenant_scope.py` (44 query parameters plus body/model-carried ids),
   so a non-administrator cannot read another tenant by editing the URL. An account with
   no grant is pinned to its home tenant.
 - `AuthorisationError` returns 403; it previously fell through to the generic 500 handler.
+
+### Changed
+
+- Removed unreferenced helpers and constants found by vulture/deadcode
+  (`posture.engine.pass_if`, `posture.inventory.falsy`, `zerotrust.coverage._catalogue_tests`,
+  `zerotrust.normalise.VALID_STATUSES`, `docx_generator.DARK_TEXT`), and the five open
+  Sonar findings from the 2026-11-23 scan (S5778 x3, S6582, S8415).
 
 ### Added
 

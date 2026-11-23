@@ -86,8 +86,9 @@ class TestCustomProviders:
         )
         assert r.status_code == 200
         assert [entry["name"] for entry in r.json()] == ["gw"]
+        removed_key = custom.secret_name(tenant.id, "gw2")
         with pytest.raises(KeyError):
-            await vault.get_secret(custom.secret_name(tenant.id, "gw2"))
+            await vault.get_secret(removed_key)
 
     async def test_a_custom_provider_joins_the_failover_chain(self, client: AsyncClient, auth_headers: dict, tenant, vault):
         await client.put(

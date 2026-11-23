@@ -27,7 +27,6 @@ except ImportError:
     HAS_DOCX = False
 
 BRAND_BLUE = "1776D2"
-DARK_TEXT = "1A1F2E"
 SEVERITY_FILLS = {
     "CRITICAL": "FFCCCC",
     "HIGH": "FFE0CC",

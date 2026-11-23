@@ -117,7 +117,7 @@ class TestLocalVault:
         """
         await vault.set_secret("stable/key", "stable-value")
 
-        def _crash(fd):
+        def _crash(_fd):
             raise OSError("simulated disk failure mid-write")
 
         monkeypatch.setattr("unimonitor.secrets.local_vault.os.fsync", _crash)
@@ -136,7 +136,7 @@ class TestLocalVault:
         await vault.set_secret("stable/key", "stable-value")
         before = vault._enc_path.read_bytes()
 
-        def _fail_replace(source, destination):
+        def _fail_replace(_source, _destination):
             raise OSError("simulated rename failure")
 
         monkeypatch.setattr("unimonitor.secrets.local_vault.os.replace", _fail_replace)

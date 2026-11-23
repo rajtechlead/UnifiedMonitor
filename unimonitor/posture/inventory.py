@@ -97,11 +97,6 @@ def truthy(value: Any, *, default: bool = False) -> bool:
     return bool(value)
 
 
-def falsy(value: Any, *, default: bool = False) -> bool:
-    """Read a boolean whose ``False`` means "the control is in place" (e.g. ``public``)."""
-    return not truthy(value, default=not default)
-
-
 def field(resource: dict[str, Any], *names: str, default: Any = None) -> Any:
     """First present field under any of *names*."""
     for name in names:

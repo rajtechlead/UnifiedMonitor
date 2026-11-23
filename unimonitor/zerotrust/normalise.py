@@ -19,7 +19,6 @@ PLATFORMS: dict[str, str] = {
     "google_workspace": "Google Workspace",
 }
 
-VALID_STATUSES = frozenset({"pass", "fail", "warn", "not_run", "not_applicable"})
 SEVERITIES = frozenset({"critical", "high", "medium", "low", "informational"})
 
 _ID_KEYS = ("TestId", "testId", "TestID", "Id", "id", "CheckId", "checkId", "controlId", "ControlId")
