@@ -72,7 +72,10 @@ export const zerotrustApi = {
     api.post('/zerotrust/assess', { platform, engine }).then((r) => r.data as { task_id: string; report_folder: string; message: string }),
   reports: () =>
     api.get('/zerotrust/reports').then((r) => r.data as { name: string; platform: string; size_bytes: number; modified_at: string }[]),
-  reportUrl: (name: string) => `/api/v1/zerotrust/reports/${encodeURIComponent(name)}`,
+  // The report endpoint is authenticated, so it must be fetched with the bearer
+  // token and opened from a blob URL; a plain <a href> sends no header.
+  downloadReport: (name: string) =>
+    api.get(`/zerotrust/reports/${encodeURIComponent(name)}`, { responseType: 'blob' }),
 }
 
 export const grcApi = {
@@ -174,6 +177,7 @@ export type TenantSettings = {
   tenant: { id: string; name: string; display_name: string | null; entra_tenant_id: string | null; is_active: boolean; last_collection_at: string | null; last_collection_status: string | null }
   branding: { portal_name: string; accent_colour: string; logo_url: string | null; support_email: string | null }
   collection: { collection_interval_minutes: number; auto_collection: boolean; notes: string }
+  external_links: { label: string; url: string }[]
   connections: TenantConnection[]
 }
 

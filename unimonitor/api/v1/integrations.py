@@ -183,7 +183,7 @@ async def _open_findings(db: Any, tenant_id: str | None, severity: str | None, l
     return list((await db.execute(stmt)).scalars().all())
 
 
-@router.post("/siem/{provider}/test", responses={400: {"description": "Bad request"}})
+@router.post("/siem/{provider}/test", responses={400: {"description": "Bad request"}, 404: {"description": "Unknown connector"}})
 async def test_siem_connector(
     provider: str,
     current_user: Annotated[Any, Depends(require_role("admin"))],
@@ -201,7 +201,7 @@ async def test_siem_connector(
     return SendResponse(**receipt)
 
 
-@router.post("/siem/{provider}/send", responses={502: {"description": "Upstream failure"}})
+@router.post("/siem/{provider}/send", responses={404: {"description": "Unknown connector"}, 502: {"description": "Upstream failure"}})
 async def push_to_siem(
     provider: str,
     body: SendRequest,

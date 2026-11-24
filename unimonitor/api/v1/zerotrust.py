@@ -595,7 +595,7 @@ class ReportRow(BaseModel):
     modified_at: datetime
 
 
-@router.post("/assess", status_code=202, responses={400: {"description": "Bad request"}})
+@router.post("/assess", status_code=202, responses={400: {"description": "Bad request"}, 503: {"description": "Assessment could not be queued"}})
 async def zerotrust_assess(
     body: AssessRequest,
     current_user: Annotated[Any, Depends(require_role("admin", "analyst"))],
@@ -645,7 +645,7 @@ async def zerotrust_assess(
     )
 
 
-@router.get("/reports")
+@router.get("/reports", responses={503: {"description": "Report folder is unavailable"}})
 async def zerotrust_reports(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> list[ReportRow]:

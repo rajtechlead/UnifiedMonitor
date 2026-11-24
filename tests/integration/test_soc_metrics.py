@@ -60,6 +60,34 @@ class TestSocMetrics:
         assert body["mean_time_to_resolve_hours"] == 32.0
         assert sum(row["alerts"] for row in body["incident_trend"]) == 4
 
+    async def test_incident_trend_uses_findings_when_no_alert_fired(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        """A fresh install has findings but no alert rows; the trend must still show them."""
+        from datetime import UTC, datetime
+
+        from unimonitor.db.models.finding import Finding
+
+        db_session.add(
+            Finding(
+                tenant_id=tenant.id,
+                external_control_id="CTRL-ENT-003",
+                title="MFA enforced",
+                description="mfa",
+                severity="critical",
+                state="not_implemented",
+                category="identity",
+                service="entra_id",
+                risk_score=10,
+                first_detected_at=datetime.now(UTC),
+            )
+        )
+        await db_session.flush()
+
+        body = (await client.get("/api/v1/dashboard/soc", headers=auth_headers)).json()
+
+        assert len(body["incident_trend"]) == 7
+        assert sum(row["findings"] for row in body["incident_trend"]) == 1
+        assert sum(row["critical"] for row in body["incident_trend"]) == 1
+
     async def test_metrics_are_tenant_scoped(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
         from unimonitor.db.models.tenant import Tenant
 

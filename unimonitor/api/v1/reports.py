@@ -75,6 +75,10 @@ class ReportStatusResponse(BaseModel):
     file_paths: dict[str, str] = {}
     requested_by: str | None = None
     run_id: str | None = None
+    # Readable labels, so the table never shows a bare UUID.
+    tenant_name: str | None = None
+    assessment_name: str | None = None
+    requested_by_name: str | None = None
 
 
 class ReportListResponse(BaseModel):
@@ -107,7 +111,13 @@ async def _tenant_for_run(run_id: str) -> str | None:
         return None
 
 
-def _report_item(row: Any) -> ReportStatusResponse:
+def _report_item(
+    row: Any,
+    *,
+    tenant_name: str | None = None,
+    assessment_name: str | None = None,
+    requested_by_name: str | None = None,
+) -> ReportStatusResponse:
     """Map a stored `Report` row (JSON strings on disk) to the API shape."""
     formats = json.loads(row.formats) if isinstance(row.formats, str) and row.formats else (row.formats or [])
     if not isinstance(formats, list):
@@ -130,6 +140,9 @@ def _report_item(row: Any) -> ReportStatusResponse:
         file_paths=paths,
         requested_by=row.requested_by,
         run_id=row.assessment_run_id,
+        tenant_name=tenant_name,
+        assessment_name=assessment_name,
+        requested_by_name=requested_by_name,
         download_url=f"/api/v1/reports/{row.id}/download",
     )
 
@@ -254,7 +267,10 @@ async def list_reports(
         from sqlalchemy import func, select
 
         from unimonitor.db.base import async_session_factory
+        from unimonitor.db.models.assessment import Assessment, AssessmentRun
         from unimonitor.db.models.report import Report
+        from unimonitor.db.models.tenant import Tenant
+        from unimonitor.db.models.user import AppUser
 
         async with async_session_factory() as session:
             stmt = select(Report)
@@ -264,7 +280,45 @@ async def list_reports(
                 stmt = stmt.where(Report.report_type == report_type)
             total = await session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
             rows = (await session.execute(stmt.order_by(Report.created_at.desc()).offset((page - 1) * page_size).limit(page_size))).scalars().all()
-        items = [_report_item(row) for row in rows]
+
+            tenant_ids = {row.tenant_id for row in rows if row.tenant_id}
+            tenant_names = (
+                dict((await session.execute(select(Tenant.id, Tenant.display_name, Tenant.name).where(Tenant.id.in_(tenant_ids)))).all())
+                if tenant_ids
+                else {}
+            )
+            run_ids = {row.assessment_run_id for row in rows if row.assessment_run_id}
+            assessment_names = (
+                dict(
+                    (
+                        await session.execute(
+                            select(AssessmentRun.id, Assessment.name)
+                            .join(Assessment, AssessmentRun.assessment_id == Assessment.id)
+                            .where(AssessmentRun.id.in_(run_ids))
+                        )
+                    ).all()
+                )
+                if run_ids
+                else {}
+            )
+            user_ids = {row.requested_by for row in rows if row.requested_by}
+            user_names = (
+                dict((await session.execute(select(AppUser.id, AppUser.full_name).where(AppUser.id.in_(user_ids)))).all()) if user_ids else {}
+            )
+
+        def _tenant_label(value: str | None) -> str | None:
+            names = tenant_names.get(value) or (None, None)
+            return names[0] or names[1]
+
+        items = [
+            _report_item(
+                row,
+                tenant_name=_tenant_label(row.tenant_id),
+                assessment_name=assessment_names.get(row.assessment_run_id),
+                requested_by_name=user_names.get(row.requested_by),
+            )
+            for row in rows
+        ]
         return ReportListResponse(items=items, total=total)
     except Exception:  # noqa: S110  # NOSONAR - the in-memory store below is the fallback
         pass

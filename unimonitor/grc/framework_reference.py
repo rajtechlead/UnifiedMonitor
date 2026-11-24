@@ -16,6 +16,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+ISO_IEC = "ISO/IEC"
+EUROPEAN_UNION = "European Union"
+FEDRAMP_BASELINES = "Rev. 5 baselines"
+FEDRAMP_BASELINES_URL = "https://www.fedramp.gov/rev5/baselines/"
+
 
 @dataclass(frozen=True)
 class Level:
@@ -58,7 +63,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "iso27001-2022": FrameworkReference(
         name="ISO/IEC 27001:2022",
         version="2022",
-        publisher="ISO/IEC",
+        publisher=ISO_IEC,
         control_count=93,
         requirement_count=93,
         levels=(_l(1, "Annex A", "One control set; applicability is decided by the risk assessment and the Statement of Applicability."),),
@@ -69,7 +74,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "iso42001": FrameworkReference(
         name="ISO/IEC 42001:2023",
         version="2023",
-        publisher="ISO/IEC",
+        publisher=ISO_IEC,
         control_count=38,
         requirement_count=38,
         levels=(_l(1, "Annex A", "AI management system controls; no published levels."),),
@@ -202,7 +207,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "gdpr": FrameworkReference(
         name="EU GDPR",
         version="Regulation (EU) 2016/679",
-        publisher="European Union",
+        publisher=EUROPEAN_UNION,
         control_count=99,
         requirement_count=99,
         levels=(_l(1, "Articles", "99 articles; seven principles in Article 5."),),
@@ -250,33 +255,33 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     ),
     "fedramp-low": FrameworkReference(
         name="FedRAMP Low Baseline",
-        version="Rev. 5 baselines",
+        version=FEDRAMP_BASELINES,
         publisher="FedRAMP",
         control_count=156,
         levels=(_l(1, "Low", "Low-impact baseline derived from NIST 800-53 Rev. 5."),),
-        source_url="https://www.fedramp.gov/rev5/baselines/",
+        source_url=FEDRAMP_BASELINES_URL,
         notes="Reported as its own framework so a Low assessment never inherits Moderate controls.",
     ),
     "fedramp-moderate": FrameworkReference(
         name="FedRAMP Moderate Baseline",
-        version="Rev. 5 baselines",
+        version=FEDRAMP_BASELINES,
         publisher="FedRAMP",
         control_count=323,
         levels=(_l(1, "Moderate", "Moderate-impact baseline derived from NIST 800-53 Rev. 5."),),
-        source_url="https://www.fedramp.gov/rev5/baselines/",
+        source_url=FEDRAMP_BASELINES_URL,
     ),
     "fedramp-high": FrameworkReference(
         name="FedRAMP High Baseline",
-        version="Rev. 5 baselines",
+        version=FEDRAMP_BASELINES,
         publisher="FedRAMP",
         control_count=421,
         levels=(_l(1, "High", "High-impact baseline derived from NIST 800-53 Rev. 5."),),
-        source_url="https://www.fedramp.gov/rev5/baselines/",
+        source_url=FEDRAMP_BASELINES_URL,
     ),
     "nis2": FrameworkReference(
         name="NIS2 Directive",
         version="Directive (EU) 2022/2555",
-        publisher="European Union",
+        publisher=EUROPEAN_UNION,
         control_count=10,
         requirement_count=10,
         levels=(
@@ -291,7 +296,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "dora": FrameworkReference(
         name="Digital Operational Resilience Act",
         version="Regulation (EU) 2022/2554",
-        publisher="European Union",
+        publisher=EUROPEAN_UNION,
         control_count=5,
         requirement_count=5,
         levels=(_l(1, "Pillar", "Five pillars: ICT risk, incident reporting, resilience testing, third-party risk, information sharing."),),
@@ -337,7 +342,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "iso27017": FrameworkReference(
         name="ISO/IEC 27017:2015",
         version="2015",
-        publisher="ISO/IEC",
+        publisher=ISO_IEC,
         control_count=7,
         requirement_count=7,
         levels=(_l(1, "Cloud extensions", "Seven cloud-specific controls added to ISO 27002 guidance."),),
@@ -347,7 +352,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "iso27018": FrameworkReference(
         name="ISO/IEC 27018:2025",
         version="2025",
-        publisher="ISO/IEC",
+        publisher=ISO_IEC,
         control_count=25,
         requirement_count=25,
         levels=(_l(1, "PII protection", "Public-cloud PII processor controls."),),
@@ -358,7 +363,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "iso27701": FrameworkReference(
         name="ISO/IEC 27701:2025",
         version="2025",
-        publisher="ISO/IEC",
+        publisher=ISO_IEC,
         control_count=49,
         requirement_count=49,
         levels=(_l(1, "Privacy extension", "PIMS requirements extending ISO 27001/27002."),),
@@ -380,7 +385,7 @@ FRAMEWORK_REFERENCES: dict[str, FrameworkReference] = {
     "eu-ai-act": FrameworkReference(
         name="EU Artificial Intelligence Act",
         version="Regulation (EU) 2024/1689",
-        publisher="European Union",
+        publisher=EUROPEAN_UNION,
         control_count=113,
         requirement_count=113,
         levels=(

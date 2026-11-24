@@ -17,7 +17,9 @@ from unimonitor.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-PER_SOURCE_TIMEOUT_SECONDS = 10
+# A Graph client-credentials token plus the audit query regularly takes longer than
+# ten seconds; the old limit timed out and reported the empty string of the timeout.
+PER_SOURCE_TIMEOUT_SECONDS = 30
 MAX_EVENTS = 100
 
 
@@ -61,7 +63,10 @@ async def cloud_events(
     events: list[dict[str, Any]] = []
     for (name, _reader), result in zip(selected, results, strict=True):
         if isinstance(result, BaseException):
-            reason = str(result)[:200]
+            if isinstance(result, TimeoutError):
+                reason = f"timed out after {PER_SOURCE_TIMEOUT_SECONDS}s"
+            else:
+                reason = (str(result).strip() or result.__class__.__name__)[:200]
             logger.warning("Cloud audit source unavailable", source=name, error=reason)
             if failures is not None:
                 failures[name] = reason
@@ -94,12 +99,15 @@ async def _microsoft(db: Any, limit: int, tenant_id: str | None = None) -> list[
         certificate_pem=app.get("certificate_pem") or None,
         private_key_pem=app.get("private_key_pem") or None,
     ) as client:
-        response = await client.get(f"/auditLogs/directoryAudits?$top={limit}")
+        response = await client.get(f"/auditLogs/directoryAudits?$top={min(limit, 50)}")
     if not response.success:
         raise RuntimeError(response.error_message or "Microsoft audit log request failed")
+    if not isinstance(response.data, list):
+        raise RuntimeError("Microsoft returned an unexpected audit payload")
 
+    payload: dict[str, Any] = response.data if isinstance(response.data, dict) else {}
     rows = []
-    for row in (response.data or {}).get("value", []) or []:
+    for row in payload.get("value", []) or []:
         initiated = (row.get("initiatedBy") or {}).get("user") or {}
         targets = row.get("targetResources") or [{}]
         rows.append(

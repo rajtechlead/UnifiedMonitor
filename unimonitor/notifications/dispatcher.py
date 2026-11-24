@@ -76,21 +76,95 @@ class NotificationDispatcher:
         await self._send_teams_channel(subject, body, settings_obj)
         await self._send_slack_channel(subject, body, settings_obj)
 
-    async def _send_email_channel(self, subject: str, body: str, settings_obj: Any) -> None:
-        if not getattr(settings_obj, "smtp_enabled", False):
-            return
+    @staticmethod
+    def _recipients(settings_obj: Any) -> list[str]:
         emails = getattr(settings_obj, "smtp_to_emails", None) or []
         if isinstance(emails, str):
             try:
                 emails = json.loads(emails)
-            except Exception:
+            except ValueError:
                 emails = [emails]
+        if not isinstance(emails, list):
+            return []
+        return [str(address).strip() for address in emails if str(address).strip()]
+
+    async def _send_email_channel(self, subject: str, body: str, settings_obj: Any) -> None:
+        emails = self._recipients(settings_obj)
         if not emails:
             return
+        # The registered Entra app is the built-in default: an install that has
+        # connected Microsoft 365 can send without SMTP. SMTP is used when it is
+        # switched on, and Graph is the fallback when SMTP is not configured.
+        smtp_ready = bool(getattr(settings_obj, "smtp_enabled", False) and getattr(settings_obj, "smtp_host", None))
+        if smtp_ready:
+            try:
+                await asyncio.to_thread(self._send_smtp, emails, subject, body)
+                return
+            except Exception as exc:
+                logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
         try:
-            await asyncio.to_thread(self._send_smtp, emails, subject, body)
+            await self._send_graph_email(emails, subject, body, settings_obj)
         except Exception as exc:
-            logger.error("SMTP send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
+            logger.error("Graph mail send failed", extra={"error": str(exc), "tenant_id": self.tenant_id})
+
+    def _graph_sender(self, settings_obj: Any) -> str:
+        """The mailbox Graph sends from: the configured From, else the app's account."""
+        from unimonitor.config import get_settings
+
+        configured = getattr(settings_obj, "smtp_from_address", None) or getattr(settings_obj, "smtp_username", None) or get_settings().SMTP_FROM
+        return str(configured).strip()
+
+    async def _send_graph_email(self, to_emails: list[str], subject: str, body: str, settings_obj: Any) -> None:
+        """Send through Microsoft Graph with the connected app (Mail.Send)."""
+        from sqlalchemy import select
+
+        from unimonitor.auth.oauth import acquire_token_for_client
+        from unimonitor.config import get_settings
+        from unimonitor.db.models.cloud_connection import CloudConnection
+        from unimonitor.onboarding.service import microsoft_app
+
+        app = await microsoft_app(self.db, self.tenant_id)
+        if not app.get("configured"):
+            return
+        sender = self._graph_sender(settings_obj)
+        if not sender:
+            account = (
+                await self.db.execute(
+                    select(CloudConnection.account).where(
+                        CloudConnection.tenant_id == self.tenant_id,
+                        CloudConnection.provider == "microsoft",
+                    )
+                )
+            ).scalar_one_or_none()
+            sender = str(account or "").strip()
+        if not sender:
+            raise RuntimeError("No sender address: set a From address in notification settings.")
+
+        token = await acquire_token_for_client(
+            tenant_id=app.get("directory"),
+            client_id=app.get("client_id"),
+            client_secret=app.get("client_secret") or None,
+            certificate_pem=app.get("certificate_pem") or None,
+            private_key_pem=app.get("private_key_pem") or None,
+        )
+        message = {
+            "message": {
+                "subject": subject,
+                "body": {"contentType": "HTML", "content": body.replace("\n", "<br>")},
+                "toRecipients": [{"emailAddress": {"address": address}} for address in to_emails],
+            },
+            "saveToSentItems": True,
+        }
+        url = f"{get_settings().graph_base_url}/users/{sender}/sendMail"
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                url,
+                json=message,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            )
+        if response.status_code >= 400:
+            raise RuntimeError(f"Graph sendMail answered HTTP {response.status_code}: {response.text[:200]}")
+        logger.info("Graph mail sent", extra={"to": to_emails, "subject": subject})
 
     async def _send_teams_channel(self, subject: str, body: str, settings_obj: Any) -> None:
         teams_url = getattr(settings_obj, "teams_webhook_url", None)

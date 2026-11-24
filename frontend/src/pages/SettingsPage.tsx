@@ -419,17 +419,22 @@ type ConnectorRow = {
   missing_settings: string[]
 }
 
+function connectorStateLabel(connector: { configured: boolean; managed?: boolean; missing_settings: string[] }): string {
+  if (!connector.configured) return `Needs ${connector.missing_settings.join(', ')}`
+  return connector.managed ? 'Connected (vault)' : 'Ready (environment)'
+}
+
 function ConnectorForm({
   kind,
   connector,
   onSaved,
   setResult,
-}: {
+}: Readonly<{
   kind: 'siem' | 'ticketing'
   connector: ConnectorRow
   onSaved: () => void
   setResult: (message: string) => void
-}) {
+}>) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [busy, setBusy] = useState(false)
@@ -554,9 +559,7 @@ function IntegrationsPanel() {
             <div>
               <div style={{ fontSize: 13, fontWeight: 500 }}>{connector.name}</div>
               <div style={{ fontSize: 11, color: connector.configured ? '#10B981' : 'var(--color-text-muted)' }}>
-                {connector.configured
-                  ? connector.managed ? 'Connected (vault)' : 'Ready (environment)'
-                  : `Needs ${connector.missing_settings.join(', ')}`}
+                {connectorStateLabel(connector)}
               </div>
             </div>
             <div style={{ display: 'flex', gap: 6 }}>
@@ -588,9 +591,7 @@ function IntegrationsPanel() {
               <div>
                 <div style={{ fontSize: 12, fontWeight: 500 }}>{provider.name}</div>
                 <div style={{ fontSize: 11, color: provider.configured ? '#10B981' : 'var(--color-text-muted)' }}>
-                  {provider.configured
-                    ? provider.managed ? 'Connected (vault)' : 'Ready (environment)'
-                    : `Needs ${provider.missing_settings.join(', ')}`}
+                  {connectorStateLabel(provider)}
                 </div>
               </div>
             </div>

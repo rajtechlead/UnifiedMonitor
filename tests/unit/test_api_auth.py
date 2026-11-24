@@ -27,6 +27,22 @@ async def test_login_success(client, admin_user):
     assert "refresh_token" in body
     assert body["token_type"] == "bearer"
     assert body["expires_in"] > 0
+    # The SPA stores this profile; without it every login looked like a viewer.
+    assert body["user"]["role"] == "admin"
+    assert body["user"]["email"] == admin_user.email
+
+
+@pytest.mark.asyncio
+async def test_second_login_still_reports_the_admin_role(client, admin_user):
+    """Sign out and back in must not downgrade the account in the UI."""
+    for _ in range(2):
+        r = await client.post(
+            "/api/v1/auth/login",
+            data={"username": admin_user.email, "password": "TestPassword123!"},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        assert r.status_code == 200
+        assert r.json()["user"]["role"] == "admin"
 
 
 @pytest.mark.asyncio

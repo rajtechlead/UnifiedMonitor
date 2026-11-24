@@ -451,10 +451,15 @@ class LicensingResponse(BaseModel):
     generated_at: datetime
 
 
+SERVICE_HEALTH_PORTAL = "https://admin.microsoft.com/#/servicehealth"
+
+
 class ServiceHealthItem(BaseModel):
     service: str
     status: str
     classification: str | None = None
+    open_issues: int = 0
+    link: str = SERVICE_HEALTH_PORTAL
 
 
 class ServiceIssue(BaseModel):
@@ -464,16 +469,26 @@ class ServiceIssue(BaseModel):
     status: str
     classification: str | None = None
     service: str | None = None
+    feature: str | None = None
+    feature_group: str | None = None
+    origin: str | None = None
     start_time: str | None = None
     end_time: str | None = None
+    last_modified_time: str | None = None
     is_resolved: bool
     details: str | None = None
+    latest_update: str | None = None
+    link: str = SERVICE_HEALTH_PORTAL
 
 
 class ServiceHealthResponse(BaseModel):
     services: list[ServiceHealthItem]
     active_issues: list[ServiceIssue]
     degraded_services: int
+    operational_services: int = 0
+    services_with_advisories: int = 0
+    advisories_by_severity: dict[str, int] = {}
+    portal_url: str = SERVICE_HEALTH_PORTAL
     generated_at: datetime
 
 
@@ -699,7 +714,14 @@ async def get_licensing(
     )
 
 
-@router.get("/service-health", responses={502: {"description": "Graph request failed"}})
+@router.get(
+    "/service-health",
+    responses={
+        403: {"description": "The app is missing ServiceHealth.Read.All"},
+        502: {"description": "Graph request failed"},
+        503: {"description": "Microsoft 365 is not connected"},
+    },
+)
 async def get_service_health(
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_session)],
@@ -720,13 +742,24 @@ async def get_service_health(
         permission="ServiceHealth.Read.All",
     )
 
-    services = [
-        ServiceHealthItem(
-            service=row.get("service", "Unknown"),
-            status=row.get("status", "unknown"),
-        )
-        for row in health.get("value", []) or []
-    ]
+    def _latest_update(row: dict[str, Any]) -> str | None:
+        posts = row.get("posts") or []
+        if not isinstance(posts, list) or not posts:
+            return None
+        last = posts[-1] if isinstance(posts[-1], dict) else {}
+        description = last.get("description") or {}
+        return str(description.get("content") or "")[:1000] or None
+
+    def _details(row: dict[str, Any]) -> str | None:
+        value = row.get("impactDescription")
+        if value:
+            return str(value)[:4000]
+        body = row.get("body")
+        if isinstance(body, dict):
+            return str(body.get("content") or "")[:4000] or None
+        return None
+
+    raw_issues = issues_payload.get("value", []) or []
     issues = [
         ServiceIssue(
             id=row.get("id", ""),
@@ -735,16 +768,48 @@ async def get_service_health(
             status=row.get("status", ""),
             classification=row.get("classification"),
             service=row.get("service"),
+            feature=row.get("feature"),
+            feature_group=row.get("featureGroup"),
+            origin=row.get("origin"),
             start_time=row.get("startDateTime"),
             end_time=row.get("endDateTime"),
+            last_modified_time=row.get("lastModifiedDateTime"),
             is_resolved=bool(row.get("isResolved", False)),
-            details=row.get("impactDescription") or row.get("body", {}).get("content") if isinstance(row.get("body"), dict) else None,
+            details=_details(row),
+            latest_update=_latest_update(row),
         )
-        for row in issues_payload.get("value", []) or []
+        for row in raw_issues
+        if isinstance(row, dict)
     ]
+
+    # Every service Graph reports, with how many open advisories touch it, so the
+    # page shows the whole coverage rather than only the Microsoft 365 suite line.
+    issues_by_service: dict[str, int] = {}
+    for issue in issues:
+        key = (issue.service or "Unknown").lower()
+        issues_by_service[key] = issues_by_service.get(key, 0) + 1
+    services = [
+        ServiceHealthItem(
+            service=str(row.get("service", "Unknown")),
+            status=str(row.get("status", "unknown")),
+            classification=row.get("classification"),
+            open_issues=issues_by_service.get(str(row.get("service", "")).lower(), 0),
+        )
+        for row in health.get("value", []) or []
+        if isinstance(row, dict)
+    ]
+    operational = sum(1 for item in services if item.status.lower() in {"serviceoperational", "operational"})
+    severity_counts: dict[str, int] = {}
+    for issue in issues:
+        severity = (issue.severity or "unknown").lower()
+        severity_counts[severity] = severity_counts.get(severity, 0) + 1
+
     return ServiceHealthResponse(
         services=services,
         active_issues=issues,
-        degraded_services=sum(1 for s in services if s.status.lower() not in {"serviceoperational", "operational"}),
+        degraded_services=len(services) - operational,
+        operational_services=operational,
+        services_with_advisories=sum(1 for item in services if item.open_issues),
+        advisories_by_severity=severity_counts,
         generated_at=datetime.now(UTC),
     )

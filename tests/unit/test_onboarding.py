@@ -35,11 +35,10 @@ class TestPermissions:
 class TestCatalogue:
     def test_every_registry_provider_is_offerable(self):
         from unimonitor.grc.providers import PROVIDERS
-        from unimonitor.onboarding.service import IDENTITY_PLATFORMS
 
         ids = [p["id"] for p in service.platform_catalogue()]
-        # Monitored clouds plus identity-only platforms (Okta), never a duplicate.
-        assert sorted(ids) == sorted([*PROVIDERS, *(platform["id"] for platform in IDENTITY_PLATFORMS)])
+        # Only platforms with a collector: an entry without one could never produce data.
+        assert sorted(ids) == sorted(PROVIDERS)
 
     def test_microsoft_is_automated_and_clouds_ask_for_credentials(self):
         catalogue = {p["id"]: p for p in service.platform_catalogue()}

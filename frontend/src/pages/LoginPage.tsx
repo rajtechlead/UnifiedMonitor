@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Shield } from 'lucide-react'
 import { api } from '../hooks/useApi'
-import { useAuthStore } from '../store/authStore'
+import { establishSession } from '../authSession'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -13,7 +13,6 @@ export default function LoginPage() {
   const [ssoReason, setSsoReason] = useState('')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const setAuth = useAuthStore((s) => s.setAuth)
 
   useEffect(() => {
     api.get('/auth/sso')
@@ -42,7 +41,10 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', form, {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       })
-      setAuth(res.data.access_token, res.data.user)
+      // The API returns the account with the token; /me is the fallback for an
+      // older API response. Signing in twice used to leave the role unset, which
+      // rendered the administrator as a standard user.
+      await establishSession(res.data.access_token, res.data.user)
       navigate('/')
     } catch {
       // Any failure is shown as the same message: the API deliberately does not

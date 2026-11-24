@@ -23,6 +23,7 @@ export default function TenantSettingsPage() {
   const [message, setMessage] = useState('')
   const [adding, setAdding] = useState('')
   const [draft, setDraft] = useState<Record<string, string> | null>(null)
+  const [links, setLinks] = useState<Array<{ label: string; url: string }> | null>(null)
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['tenant-settings', tenantId],
@@ -58,10 +59,12 @@ export default function TenantSettingsPage() {
       collection_interval_minutes: Number(values?.collection_interval_minutes || 60),
       auto_collection: values?.auto_collection === 'true',
       notes: values?.notes ?? '',
+      external_links: (links ?? data?.external_links ?? []).filter(link => link.label.trim() && link.url.trim()),
     }),
     onSuccess: () => {
       setMessage('Settings saved.')
       setDraft(null)
+      setLinks(null)
       void qc.invalidateQueries({ queryKey: ['tenant-settings', tenantId] })
       void qc.invalidateQueries({ queryKey: ['tenants', 'rollup'] })
     },
@@ -123,8 +126,8 @@ export default function TenantSettingsPage() {
           <Plug size={15} /> Platform connections
         </div>
         <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
-          Each client keeps its own credentials in the vault. Connect Microsoft 365, AWS, Google Cloud,
-          Google Workspace or Okta as needed; collection and findings stay scoped to this client.
+          Each client keeps its own credentials in the vault. Connect Microsoft 365, AWS, Google Cloud
+          or Google Workspace as needed; collection and findings stay scoped to this client.
         </div>
         {data.connections.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
@@ -205,6 +208,61 @@ export default function TenantSettingsPage() {
             <input id="support_email" style={input} value={values.support_email} onChange={e => set('support_email', e.target.value)} placeholder="soc@example.com" />
           </div>
         </div>
+      </div>
+
+      <div style={panel}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>Client portal and external links</div>
+        <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>
+          Publish a dedicated portal, sub-tenant or runbook link for this client. Links must be public
+          https addresses.
+        </div>
+        {(links ?? data.external_links ?? []).map((link, index) => (
+          <div key={`${link.url}-${index}`} style={{ display: 'grid', gridTemplateColumns: '160px 1fr auto', gap: 8, alignItems: 'end' }}>
+            <div>
+              <label htmlFor={`link-label-${index}`} style={label}>Label</label>
+              <input
+                id={`link-label-${index}`}
+                style={input}
+                value={link.label}
+                placeholder="Client portal"
+                onChange={e => {
+                  const next = [...(links ?? data.external_links ?? [])]
+                  next[index] = { ...next[index], label: e.target.value }
+                  setLinks(next)
+                }}
+              />
+            </div>
+            <div>
+              <label htmlFor={`link-url-${index}`} style={label}>URL</label>
+              <input
+                id={`link-url-${index}`}
+                style={input}
+                value={link.url}
+                placeholder="https://portal.example.com/client"
+                onChange={e => {
+                  const next = [...(links ?? data.external_links ?? [])]
+                  next[index] = { ...next[index], url: e.target.value }
+                  setLinks(next)
+                }}
+              />
+            </div>
+            <button
+              type="button"
+              aria-label={`Remove ${link.label || 'link'}`}
+              onClick={() => setLinks((links ?? data.external_links ?? []).filter((_, position) => position !== index))}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#EF4444', padding: '0 4px 10px' }}
+            >
+              <Trash2 size={14} />
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => setLinks([...(links ?? data.external_links ?? []), { label: '', url: '' }])}
+          style={{ alignSelf: 'flex-start', padding: '6px 12px', fontSize: 12, background: 'transparent', border: '1px solid var(--color-border)', borderRadius: 7, cursor: 'pointer', color: 'var(--color-text)' }}
+        >
+          Add link
+        </button>
       </div>
 
       <div style={panel}>

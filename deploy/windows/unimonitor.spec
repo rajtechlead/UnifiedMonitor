@@ -34,12 +34,21 @@ datas = [
 # python-docx ships a default.docx template it opens at runtime, and the bundled
 # frontend build (unimonitor/static) is collected by the unimonitor hook below.
 datas += collect_data_files("docx")
+# ReportLab loads its font metrics and page-compression code by name. Without them
+# the frozen build silently took the text fallback and stored it as a PDF.
+datas += collect_data_files("reportlab")
+datas += collect_data_files("openpyxl")
 
 # ── Hidden imports that PyInstaller static analysis misses ────────────────────
 # Celery and kombu load loaders, fixups and transports by name at runtime, so their
 # package hooks leave pieces out. Collecting both packages keeps the broker probe
 # (and therefore the in-process fallback) working inside the frozen build.
-hiddenimports = collect_submodules("celery") + collect_submodules("kombu") + [
+hiddenimports = (
+    collect_submodules("celery")
+    + collect_submodules("kombu")
+    + collect_submodules("reportlab")
+    + collect_submodules("openpyxl")
+    + [
     # SQLAlchemy dialects
     "sqlalchemy.dialects.sqlite",
     "sqlalchemy.dialects.postgresql",
@@ -117,7 +126,8 @@ hiddenimports = collect_submodules("celery") + collect_submodules("kombu") + [
     "docx",
     "docx.shared",
     "docx.oxml",
-]
+    ]
+)
 
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(

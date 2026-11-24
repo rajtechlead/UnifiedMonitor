@@ -6,6 +6,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-11-24 (owner observations, third round)
+
+Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
+
+### Fixed
+
+- Microsoft sign-in: the SPA now consumes the `#access_token` fragment, reads
+  `/auth/me` and strips the token from the address bar; the callback URL is derived
+  from the request origin unless explicitly configured. Delegated sign-in requests
+  only `openid profile email offline_access User.Read` instead of also asking for the
+  application-only `Organization.Read.All`, which forced admin consent at login.
+- Re-login role: `POST /auth/login` returns the account profile (login and refresh),
+  so the SPA no longer stores an undefined user and shows administrators as viewers.
+- Risk heatmap: cells carry their real finding ids; the dashboard no longer drops
+  every cell. SOC incident trend counts findings by first-seen day, not only alerts.
+- Zero Trust report links are fetched with the bearer token and opened from a blob;
+  the PowerShell runner now uses the upstream module's certificate app-auth
+  (`-Certificate <thumbprint>`), since it has no client-secret switch. PFX lives in a
+  private temp folder and its password travels only in the environment.
+- Corrupt PDFs: the no-ReportLab fallback used to store a .txt file under the `pdf`
+  format; it now writes a valid minimal PDF. The PyInstaller spec collects ReportLab
+  and openpyxl data and submodules.
+- Reports only include findings from connected providers; the table shows tenant id,
+  tenant name, assessment name and the requester's name.
+- Microsoft cloud audit errors carry Graph detail; a timeout now names itself instead
+  of rendering an empty reason. Per-source timeout raised to 30 s.
+- Service health shows per-service advisory counts, admin-center links, advisory
+  ids/features/updates and operational/degraded severity coverage.
+- Connector URL fields use the shared public-target validation (no loopback, private
+  range or cloud-metadata host); reserved ranges were added to that validator.
+
+### Added
+
+- Graph `sendMail` through the connected Entra app as the default notification
+  sender, with SMTP still available when enabled.
+- Per-client external links (dedicated portal / sub-tenant) in tenant settings.
+
+### Removed
+
+- Okta from the onboarding platform picker and its unused validation: it is an SSO
+  provider only, because UniMonitor has no Okta evidence collector.
+
+---
+
 ## [Unreleased] — 2026-11-23 (owner observations)
 
 Tracker: `docs/OBSERVATIONS_2026-11-23.md`.

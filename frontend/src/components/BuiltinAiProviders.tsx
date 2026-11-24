@@ -55,9 +55,14 @@ export default function BuiltinAiProviders() {
 
   const test = useMutation({
     mutationFn: (name: string) => aiApi.testProvider(name),
-    onSuccess: (result) => setMessage(result.ok
-      ? `${result.name} answered successfully${result.model ? ` (${result.model})` : ''}.`
-      : `${result.name} failed: ${result.error || 'no answer'}.`),
+    onSuccess: (result) => {
+      if (result.ok) {
+        const model = result.model ? ` (${result.model})` : ''
+        setMessage(`${result.name} answered successfully${model}.`)
+        return
+      }
+      setMessage(`${result.name} failed: ${result.error || 'no answer'}.`)
+    },
     onError: (err) => setMessage(errorDetail(err, 'The provider test could not run.')),
   })
 
@@ -122,7 +127,7 @@ export default function BuiltinAiProviders() {
                 checked={draft.enabled}
                 onChange={e => setDrafts(prev => ({ ...prev, [provider.name]: { ...draft, enabled: e.target.checked } }))}
               />
-              on
+              <span>on</span>
             </label>
             <div style={{ display: 'flex', gap: 2 }}>
               <button type="button" aria-label={`Move ${provider.name} earlier`} onClick={() => move(provider.name, -1)}

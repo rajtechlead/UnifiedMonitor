@@ -133,6 +133,16 @@ async def _load_report_context(
         raise ValueError(f"AssessmentRun {run_id} not found")
 
     findings = (await db.execute(select(Finding).where(Finding.assessment_run_id == run.id))).scalars().all()
+
+    # A run can carry rows for a platform that has since been disconnected (or was
+    # never connected on this install). Those are not evidence this tenant produced,
+    # so a report must not present them as findings.
+    from unimonitor.grc.providers import provider_for_service
+    from unimonitor.onboarding.service import connected_providers
+
+    connected = await connected_providers(db, tenant_id)
+    if connected:
+        findings = [f for f in findings if (provider := provider_for_service(f.service)) is not None and provider.id in connected]
     return report, run, findings
 
 

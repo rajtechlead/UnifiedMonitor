@@ -16,14 +16,15 @@ GRAPH_SCOPES = [
     "https://graph.microsoft.com/.default",
 ]
 
-# Interactive / delegated scopes for the web UI
+# Interactive / delegated scopes for the web UI. Sign-in needs only the user's own
+# profile; Organization.Read.All is an application permission that forced a second
+# admin consent during login and made sign-in fail for anyone but a global admin.
 DELEGATED_SCOPES = [
     "openid",
     "profile",
     "email",
     "offline_access",
     "User.Read",
-    "Organization.Read.All",
 ]
 
 
@@ -158,6 +159,7 @@ def build_authorize_url(
     client_secret: str | None = None,
     certificate_pem: str | None = None,
     private_key_pem: str | None = None,
+    redirect_uri: str | None = None,
 ) -> str:
     """Generate the Entra ID authorisation URL for the connected app.
 
@@ -179,7 +181,7 @@ def build_authorize_url(
     return app.get_authorization_request_url(
         scopes=DELEGATED_SCOPES,
         state=state,
-        redirect_uri=settings.ENTRA_REDIRECT_URI,
+        redirect_uri=redirect_uri or settings.ENTRA_REDIRECT_URI,
     )
 
 
@@ -191,6 +193,7 @@ async def exchange_code_for_token(
     client_secret: str | None = None,
     certificate_pem: str | None = None,
     private_key_pem: str | None = None,
+    redirect_uri: str | None = None,
 ) -> dict:
     """Exchange the auth code for tokens (delegated flow, async wrapper)."""
     return await asyncio.to_thread(
@@ -201,6 +204,7 @@ async def exchange_code_for_token(
         client_secret,
         certificate_pem,
         private_key_pem,
+        redirect_uri,
     )
 
 
@@ -211,6 +215,7 @@ def _exchange_code_for_token_sync(
     client_secret: str | None = None,
     certificate_pem: str | None = None,
     private_key_pem: str | None = None,
+    redirect_uri: str | None = None,
 ) -> dict:
     """Synchronous implementation of code exchange."""
     settings = get_settings()
@@ -227,7 +232,7 @@ def _exchange_code_for_token_sync(
     result = app.acquire_token_by_authorization_code(
         code=code,
         scopes=DELEGATED_SCOPES,
-        redirect_uri=settings.ENTRA_REDIRECT_URI,
+        redirect_uri=redirect_uri or settings.ENTRA_REDIRECT_URI,
     )
     if "error" in result:
         from unimonitor.exceptions import AuthenticationError

@@ -164,18 +164,6 @@ PLATFORM_FIELDS: dict[str, dict[str, Any]] = {
             },
         ],
     },
-    "okta": {
-        "config": [{"name": "domain", "label": "Okta domain", "placeholder": "example.okta.com", "required": "1"}],
-        "secrets": [{"name": "api_token", "label": "API token", "placeholder": "00aBcD...", "required": "1"}],
-        "automated": [],
-        "auth_methods": [
-            {
-                "id": "api_token",
-                "label": "API token",
-                "description": "Create a read-only API token as a super administrator; it is stored in the vault and never shown again.",
-            }
-        ],
-    },
 }
 
 
@@ -187,23 +175,11 @@ def _loads(raw: str | None) -> dict[str, Any]:
         return {}
 
 
-# Platforms that are connected for identity/sign-in rather than monitored as a cloud.
-# They appear in the platform picker but not in the cloud-provider roll-ups, which
-# group evidence from the control library.
-IDENTITY_PLATFORMS: tuple[dict[str, str], ...] = (
-    {
-        "id": "okta",
-        "name": "Okta",
-        "short_name": "Okta",
-        "description": "Identity provider — super-admin API token, read-only verification of the organisation",
-        "colour": "#00297A",
-    },
-)
-
-
 def platform_catalogue() -> list[dict[str, Any]]:
     """Everything the wizard needs to render the platform picker."""
     catalogue = []
+    # Only platforms with a collector appear: a picker entry that can never produce
+    # evidence would look connected and silently report nothing.
     platforms = [
         {
             "id": provider.id,
@@ -213,7 +189,7 @@ def platform_catalogue() -> list[dict[str, Any]]:
             "colour": provider.colour,
         }
         for provider in PROVIDERS.values()
-    ] + list(IDENTITY_PLATFORMS)
+    ]
     for platform in platforms:
         fields = PLATFORM_FIELDS[platform["id"]]
         catalogue.append(
@@ -237,7 +213,7 @@ async def connected_providers(session: AsyncSession, tenant_id: str | None = Non
     stmt = select(CloudConnection.provider).where(CloudConnection.status == "connected")
     if tenant_id is not None:
         stmt = stmt.where(CloudConnection.tenant_id == tenant_id)
-    return set((await session.execute(stmt)).scalars())
+    return set((await session.execute(stmt)).scalars().all())
 
 
 async def has_admin(session: AsyncSession) -> bool:
@@ -334,8 +310,7 @@ async def upsert_connection(
 
     row = existing or CloudConnection(tenant_id=tenant_id, provider=provider)
     row.account = account
-    identity_name = next((platform["name"] for platform in IDENTITY_PLATFORMS if platform["id"] == provider), provider.title())
-    row.display_name = display_name or (PROVIDERS[provider].name if provider in PROVIDERS else identity_name)
+    row.display_name = display_name or (PROVIDERS[provider].name if provider in PROVIDERS else provider.title())
     row.status = status
     row.config = json.dumps(config)
     row.secret_refs = json.dumps(secret_refs)
@@ -594,20 +569,6 @@ async def connect_platform(session: AsyncSession, provider: str, payload: dict[s
                 "credentials_json": str(payload.get("credentials_json", "")),
                 "access_token": str(payload.get("access_token", "")),
             },
-        )
-
-    if provider == "okta":
-        domain = str(payload.get("domain", "")).strip()
-        token = str(payload.get("api_token", "")).strip()
-        org = await clouds.validate_okta(domain, token)
-        return await upsert_connection(
-            session,
-            tenant_id=local_tenant,
-            provider="okta",
-            account=domain,
-            display_name=f"Okta {org}",
-            config={"domain": domain},
-            secrets={"api_token": token},
         )
 
     if provider == "google_workspace":

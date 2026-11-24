@@ -85,6 +85,7 @@ export default function ZeroTrustAssessmentPage() {
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [usePowershell, setUsePowershell] = useState(false)
+  const [openingReport, setOpeningReport] = useState('')
 
   const reports = useQuery({
     queryKey: ['zerotrust', 'reports'],
@@ -178,6 +179,21 @@ export default function ZeroTrustAssessmentPage() {
     }
   }
 
+  const openReport = async (name: string) => {
+    setError(''); setOpeningReport(name)
+    try {
+      const response = await zerotrustApi.downloadReport(name)
+      const url = URL.createObjectURL(response.data as Blob)
+      window.open(url, '_blank', 'noopener')
+      // The tab keeps its own reference; release ours after it has loaded.
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+    } catch {
+      setError('Could not open that report. Reload the page and try again.')
+    } finally {
+      setOpeningReport('')
+    }
+  }
+
   const downloadScript = async () => {
     setError('')
     try {
@@ -251,8 +267,8 @@ export default function ZeroTrustAssessmentPage() {
         </button>
         {isMicrosoft && (
           <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input type="checkbox" checked={usePowershell} onChange={event => setUsePowershell(event.target.checked)} />
-            Use Microsoft PowerShell module
+            <input type="checkbox" checked={usePowershell} onChange={event => setUsePowershell(event.target.checked)} />{' '}
+            <span>Use Microsoft PowerShell module</span>
           </label>
         )}
         {isMicrosoft && (
@@ -289,9 +305,14 @@ export default function ZeroTrustAssessmentPage() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {reports.data?.slice(0, 10).map(report => (
               <div key={report.name} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12 }}>
-                <a href={zerotrustApi.reportUrl(report.name)} target="_blank" rel="noreferrer" style={{ flex: 1, color: 'var(--color-brand)' }}>
-                  {report.name}
-                </a>
+                <button
+                  type="button"
+                  onClick={() => void openReport(report.name)}
+                  disabled={openingReport === report.name}
+                  style={{ flex: 1, textAlign: 'left', color: 'var(--color-brand)', background: 'transparent', border: 'none', cursor: 'pointer', padding: 0, fontSize: 12 }}
+                >
+                  {openingReport === report.name ? 'Opening…' : report.name}
+                </button>
                 <span style={{ color: 'var(--color-text-muted)' }}>
                   {new Date(report.modified_at).toLocaleString()} · {Math.round(report.size_bytes / 1024)} KB
                 </span>

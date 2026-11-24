@@ -612,6 +612,7 @@ async def dashboard_soc(
     from sqlalchemy import select
 
     from unimonitor.db.models.alert import Alert
+    from unimonitor.db.models.finding import Finding
 
     finding_counts = await _get_finding_counts(db, tenant_id)
     now = datetime.now(UTC)
@@ -620,6 +621,13 @@ async def dashboard_soc(
     if tenant_id:
         stmt = stmt.where(Alert.tenant_id == tenant_id)
     alerts = (await db.execute(stmt)).scalars().all()
+
+    # Incidents are the findings first seen in the window, so the trend is real even
+    # when no alert policy has fired yet.
+    finding_stmt = select(Finding.first_detected_at, Finding.severity).where(Finding.first_detected_at >= window_start)
+    if tenant_id:
+        finding_stmt = finding_stmt.where(Finding.tenant_id == tenant_id)
+    finding_rows = (await db.execute(finding_stmt)).all()
 
     def _aware(value: datetime | None) -> datetime | None:
         if value is None:
@@ -645,9 +653,13 @@ async def dashboard_soc(
     trend: list[dict[str, Any]] = []
     for days_ago in range(6, -1, -1):
         day = (now - timedelta(days=days_ago)).date()
+        day_findings = [severity for detected_at, severity in finding_rows if detected_at and (_aware(detected_at) or now).date() == day]
         trend.append(
             {
                 "date": day.isoformat(),
+                "findings": len(day_findings),
+                "critical": sum(1 for severity in day_findings if str(severity).lower() == "critical"),
+                "high": sum(1 for severity in day_findings if str(severity).lower() == "high"),
                 "alerts": sum(1 for alert in alerts if (_aware(alert.triggered_at) or now).date() == day),
             }
         )
@@ -659,8 +671,8 @@ async def dashboard_soc(
         mean_time_to_acknowledge_hours=_mean_hours(ack_pairs),
         mean_time_to_resolve_hours=_mean_hours(resolve_pairs),
         alerts_by_severity=finding_counts,
-        # No alerts means no history to show; seven empty rows would be noise.
-        incident_trend=trend if alerts else [],
+        # No findings and no alerts means there is no history to show.
+        incident_trend=trend if (alerts or finding_rows) else [],
         generated_at=now,
     )
 

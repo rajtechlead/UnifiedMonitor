@@ -2,7 +2,28 @@
 
 Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
-Last Updated: 2026-11-23 UTC
+Last Updated: 2026-11-24 UTC
+
+### Session 2026-11-24 — owner observations, third round
+
+Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
+
+- Sign-in: the SPA consumes the OAuth `#access_token` fragment (`SsoGate`), reads
+  `/auth/me`, strips the fragment; the redirect URI is derived from the request origin
+  unless configured. Delegated sign-in asks only for `User.Read` (it used to request
+  `Organization.Read.All`, which turned every login into an admin-consent prompt).
+  Local login returns the profile, fixing the viewer-role downgrade.
+- Zero Trust: report downloads are authenticated blob fetches; the PowerShell runner
+  uses the upstream module's certificate app-auth (no client-secret switch exists), the
+  PFX is private and short-lived. Python remains the fallback and records the reason.
+- Mail: Graph `sendMail` with the connected app is the default sender; SMTP optional.
+- Dashboards: heatmap cells carry finding ids; SOC trend counts findings by day.
+- Reports: findings filtered to connected providers; tenant/assessment/requester names.
+- PDF: valid minimal fallback instead of a .txt labelled as PDF; spec collects ReportLab.
+- Service health: per-service advisories, links, features/updates and coverage counts.
+- Client settings: external links for an MSP's dedicated portal or sub-tenant.
+- Security: connector URLs share the public-target validator (loopback/private/metadata
+  blocked); Okta removed from the platform picker (SSO only).
 
 ### Session 2026-11-23 (later) — owner observations 1–12
 

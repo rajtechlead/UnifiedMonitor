@@ -70,6 +70,33 @@ class TestDashboardViews:
         assert data["critical_risks"] == []
         assert data["heatmap"] == []
 
+    async def test_heatmap_carries_real_finding_ids(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        """A connected finding must appear in a cell, not in an empty heatmap."""
+        from unimonitor.db.models.cloud_connection import CloudConnection
+        from unimonitor.db.models.finding import Finding
+
+        db_session.add(CloudConnection(tenant_id=tenant.id, provider="microsoft", account="contoso", status="connected"))
+        finding = Finding(
+            tenant_id=tenant.id,
+            external_control_id="CTRL-ENT-002",
+            title="Block legacy authentication",
+            description="legacy auth",
+            severity="high",
+            state="not_implemented",
+            category="identity",
+            service="entra_id",
+            risk_score=8,
+        )
+        db_session.add(finding)
+        await db_session.flush()
+
+        body = (await client.get("/api/v1/dashboard/risk", headers=auth_headers)).json()
+
+        assert len(body["risks"]) == 1
+        assert body["heatmap"], "a finding must produce a heatmap cell"
+        assert body["heatmap"][0]["findings"] == [finding.id]
+        assert body["heatmap"][0]["count"] == 1
+
     async def test_findings_severity_filter_is_case_insensitive(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
         """SOC tiles link with uppercase severity; findings are stored lowercase."""
         from unimonitor.db.models.finding import Finding

@@ -23,7 +23,7 @@ router = APIRouter()
 
 class TenantCreate(BaseModel):
     """A managed client. Only the name is required: a client that is not a Microsoft
-    tenant (AWS, GCP, Workspace, Okta) gets a generated identifier and connects its
+    tenant (AWS, GCP, Workspace) gets a generated identifier and connects its
     platform on its own settings page."""
 
     name: str = Field(..., min_length=1, max_length=256)
@@ -735,10 +735,18 @@ class TenantRuntimeSettings(BaseModel):
     notes: str = ""
 
 
+class TenantExternalLink(BaseModel):
+    """A link an MSP publishes for one client (dedicated portal, sub-tenant, runbook)."""
+
+    label: str = Field(..., min_length=1, max_length=64)
+    url: str = Field(..., max_length=512)
+
+
 class TenantSettingsResponse(BaseModel):
     tenant: TenantResponse
     branding: TenantBrandingSettings
     collection: TenantRuntimeSettings
+    external_links: list[TenantExternalLink] = []
     connections: list[TenantConnectionRow]
 
 
@@ -752,6 +760,8 @@ class TenantSettingsUpdate(BaseModel):
     collection_interval_minutes: int | None = Field(default=None, ge=5, le=1440)
     auto_collection: bool | None = None
     notes: str | None = Field(default=None, max_length=2000)
+    # Replaces the stored list when supplied; [] clears it.
+    external_links: list[TenantExternalLink] | None = None
 
 
 def _settings_document(raw: str | None) -> dict[str, Any]:
@@ -766,6 +776,20 @@ def _settings_document(raw: str | None) -> dict[str, Any]:
 def _dict_section(document: dict[str, Any], key: str) -> dict[str, Any]:
     value = document.get(key)
     return value if isinstance(value, dict) else {}
+
+
+def _external_links(document: dict[str, Any]) -> list[TenantExternalLink]:
+    """Stored links that still validate; a hand-edited entry cannot break the page."""
+    raw = document.get("external_links")
+    if not isinstance(raw, list):
+        return []
+    links: list[TenantExternalLink] = []
+    for entry in raw:
+        try:
+            links.append(TenantExternalLink.model_validate(entry))
+        except ValueError:
+            continue
+    return links
 
 
 def _connection_row(row: Any) -> TenantConnectionRow:
@@ -822,7 +846,7 @@ async def connect_tenant_platform(
     payload: dict[str, Any],
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> TenantConnectionRow:
-    """Onboard one platform for a client tenant (Microsoft, AWS, GCP, Workspace or Okta).
+    """Onboard one platform for a client tenant (Microsoft, AWS, GCP or Workspace).
 
     This is the Managed tenants plug-n-play path: the same validated connectors the
     setup wizard uses, scoped to the client's own tenant row so collection, findings
@@ -875,12 +899,14 @@ async def get_tenant_settings(
         document = _settings_document(tenant.settings_json)
         branding_raw = _dict_section(document, "branding")
         collection_raw = _dict_section(document, "collection")
+        links = _external_links(document)
         connections = await _tenant_connections(session, tenant_id)
 
     return TenantSettingsResponse(
         tenant=TenantResponse.model_validate(tenant),
         branding=TenantBrandingSettings(**{key: branding_raw[key] for key in TenantBrandingSettings.model_fields if key in branding_raw}),
         collection=TenantRuntimeSettings(**{key: collection_raw[key] for key in TenantRuntimeSettings.model_fields if key in collection_raw}),
+        external_links=links,
         connections=connections,
     )
 
@@ -892,12 +918,16 @@ async def put_tenant_settings(
     current_user: Annotated[Any, Depends(require_role("admin"))],
 ) -> TenantSettingsResponse:
     """Update one client's branding, collection cadence and notes."""
+    from unimonitor.ai.custom import validate_base_url
     from unimonitor.db.base import async_session_factory
     from unimonitor.settings_validation import validate_logo_url, validate_support_email
 
     try:
         logo_url = validate_logo_url(body.logo_url)
         support_email = validate_support_email(body.support_email)
+        if body.external_links is not None:
+            for link in body.external_links:
+                validate_base_url(link.url)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -921,6 +951,8 @@ async def put_tenant_settings(
             collection["auto_collection"] = body.auto_collection
         if body.notes is not None:
             collection["notes"] = body.notes
+        if body.external_links is not None:
+            document["external_links"] = [link.model_dump() for link in body.external_links]
 
         document["branding"] = branding
         document["collection"] = collection
@@ -933,5 +965,6 @@ async def put_tenant_settings(
         tenant=TenantResponse.model_validate(tenant),
         branding=TenantBrandingSettings(**{key: branding[key] for key in TenantBrandingSettings.model_fields if key in branding}),
         collection=TenantRuntimeSettings(**{key: collection[key] for key in TenantRuntimeSettings.model_fields if key in collection}),
+        external_links=_external_links(document),
         connections=connections,
     )

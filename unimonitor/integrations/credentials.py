@@ -49,6 +49,29 @@ def secret_name(kind: str, provider: str) -> str:
     return f"unimonitor-connector-{kind}-{provider}"
 
 
+def _check_value(name: str, value: str) -> None:
+    """Reject a value the connector's request builder must never receive."""
+    if len(value) > MAX_VALUE_LENGTH:
+        raise ConnectorConfigError(f"{name} is longer than {MAX_VALUE_LENGTH} characters")
+    if name.endswith(_URL_FIELDS):
+        parsed = urlparse(value)
+        if parsed.scheme not in ("http", "https") or not parsed.netloc:
+            raise ConnectorConfigError(f"{name} must be an http(s) URL")
+        # The same public-target rule as a custom AI endpoint: no loopback,
+        # private-range or cloud-metadata host, which would turn a webhook into
+        # an authenticated request against the host's own network.
+        from unimonitor.ai.custom import validate_base_url
+
+        # shortcut: hostnames are checked syntactically; a public name that resolves
+        # to a private address (DNS rebinding) needs a connect-time address check.
+        try:
+            validate_base_url(value)
+        except ValueError as exc:
+            raise ConnectorConfigError(f"{name}: {exc}") from exc
+    elif name.endswith(_HOST_FIELDS) and ("://" in value or "/" in value or " " in value):
+        raise ConnectorConfigError(f"{name} must be a bare hostname or IP address")
+
+
 def _clean(kind: str, provider: str, values: dict[str, Any]) -> dict[str, str]:
     allowed = fields_for(kind, provider)
     cleaned: dict[str, str] = {}
@@ -61,14 +84,7 @@ def _clean(kind: str, provider: str, values: dict[str, Any]) -> dict[str, str]:
         value = raw.strip()
         if not value:
             continue
-        if len(value) > MAX_VALUE_LENGTH:
-            raise ConnectorConfigError(f"{name} is longer than {MAX_VALUE_LENGTH} characters")
-        if name.endswith(_URL_FIELDS):
-            parsed = urlparse(value)
-            if parsed.scheme not in ("http", "https") or not parsed.netloc:
-                raise ConnectorConfigError(f"{name} must be an http(s) URL")
-        elif name.endswith(_HOST_FIELDS) and ("://" in value or "/" in value or " " in value):
-            raise ConnectorConfigError(f"{name} must be a bare hostname or IP address")
+        _check_value(name, value)
         cleaned[name] = value
     return cleaned
 

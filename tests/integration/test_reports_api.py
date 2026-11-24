@@ -157,3 +157,34 @@ class TestReportRuns:
                 # flushed fixture tenant; remove it so the next fixture can insert it.
                 await session.execute(delete(Tenant).where(Tenant.id == "test-tenant-id-00000000000001"))
                 await session.commit()
+
+
+class TestScorecardDownload:
+    async def test_pdf_scorecard_for_stored_findings(self, client: AsyncClient, auth_headers: dict, db_session, tenant):
+        """The PDF branch must return a real PDF, not an error the page hides."""
+        from unimonitor.db.models.finding import Finding
+
+        db_session.add(
+            Finding(
+                tenant_id=tenant.id,
+                external_control_id="CTRL-ENT-001",
+                title="Require MFA for all users",
+                description="mfa",
+                severity="critical",
+                state="not_implemented",
+                category="identity",
+                service="entra_id",
+                risk_score=10,
+            )
+        )
+        await db_session.flush()
+
+        r = await client.get("/api/v1/reports/scorecard", params={"fmt": "pdf"}, headers=auth_headers)
+
+        assert r.status_code == 200, r.text
+        assert r.content.startswith(b"%PDF-")
+        assert r.headers["content-type"] == "application/pdf"
+
+    async def test_unknown_scorecard_format_is_rejected(self, client: AsyncClient, auth_headers: dict):
+        r = await client.get("/api/v1/reports/scorecard", params={"fmt": "exe"}, headers=auth_headers)
+        assert r.status_code == 422

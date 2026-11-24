@@ -34,10 +34,41 @@ import AuditorPage from './pages/AuditorPage'
 import UsersPage from './pages/UsersPage'
 import LoginPage from './pages/LoginPage'
 import { useAuthStore } from './store/authStore'
+import { accessTokenFromLocationHash, establishSession } from './authSession'
 
 function ProtectedRoute({ children }: Readonly<{ children: React.ReactNode }>) {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated)
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  return <>{children}</>
+}
+
+/**
+ * Finishes a Microsoft/Google/Okta redirect.
+ *
+ * The API answers the OAuth callback with ``#access_token=…`` on the frontend URL;
+ * nothing used to read that fragment, so the browser landed on /login while still
+ * signed out. The token is stored, /me supplies the real role and the fragment is
+ * removed from the address bar.
+ */
+function SsoGate({ children }: Readonly<{ children: React.ReactNode }>) {
+  const [pending, setPending] = useState(() => Boolean(accessTokenFromLocationHash()))
+
+  useEffect(() => {
+    const token = accessTokenFromLocationHash()
+    if (!token) return
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    establishSession(token)
+      .catch(() => undefined)
+      .finally(() => setPending(false))
+  }, [])
+
+  if (pending) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
+        Signing you in…
+      </div>
+    )
+  }
   return <>{children}</>
 }
 
@@ -80,6 +111,7 @@ export default function App() {
     // Top-level boundary catches errors in Layout, auth checks, etc.
     <ErrorBoundary>
       <BrowserRouter>
+        <SsoGate>
         <SetupGate>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -125,6 +157,7 @@ export default function App() {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </SetupGate>
+        </SsoGate>
       </BrowserRouter>
     </ErrorBoundary>
   )

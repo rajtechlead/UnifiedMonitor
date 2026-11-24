@@ -30,7 +30,7 @@ class FakeResolver:
         self.values.pop(name, None)
 
 
-@pytest.fixture()
+@pytest.fixture
 def resolver(monkeypatch: pytest.MonkeyPatch) -> FakeResolver:
     fake = FakeResolver()
 
@@ -55,6 +55,23 @@ def test_save_merges_and_ignores_unknown_fields(resolver: FakeResolver):
     asyncio_run(credentials.save("siem", "elastic", {"ELASTIC_URL": "https://es.example.com", "ELASTIC_API_KEY": "one"}))
     asyncio_run(credentials.save("siem", "elastic", {"ELASTIC_API_KEY": "two", "EVIL": "x"}))
     assert asyncio_run(credentials.load("siem", "elastic")) == {"ELASTIC_URL": "https://es.example.com", "ELASTIC_API_KEY": "two"}
+
+
+def test_url_fields_reject_internal_and_metadata_targets(resolver: FakeResolver):
+    """A webhook must not be able to reach the host's own network or a metadata IP."""
+    for target in (
+        "http://169.254.169.254/latest/meta-data",
+        "http://metadata.google.internal/computeMetadata/v1",
+        "http://127.0.0.1:8080/hook",
+        "http://localhost/hook",
+        "https://10.0.0.5/hook",
+        "https://192.168.1.10/hook",
+        "https://[::1]/hook",
+    ):
+        with pytest.raises(credentials.ConnectorConfigError):
+            asyncio_run(credentials.save("siem", "webhook", {"SIEM_WEBHOOK_URL": target}))
+    # A public https endpoint is still accepted.
+    asyncio_run(credentials.save("siem", "webhook", {"SIEM_WEBHOOK_URL": "https://siem.example.com/hook"}))
 
 
 def test_url_fields_must_be_http(resolver: FakeResolver):

@@ -444,6 +444,7 @@ class TestGenerateReportTask:
             _db_result(mock_report),
             _db_result(mock_run),
             findings_result,
+            _db_result([]),  # connected providers
         ]
 
         mock_gen = AsyncMock()
@@ -477,6 +478,7 @@ class TestGenerateReportTask:
             _db_result(mock_report),
             _db_result(mock_run),
             findings_result,
+            _db_result([]),  # connected providers
         ]
 
         with patch("unimonitor.db.base.async_session_factory", _make_session_factory(mock_session)):

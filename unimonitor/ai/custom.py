@@ -90,23 +90,33 @@ def _literal_address(host: str) -> ipaddress.IPv4Address | ipaddress.IPv6Address
         return None
 
 
-def _address_is_blocked(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
-    """True for link-local, unspecified or published metadata addresses."""
+def _address_is_blocked(address: ipaddress.IPv4Address | ipaddress.IPv6Address, *, allow_loopback: bool) -> bool:
+    """True for addresses outside the public internet."""
     candidates: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = [address]
     if isinstance(address, ipaddress.IPv6Address) and address.ipv4_mapped is not None:
         candidates.append(address.ipv4_mapped)
-    return any(candidate.is_link_local or candidate in _BLOCKED_ADDRESSES or candidate.is_unspecified for candidate in candidates)
+    for candidate in candidates:
+        if candidate.is_link_local or candidate in _BLOCKED_ADDRESSES or candidate.is_unspecified:
+            return True
+        if candidate.is_private or candidate.is_reserved:
+            # A loopback gateway is the one deliberate local exception.
+            if not (allow_loopback and candidate.is_loopback):
+                return True
+    return False
 
 
-def _validate_target(value: str) -> str:
+def _validate_target(value: str, *, allow_loopback: bool = False) -> str:
     """Reject schemes, credentials and addresses a provider must never reach."""
     scheme, host = _scheme_and_host(value)
 
+    loopback = allow_loopback and _is_loopback(host)
+    if (not allow_loopback) and _is_loopback(host):
+        raise ValueError("base_url must not point at loopback or a local address")
     address = _literal_address(host)
-    if address is not None and _address_is_blocked(address):
-        raise ValueError("base_url must not point at a link-local or cloud metadata address")
+    if address is not None and _address_is_blocked(address, allow_loopback=loopback):
+        raise ValueError("base_url must not point at a private, link-local or cloud metadata address")
 
-    if scheme == "http" and not _is_loopback(host):
+    if scheme == "http" and not loopback:
         raise ValueError("base_url must use https://; http:// is only allowed for a loopback gateway")
     return value.rstrip("/")
 
@@ -130,7 +140,18 @@ class CustomProvider(BaseModel):
     @field_validator("base_url")
     @classmethod
     def _https(cls, value: str) -> str:
-        return _validate_target(value)
+        # A tenant may deliberately run its own loopback gateway.
+        return _validate_target(value, allow_loopback=True)
+
+
+def validate_base_url(value: str) -> str:
+    """Public-target validation for any URL an administrator can point us at.
+
+    Connector webhooks use the strict form: no loopback, private range or
+    cloud-metadata host, which would otherwise let a webhook reach the host's own
+    network with the connector's credentials.
+    """
+    return _validate_target(value)
 
 
 def secret_name(tenant_id: str, name: str) -> str:

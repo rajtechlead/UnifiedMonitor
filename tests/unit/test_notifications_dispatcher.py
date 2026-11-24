@@ -332,3 +332,46 @@ class TestPublicAPI:
             mock_slack.assert_awaited_once()
             subject = mock_slack.call_args[0][1]  # (url, subject, body)
             assert "0" in subject
+
+
+class TestGraphMail:
+    """The registered Entra app is the built-in mail sender."""
+
+    def test_graph_mail_posts_to_the_sender_mailbox(self):
+        d, _ = _make_dispatcher()
+        settings_obj = _make_settings_obj(smtp_enabled=False, smtp_to_emails=["soc@contoso.com"])
+        settings_obj.smtp_from_address = "alerts@contoso.com"
+        app = {
+            "configured": True,
+            "directory": "tenant-id",
+            "client_id": "client-id",
+            "client_secret": "secret",
+            "certificate_pem": None,
+            "private_key_pem": None,
+        }
+        client = AsyncMock()
+        client.post.return_value = MagicMock(status_code=202, text="")
+
+        with (
+            patch("unimonitor.onboarding.service.microsoft_app", new=AsyncMock(return_value=app)),
+            patch("unimonitor.auth.oauth.acquire_token_for_client", new=AsyncMock(return_value="token")),
+            patch("unimonitor.notifications.dispatcher.httpx.AsyncClient") as http,
+        ):
+            http.return_value.__aenter__.return_value = client
+            _run(d._send_graph_email(["soc@contoso.com"], "Subject", "Body", settings_obj))
+
+        url = client.post.call_args[0][0]
+        assert url.endswith("/users/alerts@contoso.com/sendMail")
+        payload = client.post.call_args[1]["json"]
+        assert payload["message"]["toRecipients"][0]["emailAddress"]["address"] == "soc@contoso.com"
+        assert client.post.call_args[1]["headers"]["Authorization"] == "Bearer token"
+
+    def test_graph_mail_is_skipped_when_microsoft_is_not_connected(self):
+        d, _ = _make_dispatcher()
+        settings_obj = _make_settings_obj(smtp_enabled=False, smtp_to_emails=["soc@contoso.com"])
+        with patch(
+            "unimonitor.onboarding.service.microsoft_app",
+            new=AsyncMock(return_value={"configured": False}),
+        ):
+            _run(d._send_graph_email(["soc@contoso.com"], "Subject", "Body", settings_obj))
+        # Nothing to send with: no exception, no message.

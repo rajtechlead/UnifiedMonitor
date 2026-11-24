@@ -291,14 +291,13 @@ class FindingRepository(BaseRepository[Finding]):
         tenant_id: str | None = None,
     ) -> list[dict]:
         """Return risk heatmap cells (likelihood x impact)."""
-        # Basic implementation: group by severity as proxy for likelihood/impact
-        stmt = select(Finding.severity, func.count(Finding.id).label("cnt")).where(Finding.is_suppressed.is_(False)).group_by(Finding.severity)
+        # Likelihood and impact both come from severity; the ids are carried so the
+        # dashboard can keep a cell only when one of its findings is still visible.
+        stmt = select(Finding.id, Finding.severity).where(Finding.is_suppressed.is_(False))
         if tenant_id:
             stmt = stmt.where(Finding.tenant_id == tenant_id)
-        result = await self.session.execute(stmt)
-        rows = result.all()
+        rows = (await self.session.execute(stmt)).all()
 
-        # Map severity → likelihood/impact grid
         sev_to_coords = {
             "critical": (5, 5),
             "high": (4, 4),
@@ -306,18 +305,14 @@ class FindingRepository(BaseRepository[Finding]):
             "low": (2, 2),
             "informational": (1, 1),
         }
-        cells = []
-        for sev, count in rows:
-            coords = sev_to_coords.get(sev, (3, 3))
-            cells.append(
-                {
-                    "likelihood": coords[0],
-                    "impact": coords[1],
-                    "count": count,
-                    "finding_ids": [],
-                }
-            )
-        return cells
+        buckets: dict[tuple[int, int], list[str]] = {}
+        for finding_id, sev in rows:
+            likelihood, impact = sev_to_coords.get(str(sev or "").lower(), (3, 3))
+            buckets.setdefault((likelihood, impact), []).append(str(finding_id))
+        return [
+            {"likelihood": likelihood, "impact": impact, "count": len(ids), "finding_ids": ids}
+            for (likelihood, impact), ids in sorted(buckets.items())
+        ]
 
     async def get_recent_activity(
         self,

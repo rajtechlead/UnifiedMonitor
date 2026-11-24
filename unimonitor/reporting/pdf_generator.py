@@ -35,6 +35,34 @@ SEVERITY_COLORS = {
 
 SEVERITY_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3, "INFORMATIONAL": 4}
 
+
+def _minimal_pdf(lines: list[str]) -> bytes:
+    """A structurally valid single-page PDF (ReportLab is the normal path)."""
+
+    def escape(text: str) -> str:
+        return text.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)")
+
+    text = "BT /F1 10 Tf 50 780 Td 14 TL " + "".join(f"({escape(line)}) Tj T* " for line in lines[:48]) + "ET"
+    stream = text.encode("latin-1", "replace")
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets: list[int] = []
+    for index, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += f"{index} 0 obj\n".encode() + body + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objects) + 1}\n".encode() + b"0000000000 65535 f \n"
+    out += b"".join(f"{offset:010d} 00000 n \n".encode() for offset in offsets)
+    out += f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
+
+
 MAX_FINDINGS = 200
 MAX_PROVIDER_FINDINGS = 80
 
@@ -70,8 +98,10 @@ class PdfReportGenerator(BaseReportGenerator):
 
     async def generate(self, report_type: str = "full") -> str:
         if not HAS_REPORTLAB:
-            # Fallback: produce a minimal text-based PDF substitute
-            return self._generate_text_fallback()
+            # A valid one-page PDF: the old .txt fallback was stored under the "pdf"
+            # key and served as application/pdf, which is exactly the corrupt file a
+            # reader refused to open.
+            return self._generate_minimal_pdf()
 
         output_path = self._get_output_path("pdf")
         doc = SimpleDocTemplate(
@@ -265,31 +295,22 @@ class PdfReportGenerator(BaseReportGenerator):
             ordered = sorted(p["findings"], key=lambda f: SEVERITY_RANK.get(_severity_of(getattr(f, "severity", "INFORMATIONAL")), 5))
             story.append(_finding_table(self._finding_rows(ordered, MAX_PROVIDER_FINDINGS, getattr), p["rgb"]))
 
-    def _generate_text_fallback(self) -> str:
-        """Minimal text fallback when ReportLab not available."""
-        output_path = self._get_output_path("txt")
+    def _generate_minimal_pdf(self) -> str:
+        """A valid PDF with the summary, for a build without ReportLab."""
         stats = self._summary_stats()
         lines = [
             "UniMonitor Security Assessment Report",
-            "=" * 50,
             f"Tenant: {self.tenant_id}",
             f"Run ID: {self._get_run_id()}",
             f"Security Score: {stats.get('security_score')}",
             f"Compliance Score: {stats.get('compliance_score')}",
             f"Total Findings: {stats['total_findings']}",
-            "",
+            f"Pass Rate: {stats['pass_rate']}%",
             "Severity Breakdown:",
         ]
-        for sev, cnt in stats["severity_counts"].items():
-            lines.append(f"  {sev}: {cnt}")
-        providers = self._provider_breakdown()
-        if providers:
-            lines.extend(["", "Cloud Provider Breakdown:"])
-            for p in providers:
-                lines.append(
-                    f"  {p['name']}: {p['total']} findings, score {p['security_score']:.1f},"
-                    f" coverage {p['pass_rate']}%, {p['severity_counts']['CRITICAL']} critical,"
-                    f" {p['severity_counts']['HIGH']} high"
-                )
-        output_path.write_text("\n".join(lines))
+        lines.extend(f"  {sev}: {cnt}" for sev, cnt in stats["severity_counts"].items())
+        for p in self._provider_breakdown():
+            lines.append(f"{p['name']}: {p['total']} findings, score {p['security_score']:.1f}, coverage {p['pass_rate']}%")
+        output_path = self._get_output_path("pdf")
+        output_path.write_bytes(_minimal_pdf(lines))
         return str(output_path)

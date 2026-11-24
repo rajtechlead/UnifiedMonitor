@@ -11,6 +11,10 @@ type Report = {
   file_paths?: Record<string, string>
   created_at: string
   requested_by: string
+  requested_by_name?: string | null
+  tenant_id?: string
+  tenant_name?: string | null
+  assessment_name?: string | null
   run_id?: string
 }
 
@@ -260,7 +264,7 @@ export default function ReportsPage() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--color-border)', background: 'var(--color-surface-2)' }}>
-                {['Status', 'Type', 'Formats', 'Requested By', 'Created', 'Downloads'].map(h => (
+                {['Status', 'Type', 'Tenant ID', 'Tenant', 'Assessment', 'Formats', 'Requested By', 'Created', 'Downloads'].map(h => (
                   <th key={h} style={{ textAlign: 'left', padding: '10px 14px',
                     fontWeight: 600, color: 'var(--color-text-muted)', fontSize: 12 }}>{h}</th>
                 ))}
@@ -278,6 +282,11 @@ export default function ReportsPage() {
                   <td style={{ padding: '12px 14px', textTransform: 'capitalize' }}>
                     {r.report_type?.replace('_', ' ')}
                   </td>
+                  <td style={{ padding: '12px 14px', color: 'var(--color-text-muted)', fontFamily: 'monospace', fontSize: 11 }}>
+                    {r.tenant_id ? r.tenant_id.slice(0, 8) : '—'}
+                  </td>
+                  <td style={{ padding: '12px 14px' }}>{r.tenant_name || '—'}</td>
+                  <td style={{ padding: '12px 14px', color: 'var(--color-text-muted)' }}>{r.assessment_name || '—'}</td>
                   <td style={{ padding: '12px 14px' }}>
                     <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                       {(r.formats || []).map(fmt => (
@@ -290,7 +299,7 @@ export default function ReportsPage() {
                     </div>
                   </td>
                   <td style={{ padding: '12px 14px', color: 'var(--color-text-muted)' }}>
-                    {r.requested_by}
+                    {r.requested_by_name || '—'}
                   </td>
                   <td style={{ padding: '12px 14px', color: 'var(--color-text-muted)', whiteSpace: 'nowrap' }}>
                     {new Date(r.created_at).toLocaleString()}

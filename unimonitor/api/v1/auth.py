@@ -30,16 +30,17 @@ from unimonitor.db.session import get_db
 logger = structlog.get_logger(__name__)
 router = APIRouter()
 
-
-class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
-    token_type: str = "bearer"  # noqa: S105
-    expires_in: int
+# The shipped default only fits a developer's laptop. On a real install the app must
+# tell Entra the URL the browser is actually using, or every sign-in is rejected.
+DEV_REDIRECT_URI = "http://localhost:8000/api/v1/auth/callback"
 
 
-class RefreshRequest(BaseModel):
-    refresh_token: str
+def callback_url(request: Request) -> str:
+    """The redirect URI to register and to send to Entra for this request."""
+    configured = get_settings().ENTRA_REDIRECT_URI.strip()
+    if configured and configured != DEV_REDIRECT_URI:
+        return configured
+    return f"{str(request.base_url).rstrip('/')}/api/v1/auth/callback"
 
 
 class UserProfile(BaseModel):
@@ -49,6 +50,30 @@ class UserProfile(BaseModel):
     role: str
     tenant_id: str | None = None
     is_active: bool = True
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"  # noqa: S105
+    expires_in: int
+    # The signed-in account, so the SPA never has to guess the role after login.
+    user: UserProfile | None = None
+
+
+def _profile(user: Any) -> UserProfile:
+    return UserProfile(
+        id=user.id,
+        email=user.email,
+        display_name=user.full_name,
+        role=user.role,
+        tenant_id=user.tenant_id,
+        is_active=user.is_active,
+    )
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 @router.post("/login")
@@ -102,11 +127,12 @@ async def login_local(
         access_token=access_token,
         refresh_token=refresh_token,
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=_profile(db_user),
     )
 
 
 @router.get("/sso")
-async def sso_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
+async def sso_status(request: Request, db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, Any]:
     """Whether "Sign in with Microsoft" can work on this install.
 
     The setup wizard stores the Entra app in the database and the vault, not in
@@ -115,11 +141,12 @@ async def sso_status(db: Annotated[AsyncSession, Depends(get_db)]) -> dict[str, 
     from unimonitor.onboarding.service import microsoft_app
 
     app = await microsoft_app(db)
-    settings = get_settings()
     return {
-        "enabled": bool(app.get("configured") and settings.ENTRA_REDIRECT_URI),
+        "enabled": bool(app.get("configured")),
         "provider": "microsoft",
         "source": app.get("source"),
+        # The exact value an administrator must add to the app registration.
+        "redirect_uri": callback_url(request),
         "reason": None if app.get("configured") else "Connect Microsoft 365 under Settings → Platform connections.",
     }
 
@@ -147,6 +174,7 @@ async def login(
             client_secret=app.get("client_secret") or None,
             certificate_pem=app.get("certificate_pem") or None,
             private_key_pem=app.get("private_key_pem") or None,
+            redirect_uri=callback_url(request),
         )
     except Exception as exc:  # bad app id / authority: tell the page, don't 500
         logger.warning("oauth_login_unavailable", error=str(exc))
@@ -192,6 +220,7 @@ async def oauth_callback(
             client_secret=app.get("client_secret") or None,
             certificate_pem=app.get("certificate_pem") or None,
             private_key_pem=app.get("private_key_pem") or None,
+            redirect_uri=callback_url(request),
         )
     except Exception as exc:
         logger.error("token_exchange_failed", error=str(exc))
@@ -299,6 +328,7 @@ async def refresh_token(
         access_token=new_access,
         refresh_token=new_refresh,
         expires_in=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        user=_profile(db_user),
     )
 
 
@@ -331,14 +361,7 @@ async def get_me(
     current_user: Annotated[Any, Depends(get_current_user)],
 ) -> UserProfile:
     """Return the authenticated user's profile."""
-    return UserProfile(
-        id=current_user.id,
-        email=current_user.email,
-        display_name=current_user.full_name,
-        role=current_user.role,
-        tenant_id=current_user.tenant_id,
-        is_active=current_user.is_active,
-    )
+    return _profile(current_user)
 
 
 @router.get("/sso/providers")
