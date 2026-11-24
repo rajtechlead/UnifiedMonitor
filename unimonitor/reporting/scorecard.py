@@ -154,6 +154,25 @@ def to_xlsx(scorecard: dict[str, Any]) -> bytes:
 
 
 def to_pdf(scorecard: dict[str, Any]) -> bytes:
+    """A real PDF when ReportLab is installed, a valid minimal one when it is not.
+
+    A frozen build without ReportLab used to make the whole download fail; the CSV
+    and Excel paths are pure Python, so the PDF button now always returns a PDF.
+    """
+    try:
+        return _pdf_with_reportlab(scorecard)
+    except Exception:  # noqa: BLE001 - a missing/broken ReportLab must not fail the download
+        from unimonitor.core.logging import get_logger
+        from unimonitor.reporting.pdf_generator import _minimal_pdf
+
+        get_logger(__name__).exception("scorecard_pdf_fallback")
+        lines = [SCORECARD_TITLE, f"Generated {scorecard['generated_at']}"]
+        lines += [f"{key}: {value}" for key, value in scorecard["scores"].items()]
+        lines += [f"Findings {severity}: {count}" for severity, count in scorecard["counts"].items()]
+        return _minimal_pdf(lines)
+
+
+def _pdf_with_reportlab(scorecard: dict[str, Any]) -> bytes:
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle

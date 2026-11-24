@@ -228,6 +228,59 @@ def _catalogue_check(
     }
 
 
+# What Microsoft's module writes in TestStatus.
+MODULE_STATUS_TO_RESULT = {
+    "passed": "pass",
+    "failed": "fail",
+    "investigate": "warn",
+    "error": "fail",
+    "skipped": "not_applicable",
+    "planned": "not_run",
+    "notrun": "not_run",
+    "not run": "not_run",
+}
+
+
+def checks_from_module_export(payload: Any) -> list[dict[str, Any]]:
+    """The checks Microsoft's own assessment produced, in our row shape.
+
+    ``Invoke-ZtAssessment`` writes ``ZeroTrustAssessmentReport.json`` next to its
+    HTML report with one ``Tests`` row per executed test (``TestId``, ``TestTitle``,
+    ``TestStatus``, ``TestPillar``, ``TestRisk``, ``TestCategory``). Reading it is
+    what makes the run show real statuses: the Python catalogue can only score the
+    tests whose evidence UniMonitor also collects.
+    """
+    if not isinstance(payload, dict):
+        return []
+    rows = payload.get("Tests") or payload.get("tests") or []
+    if not isinstance(rows, list):
+        return []
+    checks: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        test_id = str(row.get("TestId") or row.get("testId") or "").strip()
+        title = str(row.get("TestTitle") or row.get("title") or "").strip()
+        if not test_id or not title:
+            continue
+        status = str(row.get("TestStatus") or row.get("status") or "").strip()
+        pillar = str(row.get("TestPillar") or "identity").strip().lower() or "identity"
+        severity = str(row.get("TestRisk") or "medium").strip().lower() or "medium"
+        checks.append(
+            {
+                "check_id": test_id,
+                "title": title,
+                "pillar": pillar,
+                "severity": severity,
+                "status": MODULE_STATUS_TO_RESULT.get(status.lower(), "not_run"),
+                "category": str(row.get("TestCategory") or "") or None,
+                "remediation": [],
+                "reference": "",
+            }
+        )
+    return checks
+
+
 def _control_check(control: Any, current_state: str | None) -> dict[str, Any]:
     return {
         "check_id": control.id,

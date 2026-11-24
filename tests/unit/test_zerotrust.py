@@ -494,3 +494,42 @@ def test_builds_check_the_runner_where_pyinstaller_puts_it() -> None:
     for name in ("windows-installer.yml", "release.yml"):
         workflow = (ROOT / ".github" / "workflows" / name).read_text()
         assert "_internal/scripts/zerotrust" in workflow
+
+
+# ── Microsoft's own module results ───────────────────────────────────────────
+
+
+def test_module_export_becomes_real_check_statuses() -> None:
+    """Every test the module ran keeps its own id and its real result."""
+    from unimonitor.zerotrust.service import checks_from_module_export
+
+    payload = {
+        "Tests": [
+            {
+                "TestId": 21772,
+                "TestTitle": "No client secrets",
+                "TestStatus": "Passed",
+                "TestPillar": "Identity",
+                "TestRisk": "High",
+                "TestCategory": "Application",
+            },
+            {"TestId": "24541", "TestTitle": "Windows compliance", "TestStatus": "Failed", "TestPillar": "Devices", "TestRisk": "High"},
+            {"TestId": "35003", "TestTitle": "Sensitivity labels", "TestStatus": "Skipped", "TestPillar": "Data", "TestRisk": "High"},
+            {"TestId": "41002", "TestTitle": "MDI sensor", "TestStatus": "Investigate", "TestPillar": "SecOps", "TestRisk": "Medium"},
+            {"TestId": "41201", "TestTitle": "Sentinel connector", "TestStatus": "NotRun", "TestPillar": "SecOps", "TestRisk": "High"},
+        ]
+    }
+
+    checks = checks_from_module_export(payload)
+
+    assert [check["check_id"] for check in checks] == ["21772", "24541", "35003", "41002", "41201"]
+    assert [check["status"] for check in checks] == ["pass", "fail", "not_applicable", "warn", "not_run"]
+    assert checks[1]["pillar"] == "devices"
+    assert checks[0]["severity"] == "high"
+
+
+def test_module_export_without_tests_is_empty() -> None:
+    from unimonitor.zerotrust.service import checks_from_module_export
+
+    assert checks_from_module_export({"Tests": []}) == []
+    assert checks_from_module_export("not a report") == []

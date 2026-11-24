@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -132,6 +132,7 @@ async def microsoft_device_code(_: Annotated[None, Depends(require_setup_admin)]
 @router.post("/microsoft/complete")
 async def microsoft_complete(
     body: CompleteRequest,
+    request: Request,
     db: Annotated[AsyncSession, Depends(get_db)],
     _: Annotated[None, Depends(require_setup_admin)],
 ) -> dict:
@@ -141,11 +142,16 @@ async def microsoft_complete(
         if poll["status"] != "ok":
             return {"status": poll["status"]}
 
+        # Register the callback on the origin the wizard is actually served from,
+        # so "Sign in with Microsoft" works on this host and not only localhost.
+        from unimonitor.api.v1.auth import callback_url
+
         result = await m365.provision_app(
             poll["access_token"],
             display_name=body.display_name,
             auth_method=body.auth_method,
             certificate_validity_days=body.certificate_validity_days,
+            redirect_uri=callback_url(request),
         )
         tenant = await service.first_tenant(db)
         if tenant is None:

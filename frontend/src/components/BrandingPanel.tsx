@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import { Palette, Save } from 'lucide-react'
+import { Palette } from 'lucide-react'
 import { api, errorDetail } from '../hooks/useApi'
+import SaveButton from './SaveButton'
 
 type Branding = {
   portal_name: string
@@ -78,19 +79,8 @@ export default function BrandingPanel() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 16 }}>
-        <button
-          onClick={() => save.mutate()}
-          disabled={save.isPending}
-          style={{
-            padding: '8px 16px', fontSize: 13, background: 'var(--color-brand)', color: 'white',
-            border: 'none', borderRadius: 8, cursor: save.isPending ? 'wait' : 'pointer',
-            display: 'flex', alignItems: 'center', gap: 6,
-          }}
-        >
-          <Save size={14} /> {save.isPending ? 'Saving…' : 'Save branding'}
-        </button>
-        {message && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{message}</span>}
+      <div style={{ marginTop: 16 }}>
+        <SaveButton pending={save.isPending} label="Save branding" message={message} onClick={() => save.mutate()} />
       </div>
     </div>
   )

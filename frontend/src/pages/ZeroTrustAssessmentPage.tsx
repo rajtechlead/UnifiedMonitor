@@ -216,9 +216,9 @@ export default function ZeroTrustAssessmentPage() {
       <div>
         <h1 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>Zero Trust Assessment</h1>
         <p style={{ fontSize: 13, color: 'var(--color-text-muted)', margin: 0 }}>
-          One Python assessment engine scores Microsoft 365, AWS, Google Cloud and Google Workspace from
-          collected evidence, with remediation guidance on every result. The PowerShell runner stays
-          available as a manual fallback.
+          Microsoft 365 runs Microsoft's own Zero Trust Assessment module on this host when it can
+          (certificate app auth), and its test results are imported automatically; otherwise the Python
+          engine scores Microsoft, AWS, Google Cloud and Google Workspace from collected evidence.
         </p>
       </div>
 
@@ -290,7 +290,7 @@ export default function ZeroTrustAssessmentPage() {
         )}
         <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>
           {isMicrosoft
-            ? 'Python by default; the PowerShell report can still be generated on a Windows workstation and imported here.'
+            ? 'Microsoft’s module runs automatically on a Windows host with a certificate; Python is the fallback.'
             : 'Runs the platform’s controls against the latest collected evidence.'}
         </span>
       </div>

@@ -80,6 +80,7 @@ async def _microsoft(db: Any, limit: int, tenant_id: str | None = None) -> list[
     from sqlalchemy import select
 
     from unimonitor.db.models.tenant import Tenant
+    from unimonitor.exceptions import GraphPermissionError
     from unimonitor.graph.client import GraphClient
     from unimonitor.onboarding.service import microsoft_app
 
@@ -99,7 +100,13 @@ async def _microsoft(db: Any, limit: int, tenant_id: str | None = None) -> list[
         certificate_pem=app.get("certificate_pem") or None,
         private_key_pem=app.get("private_key_pem") or None,
     ) as client:
-        response = await client.get(f"/auditLogs/directoryAudits?$top={min(limit, 50)}")
+        try:
+            response = await client.get(f"/auditLogs/directoryAudits?$top={min(limit, 50)}&$orderby=activityDateTime desc")
+        except GraphPermissionError as exc:
+            # The exception's own text only names the endpoint; Graph's response body
+            # says which permission is missing, so surface that instead of a blank.
+            detail = str(getattr(exc, "detail", "") or "").strip()
+            raise RuntimeError(f"Graph refused the audit log (403){': ' + detail[:300] if detail else ''}") from exc
     if not response.success:
         raise RuntimeError(response.error_message or "Microsoft audit log request failed")
     if not isinstance(response.data, list):

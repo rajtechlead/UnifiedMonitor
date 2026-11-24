@@ -187,23 +187,43 @@ async def test_logout_unauthenticated(client):
 
 @pytest.mark.asyncio
 async def test_entra_login_redirects(client):
-    """GET /login should redirect to Entra authorize URL."""
-    with patch("unimonitor.api.v1.auth.cache_set", new=AsyncMock(return_value=True)):
-        with patch("unimonitor.api.v1.auth.build_authorize_url", return_value="https://login.microsoftonline.com/auth"):
+    """GET /login goes straight to Entra with the connected app and our scopes."""
+    connected = {"configured": True, "client_id": "client-123", "directory": "tenant-123", "source": "connection"}
+    with patch("unimonitor.onboarding.service.microsoft_app", new=AsyncMock(return_value=connected)):
+        with patch("unimonitor.api.v1.auth.cache_set", new=AsyncMock(return_value=True)):
             r = await client.get("/api/v1/auth/login", follow_redirects=False)
     assert r.status_code in (302, 307)
-    assert "microsoftonline" in r.headers.get("location", "")
+    location = r.headers.get("location", "")
+    assert location.startswith("https://login.microsoftonline.com/tenant-123/oauth2/v2.0/authorize?")
+    assert "client_id=client-123" in location
+    assert "redirect_uri=" in location
+    assert "User.Read" in location
 
 
 @pytest.mark.asyncio
-async def test_callback_error_param(client):
-    """OAuth callback with error param returns 400."""
+async def test_entra_login_without_an_app_explains_why(client):
+    """No connected app is a redirect with a reason, not a bare JSON error."""
+    with patch(
+        "unimonitor.onboarding.service.microsoft_app",
+        new=AsyncMock(return_value={"configured": False, "client_id": "", "directory": ""}),
+    ):
+        r = await client.get("/api/v1/auth/login", follow_redirects=False)
+    assert r.status_code in (302, 303, 307)
+    assert "error=sso_unavailable" in r.headers["location"]
+    assert "reason=" in r.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_callback_error_param_returns_to_the_login_page(client):
+    """A denied sign-in shows the reason on the login page, not a JSON page."""
     r = await client.get(
         "/api/v1/auth/callback",
         params={"code": "x", "state": "s", "error": "access_denied", "error_description": "User denied"},
+        follow_redirects=False,
     )
-    assert r.status_code == 400
-    assert "denied" in r.json()["detail"].lower() or "access_denied" in r.json()["detail"]
+    assert r.status_code in (302, 303, 307)
+    assert "error=sso_failed" in r.headers["location"]
+    assert "User%20denied" in r.headers["location"]
 
 
 @pytest.mark.asyncio

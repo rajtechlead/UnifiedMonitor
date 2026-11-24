@@ -151,6 +151,40 @@ def get_auth_code_url(state: str, nonce: str) -> str:
     )
 
 
+def authorize_url(
+    *,
+    client_id: str,
+    tenant_id: str,
+    redirect_uri: str,
+    state: str,
+    login_hint: str | None = None,
+) -> str:
+    """The Entra authorization URL, built directly instead of through MSAL.
+
+    Building it here removes every way the redirect could fail locally (an invalid
+    authority, a certificate MSAL refuses to load) and leaves failures to Entra,
+    where the browser can show the real AADSTS code. ``tenant_id`` of
+    ``organizations``/``common`` is accepted.
+    """
+    from urllib.parse import urlencode
+
+    settings = get_settings()
+    authority = settings.ENTRA_AUTHORITY.rstrip("/")
+    directory = (tenant_id or "organizations").strip()
+    query = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "response_mode": "query",
+        "scope": " ".join(DELEGATED_SCOPES),
+        "state": state,
+        "prompt": "select_account",
+    }
+    if login_hint:
+        query["login_hint"] = login_hint
+    return f"{authority}/{directory}/oauth2/v2.0/authorize?{urlencode(query)}"
+
+
 def build_authorize_url(
     state: str,
     *,

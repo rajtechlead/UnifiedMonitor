@@ -66,15 +66,19 @@ def _certificate_pfx(app: dict[str, Any], folder: Path) -> tuple[Path, str]:
     return target, password
 
 
-async def _run_powershell(app: dict[str, Any], tenant_name: str) -> tuple[Path | None, str | None]:
-    """Attempt Microsoft's own assessment module with the registered app."""
+async def _run_powershell(app: dict[str, Any], tenant_name: str) -> tuple[Path | None, str | None, list[dict[str, Any]]]:
+    """Attempt Microsoft's own assessment module with the registered app.
+
+    Returns the copied HTML report, a failure reason, and the module's own JSON
+    test results (empty when the module did not write them).
+    """
     executable = powershell_path()
     if not executable or not POWERSHELL_SCRIPT.is_file():
-        return None, "PowerShell 7 is not available on this host."
+        return None, "PowerShell 7 is not available on this host.", []
     if not (app.get("certificate_pem") and app.get("private_key_pem")):
         # The module has no client-secret app auth; telling the administrator is
         # better than a silent empty report.
-        return None, "Microsoft's module needs certificate app authentication. Re-connect Microsoft 365 with a certificate to run it."
+        return None, "Microsoft's module needs certificate app authentication. Re-connect Microsoft 365 with a certificate to run it.", []
 
     import tempfile
 
@@ -83,8 +87,9 @@ async def _run_powershell(app: dict[str, Any], tenant_name: str) -> tuple[Path |
     with tempfile.TemporaryDirectory(prefix="unimonitor-zt-") as temporary:
         try:
             pfx_path, pfx_password = _certificate_pfx(app, Path(temporary))
-        except Exception as exc:  # noqa: BLE001 - a bad certificate pair is a setup problem
-            return None, f"The stored app certificate could not be used: {str(exc)[:200]}"
+        # A bad certificate pair is a setup problem, not a reason to fail the run.
+        except Exception as exc:  # noqa: BLE001
+            return None, f"The stored app certificate could not be used: {str(exc)[:200]}", []
 
         command = [
             executable,
@@ -119,19 +124,39 @@ async def _run_powershell(app: dict[str, Any], tenant_name: str) -> tuple[Path |
         except TimeoutError:
             process.kill()
             logger.error("zt_powershell_timeout", tenant=tenant_name)
-            return None, "The Microsoft assessment timed out."
+            return None, "The Microsoft assessment timed out.", []
 
     if process.returncode != 0:
         message = (stderr or stdout or b"").decode(errors="replace").strip()[-500:]
         logger.warning("zt_powershell_failed", code=process.returncode, error=message)
-        return None, message or f"PowerShell exited with code {process.returncode}"
+        return None, message or f"PowerShell exited with code {process.returncode}", []
     generated = sorted(output.glob("*.html"), key=lambda item: item.stat().st_mtime, reverse=True)
     if not generated:
         logger.warning("zt_powershell_no_report", stdout=(stdout or b"")[-400:].decode(errors="replace"))
-        return None, "The Microsoft assessment finished without writing an HTML report."
+        return None, "The Microsoft assessment finished without writing an HTML report.", []
     target = reports.zt_directory() / reports.report_name("microsoft")
     shutil.copyfile(generated[0], target)
-    return target, None
+    checks = _module_checks(output)
+    logger.info("zt_powershell_completed", tenant=tenant_name, tests=len(checks))
+    return target, None, checks
+
+
+def _module_checks(output: Path) -> list[dict[str, Any]]:
+    """Read the module's JSON test results from its export folder, if present."""
+    import json
+
+    candidates = sorted(output.rglob("ZeroTrustAssessmentReport.json"), key=lambda item: item.stat().st_mtime, reverse=True)
+    for path in candidates:
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            logger.warning("zt_powershell_json_unreadable", path=str(path), error=str(exc)[:200])
+            continue
+        checks = service.checks_from_module_export(payload)
+        if checks:
+            return checks
+    logger.warning("zt_powershell_json_missing", output=str(output))
+    return []
 
 
 async def run_assessment_now(
@@ -156,18 +181,33 @@ async def run_assessment_now(
         engine_used = "python"
         report_path: Path | None = None
         powershell_error: str | None = None
-        if platform == "microsoft" and engine == "powershell":
+        module_checks: list[dict[str, Any]] = []
+        # Microsoft's own module is the only engine that can execute all of its
+        # tests. Prefer it when this host can run it, whether or not the page asked:
+        # the Python catalogue can only score the controls UniMonitor also collects,
+        # which is why a Microsoft run used to show every test as "not run".
+        if platform == "microsoft":
             try:
                 app = await microsoft_app(db, tenant.id)
-                report_path, failure = await _run_powershell(app, tenant.display_name or tenant.name)
-                powershell_error = failure
-            except Exception as exc:  # noqa: BLE001 - fall back to Python, never fail the run
+                has_certificate = bool(app.get("certificate_pem") and app.get("private_key_pem"))
+                if engine == "powershell" or (powershell_path() and has_certificate):
+                    report_path, failure, module_checks = await _run_powershell(app, tenant.display_name or tenant.name)
+                    powershell_error = failure
+            # Fall back to Python, never fail the run.
+            except Exception as exc:  # noqa: BLE001
                 powershell_error = str(exc)[:300]
                 logger.warning("zt_powershell_unavailable", error=powershell_error)
             if report_path is not None:
                 engine_used = "powershell"
 
-        checks = await service.cloud_checks(db, tenant.id, platform)
+        python_checks = await service.cloud_checks(db, tenant.id, platform)
+        if module_checks:
+            # Keep every catalogue row: the module reports the tests it executed, and
+            # the remaining ones still get their Python evidence score.
+            executed = {check["check_id"] for check in module_checks}
+            checks = module_checks + [check for check in python_checks if check["check_id"] not in executed]
+        else:
+            checks = python_checks
         run, summary = await service.store_run(
             db,
             tenant_id=tenant.id,

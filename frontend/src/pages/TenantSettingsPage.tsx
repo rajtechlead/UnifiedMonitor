@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Building2, Plug, Save, Trash2 } from 'lucide-react'
+import { ArrowLeft, Building2, Plug, Trash2 } from 'lucide-react'
 import PlatformConnector, { type Platform } from '../components/PlatformConnector'
+import SaveButton from '../components/SaveButton'
 import { api, errorDetail, tenantsApi } from '../hooks/useApi'
 
 const panel: React.CSSProperties = {
@@ -286,21 +287,7 @@ export default function TenantSettingsPage() {
             <textarea id="notes" style={{ ...input, minHeight: 70 }} value={values.notes} onChange={e => set('notes', e.target.value)} />
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            type="button"
-            onClick={() => save.mutate()}
-            disabled={save.isPending}
-            style={{
-              padding: '8px 16px', fontSize: 13, background: 'var(--color-brand)', color: 'white',
-              border: 'none', borderRadius: 8, cursor: save.isPending ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', gap: 6,
-            }}
-          >
-            <Save size={14} /> {save.isPending ? 'Saving…' : 'Save client settings'}
-          </button>
-          {message && <span style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>{message}</span>}
-        </div>
+        <SaveButton pending={save.isPending} label="Save client settings" message={message} onClick={() => save.mutate()} />
       </div>
     </div>
   )

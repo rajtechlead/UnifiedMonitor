@@ -331,6 +331,7 @@ async def _create_app(
     display_name: str,
     resource_access: list[dict[str, str]],
     certificate: certificates.ClientCertificate | None,
+    redirect_uris: list[str] | None = None,
 ) -> dict[str, Any]:
     """Create the app registration, with the certificate attached when one is wanted.
 
@@ -343,7 +344,7 @@ async def _create_app(
         "signInAudience": "AzureADMyOrg",
         # Without the web redirect URI the app's own "Sign in with Microsoft"
         # fails with AADSTS50011 redirect_uri mismatch.
-        "web": {"redirectUris": [get_settings().ENTRA_REDIRECT_URI]},
+        "web": {"redirectUris": _redirect_uris(redirect_uris)},
         "requiredResourceAccess": [{"resourceAppId": GRAPH_APP_ID, "resourceAccess": resource_access}],
     }
     if certificate is not None:
@@ -382,12 +383,30 @@ async def _grant_roles(
     return granted, warnings
 
 
+def _redirect_uris(extra: list[str] | None = None) -> list[str]:
+    """Every web redirect URI to register, configured default first, de-duplicated.
+
+    The setup wizard runs on the same origin the administrator will sign in from, so
+    that origin's callback is registered alongside the configured default. Without
+    this the app registration only knows localhost and Entra answers AADSTS50011
+    for every sign-in from the real host.
+    """
+    candidates = [get_settings().ENTRA_REDIRECT_URI, *(extra or [])]
+    seen: list[str] = []
+    for candidate in candidates:
+        value = (candidate or "").strip()
+        if value and value not in seen:
+            seen.append(value)
+    return seen
+
+
 async def provision_app(
     access_token: str,
     *,
     display_name: str = "UniMonitor",
     auth_method: str = "certificate",
     certificate_validity_days: int | None = None,
+    redirect_uri: str | None = None,
     client: httpx.AsyncClient | None = None,
 ) -> ProvisionResult:
     """Create the app registration, grant admin consent and add one credential.
@@ -408,7 +427,14 @@ async def provision_app(
         resource_access, warnings = _role_payloads(role_ids)
         certificate = certificates.generate_client_certificate(display_name, certificate_validity_days) if auth_method == "certificate" else None
 
-        app = await _create_app(http, access_token, display_name, resource_access, certificate)
+        app = await _create_app(
+            http,
+            access_token,
+            display_name,
+            resource_access,
+            certificate,
+            redirect_uris=[redirect_uri] if redirect_uri else None,
+        )
         app_id, app_object_id = app["appId"], app["id"]
 
         sp = await _graph(

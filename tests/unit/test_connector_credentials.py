@@ -57,6 +57,10 @@ def test_save_merges_and_ignores_unknown_fields(resolver: FakeResolver):
     assert asyncio_run(credentials.load("siem", "elastic")) == {"ELASTIC_URL": "https://es.example.com", "ELASTIC_API_KEY": "two"}
 
 
+def _save(kind: str, name: str, payload: dict[str, str]) -> None:
+    asyncio_run(credentials.save(kind, name, payload))
+
+
 def test_url_fields_reject_internal_and_metadata_targets(resolver: FakeResolver):
     """A webhook must not be able to reach the host's own network or a metadata IP."""
     for target in (
@@ -69,28 +73,28 @@ def test_url_fields_reject_internal_and_metadata_targets(resolver: FakeResolver)
         "https://[::1]/hook",
     ):
         with pytest.raises(credentials.ConnectorConfigError):
-            asyncio_run(credentials.save("siem", "webhook", {"SIEM_WEBHOOK_URL": target}))
+            _save("siem", "webhook", {"SIEM_WEBHOOK_URL": target})
     # A public https endpoint is still accepted.
-    asyncio_run(credentials.save("siem", "webhook", {"SIEM_WEBHOOK_URL": "https://siem.example.com/hook"}))
+    _save("siem", "webhook", {"SIEM_WEBHOOK_URL": "https://siem.example.com/hook"})
 
 
 def test_url_fields_must_be_http(resolver: FakeResolver):
     with pytest.raises(credentials.ConnectorConfigError):
-        asyncio_run(credentials.save("siem", "webhook", {"SIEM_WEBHOOK_URL": "file:///etc/passwd"}))
+        _save("siem", "webhook", {"SIEM_WEBHOOK_URL": "file:///etc/passwd"})
     with pytest.raises(credentials.ConnectorConfigError):
-        asyncio_run(credentials.save("siem", "syslog", {"SIEM_SYSLOG_HOST": "https://host"}))
+        _save("siem", "syslog", {"SIEM_SYSLOG_HOST": "https://host"})
 
 
 def test_unknown_connector_is_rejected(resolver: FakeResolver):
     with pytest.raises(credentials.ConnectorConfigError):
-        asyncio_run(credentials.save("siem", "nope", {"A": "b"}))
+        _save("siem", "nope", {"A": "b"})
     with pytest.raises(credentials.ConnectorConfigError):
-        asyncio_run(credentials.save("other", "splunk", {"SPLUNK_HEC_URL": "https://x"}))
+        _save("other", "splunk", {"SPLUNK_HEC_URL": "https://x"})
 
 
 def test_blank_values_are_not_stored(resolver: FakeResolver):
     with pytest.raises(credentials.ConnectorConfigError):
-        asyncio_run(credentials.save("siem", "splunk", {"SPLUNK_HEC_URL": "  "}))
+        _save("siem", "splunk", {"SPLUNK_HEC_URL": "  "})
 
 
 def test_delete_restores_environment_fallback(resolver: FakeResolver):

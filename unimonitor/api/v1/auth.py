@@ -19,7 +19,7 @@ from unimonitor.auth.jwt import (
     decode_refresh_token,
 )
 from unimonitor.auth.oauth import (
-    build_authorize_url,
+    authorize_url,
     exchange_code_for_token,
     get_entra_user_info,
 )
@@ -33,6 +33,26 @@ router = APIRouter()
 # The shipped default only fits a developer's laptop. On a real install the app must
 # tell Entra the URL the browser is actually using, or every sign-in is rejected.
 DEV_REDIRECT_URI = "http://localhost:8000/api/v1/auth/callback"
+
+
+def _login_failed(reason: str) -> RedirectResponse:
+    """Send the browser to the login page instead of a bare JSON error page."""
+    from urllib.parse import quote
+
+    return RedirectResponse(
+        url=f"/login?error=sso_failed&reason={quote(reason[:300])}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
+
+
+def _login_unavailable(reason: str) -> RedirectResponse:
+    """Send the browser back to the login page with a short, displayable reason."""
+    from urllib.parse import quote
+
+    return RedirectResponse(
+        url=f"/login?error=sso_unavailable&reason={quote(reason[:300])}",
+        status_code=status.HTTP_303_SEE_OTHER,
+    )
 
 
 def callback_url(request: Request) -> str:
@@ -161,27 +181,27 @@ async def login(
     from unimonitor.onboarding.service import microsoft_app
 
     app = await microsoft_app(db)
+    client_id = str(app.get("client_id") or "").strip()
+    if not client_id:
+        logger.warning("oauth_login_unavailable", reason="no_client_id")
+        return _login_unavailable("No Microsoft app is connected yet.")
+
     state = secrets.token_urlsafe(32)
 
     # Store state + redirect destination in cache (5 min TTL)
     await cache_set(f"oauth_state:{state}", {"redirect": redirect_after}, ttl=300)
 
-    try:
-        authorize_url = build_authorize_url(
-            state=state,
-            client_id=app["client_id"],
-            tenant_id=app["directory"],
-            client_secret=app.get("client_secret") or None,
-            certificate_pem=app.get("certificate_pem") or None,
-            private_key_pem=app.get("private_key_pem") or None,
-            redirect_uri=callback_url(request),
-        )
-    except Exception as exc:  # bad app id / authority: tell the page, don't 500
-        logger.warning("oauth_login_unavailable", error=str(exc))
-        return RedirectResponse(url="/login?error=sso_unavailable", status_code=status.HTTP_303_SEE_OTHER)
-
-    logger.info("oauth_login_initiated", state=state[:8], source=app.get("source"))
-    return RedirectResponse(url=authorize_url, status_code=status.HTTP_302_FOUND)
+    # Built directly: the redirect can no longer fail on this host, so Entra's own
+    # page reports a wrong redirect URI or an unconsented permission instead of the
+    # login page guessing that sign-in is "not configured".
+    target = authorize_url(
+        client_id=client_id,
+        tenant_id=str(app.get("directory") or "organizations"),
+        redirect_uri=callback_url(request),
+        state=state,
+    )
+    logger.info("oauth_login_initiated", state=state[:8], source=app.get("source"), redirect_uri=callback_url(request))
+    return RedirectResponse(url=target, status_code=status.HTTP_302_FOUND)
 
 
 @router.get("/callback")
@@ -196,10 +216,7 @@ async def oauth_callback(
     """Handle Entra ID OAuth callback, issue JWT tokens."""
     if error:
         logger.warning("oauth_callback_error", error=error, description=error_description)
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"OAuth error: {error_description or error}",
-        )
+        return _login_failed(error_description or error)
 
     # Validate state
     state_data = await cache_get(f"oauth_state:{state}")
@@ -224,20 +241,14 @@ async def oauth_callback(
         )
     except Exception as exc:
         logger.error("token_exchange_failed", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to exchange authorization code for token",
-        ) from exc
+        return _login_failed(f"the authorization code was rejected ({str(exc)[:200]})")
 
     # Fetch user info from Graph /me
     try:
         user_info = await get_entra_user_info(access_token=token_data["access_token"])
     except Exception as exc:
         logger.error("user_info_fetch_failed", error=str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Failed to retrieve user information",
-        ) from exc
+        return _login_failed(f"the signed-in profile could not be read ({str(exc)[:200]})")
 
     return await complete_sign_in(user_info, state_data.get("redirect", "/"))
 

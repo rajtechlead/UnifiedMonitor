@@ -174,12 +174,24 @@ class GraphClient:
         async with self._semaphore:
             await self._rate_limiter.acquire()
             try:
-                return await self._execute_get(endpoint, params=params, cache_key=cache_key, cache_ttl=cache_ttl)
+                try:
+                    return await self._execute_get(endpoint, params=params, cache_key=cache_key, cache_ttl=cache_ttl)
+                except GraphPermissionError as permission_error:
+                    # A token minted before an admin granted a permission keeps the
+                    # old roles until it expires. Drop it and ask once more, so a
+                    # freshly consented permission takes effect on the next request.
+                    if not self._token:
+                        raise
+                    self._token = None
+                    try:
+                        return await self._execute_get(endpoint, params=params, cache_key=cache_key, cache_ttl=cache_ttl)
+                    except Exception:
+                        # Still refused (or the new token could not be minted): the
+                        # permission error is the useful one for the caller.
+                        raise permission_error from None
             except GraphTimeoutError as exc:
                 return await self._last_good(cache_key, endpoint, exc)
             except GraphAPIError as exc:
-                from unimonitor.exceptions import GraphPermissionError
-
                 upstream_status = getattr(exc, "upstream_status", None)
                 if isinstance(exc, GraphPermissionError) or (upstream_status is not None and upstream_status < 500):
                     # A revoked permission or a bad request is not an outage; stale

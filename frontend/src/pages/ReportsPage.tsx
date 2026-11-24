@@ -50,6 +50,18 @@ function StatusIcon({ status }: Readonly<{ status: string }>) {
   return <Clock size={14} color="#F59E0B" />
 }
 
+async function blobErrorDetail(error: unknown): Promise<string> {
+  const data = (error as { response?: { data?: unknown } })?.response?.data
+  if (!(data instanceof Blob)) return ''
+  try {
+    const text = await data.text()
+    const parsed = JSON.parse(text) as { detail?: unknown }
+    return typeof parsed.detail === 'string' ? parsed.detail : text.slice(0, 200)
+  } catch {
+    return ''
+  }
+}
+
 export default function ReportsPage() {
   const [showNew, setShowNew] = useState(false)
   const [selectedRunId, setSelectedRunId] = useState('')
@@ -67,8 +79,10 @@ export default function ReportsPage() {
       link.click()
       URL.revokeObjectURL(url)
       setScorecardMessage('')
-    } catch {
-      setScorecardMessage('Could not generate the scorecard.')
+    } catch (error) {
+      // The request asks for a blob, so the API's JSON detail arrives as a Blob too.
+      const detail = await blobErrorDetail(error)
+      setScorecardMessage(detail ? `Could not generate the scorecard: ${detail}` : 'Could not generate the scorecard.')
     }
   }
 

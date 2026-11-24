@@ -683,7 +683,7 @@ async def delete_connection(session: AsyncSession, provider: str) -> bool:
     return True
 
 
-async def _connection_secret(session: AsyncSession, row: CloudConnection, field: str) -> str:
+async def _connection_secret(row: CloudConnection, field: str) -> str:
     """Resolve one stored secret for a specific connection."""
     ref = _loads(row.secret_refs).get(field)
     if not ref:
@@ -698,7 +698,7 @@ async def _stored_secret(session: AsyncSession, provider: str, field: str) -> st
     row = (await session.execute(select(CloudConnection).where(CloudConnection.provider == provider))).scalars().first()
     if row is None:
         return ""
-    return await _connection_secret(session, row, field)
+    return await _connection_secret(row, field)
 
 
 async def microsoft_app(session: AsyncSession, tenant_id: str | None = None) -> dict[str, Any]:
@@ -731,10 +731,10 @@ async def microsoft_app(session: AsyncSession, tenant_id: str | None = None) -> 
     certificate_pem = private_key_pem = ""
     client_secret = ""
     if auth_method == "certificate":
-        certificate_pem = await _connection_secret(session, row, "certificate_pem")
-        private_key_pem = await _connection_secret(session, row, "private_key_pem")
+        certificate_pem = await _connection_secret(row, "certificate_pem")
+        private_key_pem = await _connection_secret(row, "private_key_pem")
     else:
-        client_secret = await _connection_secret(session, row, "client_secret")
+        client_secret = await _connection_secret(row, "client_secret")
 
     client_id = config.get("client_id", "")
     return {

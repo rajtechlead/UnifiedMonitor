@@ -77,3 +77,27 @@ def test_export_rejects_unknown_format():
     scorecard = _scorecard()
     with pytest.raises(ValueError):
         export(scorecard, "docx")
+
+
+def test_pdf_falls_back_when_reportlab_is_unavailable(monkeypatch) -> None:
+    """A frozen build without ReportLab must still return a real PDF."""
+    from unimonitor.reporting import scorecard
+
+    def broken(_scorecard):
+        raise TypeError("reportlab missing")
+
+    monkeypatch.setattr(scorecard, "_pdf_with_reportlab", broken)
+    content = scorecard.to_pdf(
+        {
+            "generated_at": "2026-11-24T00:00:00Z",
+            "tenant_id": None,
+            "run_id": None,
+            "scores": {"security_score": 42.0},
+            "counts": {"critical": 1},
+            "controls": [],
+            "frameworks": [],
+        }
+    )
+
+    assert content.startswith(b"%PDF-")
+    assert content.rstrip().endswith(b"%%EOF")

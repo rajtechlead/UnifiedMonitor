@@ -52,7 +52,13 @@ if ([string]::IsNullOrWhiteSpace($PfxPassword)) {
 }
 
 if (-not (Get-Module -ListAvailable -Name ZeroTrustAssessment)) {
-    Install-Module ZeroTrustAssessment -Scope CurrentUser -Force -AllowClobber
+    # PowerShell 7.6 ships PSResourceGet; the older PowerShellGet path is the fallback.
+    if (Get-Command Install-PSResource -ErrorAction SilentlyContinue) {
+        Install-PSResource -Name ZeroTrustAssessment -Scope CurrentUser -TrustRepository -Quiet
+    }
+    else {
+        Install-Module ZeroTrustAssessment -Scope CurrentUser -Force -AllowClobber -Confirm:$false
+    }
 }
 Import-Module ZeroTrustAssessment -Force
 
@@ -65,7 +71,16 @@ New-Item -ItemType Directory -Force -Path $OutputPath | Out-Null
 try {
     Write-Host -Object "Connecting to Microsoft Graph with app $ClientId in tenant $TenantId"
     Connect-ZtAssessment -TenantId $TenantId -ClientId $ClientId -Certificate $thumbprint
-    Invoke-ZtAssessment -Path $OutputPath -ExportLog
+    # NoBrowser keeps the module from opening a browser on the server; the JSON is
+    # the machine-readable result UniMonitor imports so every test has a real status.
+    Invoke-ZtAssessment -Path $OutputPath -ExportLog -NoBrowser -DisableTelemetry
+
+    $json = Get-ChildItem -Path $OutputPath -Filter ZeroTrustAssessmentReport.json -Recurse -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending |
+        Select-Object -First 1
+    if ($json -and $json.DirectoryName -ne (Resolve-Path -LiteralPath $OutputPath).Path) {
+        Copy-Item -LiteralPath $json.FullName -Destination (Join-Path $OutputPath 'ZeroTrustAssessmentReport.json') -Force
+    }
 }
 finally {
     # The certificate must not outlive the run.

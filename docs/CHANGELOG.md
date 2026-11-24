@@ -6,9 +6,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased] — 2026-11-24 (owner observations, fourth round)
+
+Tracker: `docs/TRACKER.md`.
+
+### Fixed
+
+- Microsoft sign-in builds the Entra authorization URL itself from the connected app,
+  so a local MSAL/authority problem cannot show "sign-in is not configured". Missing
+  apps and rejected callbacks return to the login page with the real reason, and the
+  setup wizard registers the callback of the origin it is served from.
+- Zero Trust for Microsoft: the upstream module now runs automatically on a Windows
+  host with a certificate, and its `ZeroTrustAssessmentReport.json` is imported so
+  every one of its tests shows its real status instead of "not run".
+- Control scorecard PDF falls back to a valid minimal PDF when ReportLab is missing;
+  the page shows the API's error detail.
+- Microsoft cloud audit surfaces Graph's 403 body (the missing permission/consent) and
+  retries once with a fresh token after a permission grant.
+- About page no longer displays a version tag.
+
 ## [Unreleased] — 2026-11-24 (owner observations, third round)
 
-Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
+Tracker: `docs/TRACKER.md`.
 
 ### Fixed
 
@@ -52,7 +71,7 @@ Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
 
 ## [Unreleased] — 2026-11-23 (owner observations)
 
-Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
+Tracker: `docs/TRACKER.md`.
 
 ### Added
 
@@ -244,8 +263,8 @@ Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
 
 ### Documentation
 
-- `docs/PLATFORM_OBSERVATIONS_2026-11-22.md` — the 19-item owner review with root
-  causes, what changed, and what remains open.
+- The 19-item owner review of 2026-11-22 (root causes, what changed, and what
+  remains open) is consolidated into `docs/TRACKER.md`.
 
 ---
 

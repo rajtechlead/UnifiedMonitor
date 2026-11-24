@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(true)
   const [ssoReason, setSsoReason] = useState('')
+  const [redirectUri, setRedirectUri] = useState('')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
@@ -19,14 +20,22 @@ export default function LoginPage() {
       .then((res) => {
         setSsoEnabled(Boolean(res.data.enabled))
         setSsoReason(typeof res.data.reason === 'string' ? res.data.reason : '')
+        setRedirectUri(typeof res.data.redirect_uri === 'string' ? res.data.redirect_uri : '')
       })
       .catch(() => setSsoEnabled(false))
   }, [])
 
   useEffect(() => {
     const ssoError = searchParams.get('error')
+    const reason = searchParams.get('reason')
     if (ssoError === 'sso_unavailable') {
-      setError('Microsoft sign-in is not configured. Connect Microsoft 365 in Settings, or sign in with your local administrator account (the break-glass account created during setup).')
+      setError(
+        reason
+          ? `Microsoft sign-in could not start: ${reason}`
+          : 'Microsoft sign-in is not configured. Connect Microsoft 365 in Settings, or sign in with your local administrator account (the break-glass account created during setup).',
+      )
+    } else if (ssoError === 'sso_failed') {
+      setError(`Microsoft sign-in failed: ${reason || 'Entra rejected the request.'}`)
     }
   }, [searchParams])
 
@@ -118,6 +127,12 @@ export default function LoginPage() {
         {!ssoEnabled && (
           <p style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: -12, marginBottom: 16, textAlign: 'center' }}>
             {ssoReason || 'Connect Microsoft 365 in Settings to enable single sign-on.'}
+            {redirectUri && (
+              <>
+                <br />
+                Redirect URI for the app registration: <code>{redirectUri}</code>
+              </>
+            )}
             <br />
             Your local administrator account stays available as the break-glass sign-in.
           </p>

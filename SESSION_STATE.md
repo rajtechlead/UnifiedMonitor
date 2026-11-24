@@ -4,9 +4,23 @@ Project: UnifiedMonitor
 Repository: https://github.com/rajtechlead/UnifiedMonitor
 Last Updated: 2026-11-24 UTC
 
+### Session 2026-11-24 — owner observations, fourth round
+
+Tracker: `docs/TRACKER.md`.
+
+- Microsoft sign-in: direct Entra authorize URL from the connected app (no MSAL at
+  redirect time), failure reasons shown on the login page, setup registers the
+  callback of the origin it runs on.
+- Zero Trust: Microsoft's module runs automatically with certificate app auth and its
+  JSON results are imported, so its ~450 tests carry real statuses; Python stays the
+  fallback and still serves AWS/GCP/Workspace from collected evidence.
+- Scorecard PDF always returns a PDF (ReportLab fallback); the page shows API detail.
+- Cloud audit shows Graph's 403 detail and retries once after a permission grant.
+- Version tags removed from the UI; single tracker at `docs/TRACKER.md`.
+
 ### Session 2026-11-24 — owner observations, third round
 
-Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
+Tracker: `docs/TRACKER.md`.
 
 - Sign-in: the SPA consumes the OAuth `#access_token` fragment (`SsoGate`), reads
   `/auth/me`, strips the fragment; the redirect URI is derived from the request origin
@@ -27,7 +41,7 @@ Tracker: `docs/OBSERVATIONS_2026-11-24.md`.
 
 ### Session 2026-11-23 (later) — owner observations 1–12
 
-Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
+Tracker: `docs/TRACKER.md`.
 
 - Items 1–3: sign-in, service health and licensing resolve the Entra app from the
   saved connection (certificate or secret) and map Graph errors honestly (503/403/502).
@@ -96,7 +110,7 @@ Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
   seven-day trend from `Alert` rows; no hard-coded zeros.
 - Assessment runs render `error_message` when a run fails.
 - Tests: `test_tenant_scope.py`, `test_soc_metrics.py`. Queued follow-ups listed in
-  `docs/PLATFORM_OBSERVATIONS_2026-11-22.md#follow-up-round`.
+  `docs/TRACKER.md`.
 
 ### Session 2026-11-22 — atomic vault writes and owner observation fixes
 
@@ -118,7 +132,7 @@ Tracker: `docs/OBSERVATIONS_2026-11-23.md`.
   when the mask is echoed and deleted when cleared. The Settings page seeds from the
   response.
 - Sonar `typescript:S6582` optional chain in `ZeroTrustPlatformPage`.
-- Register and plans: `docs/PLATFORM_OBSERVATIONS_2026-11-22.md`. Open items are
+- Register and plans: `docs/TRACKER.md`. Open items are
   OBS-03, 04, 05, 08, 11, 12, 13, 14, 15, 17 and the Graph-mail half of OBS-18.
 - Checks: 725 pytest passed, ruff check/format, mypy, eslint, tsc, vite build.
 
@@ -385,7 +399,7 @@ frontend dependency migrations already merged. Trackers have now been reconciled
 ## Completed Previously (Phases 1–5, unchanged)
 
 - Phase 1 Repository Recovery ✅ (PROJECT_AUDIT.md still deferred, L-001)
-- Phase 2 Stabilisation ✅ — all Critical/High resolved (see GAP_REGISTER.md)
+- Phase 2 Stabilisation ✅ — all Critical/High resolved (see `docs/TRACKER.md`)
 - Phase 3 Architecture ✅ — unified secrets framework done; setup wizard script exists
   (`scripts/setup_wizard.py`, wired into `unimonitor/cli.py setup`)
 - Phase 4 Build Validation ✅ — tests, lint, mypy, ESLint, Playwright, Docker (CI)
@@ -519,7 +533,7 @@ same-vendor upgrades within the approved stack, not substitutions.
 
 ## Resume Instructions
 
-1. Read `SECTION_STATE.md`… i.e. this file, `NEXT_ACTIONS.md`, `GAP_REGISTER.md`,
+1. Read `SECTION_STATE.md`… i.e. this file and `docs/TRACKER.md`,
    `BUILD_STATUS.md`, `TECHNOLOGY_BASELINE.md`, `PROJECT_REQUIREMENTS.md`.
 2. Country-free first action: push the release tag if the session allows it.
 3. Then the Windows validation block, or the control-library expansion if no Windows host exists.
